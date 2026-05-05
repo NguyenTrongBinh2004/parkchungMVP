@@ -1,0 +1,9 @@
+#Bỏ qua môi trường ảo
+venv/
+# bỏ qua bộ nhớ đệm
+__pycache__
+# Bỏ qua file cấu hình bảo mật
+.evn
+# Bỏ qua các file rác của hệ thống/IDE
+.vscode/
+*.pyc
