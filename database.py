@@ -19,5 +19,8 @@ def lay_ket_noi_CSDL():
         print(f"Lỗi kết nối CSDL: {err}")
         raise err
     finally:
-        if KetNoi and KetNoi.is_connected():
-            KetNoi.close()
+        if KetNoi:
+            try:
+                KetNoi.close()
+            except Exception:
+                pass

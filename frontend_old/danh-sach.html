@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Xe trong bãi</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #121212; color: #fff; }
+    .xe-card { background-color: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 12px; margin-bottom: 10px; display: flex; align-items: center; }
+    .xe-card img { width: 80px; height: 60px; object-fit: cover; border-radius: 8px; margin-right: 12px; background: #333; }
+    .bien-so { font-size: 1.2rem; font-weight: bold; }
+    .gio-vao { font-size: 0.9rem; color: #aaa; }
+  </style>
+</head>
+<body class="container py-4">
+  <h4 class="mb-3">🚗 Xe đang trong bãi</h4>
+  <div id="list"></div>
+
+  <script>
+    const BASE_URL = window.location.origin;
+    const PLACEHOLDER = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iIzMzMyIvPjx0ZXh0IHg9IjQwIiB5PSIzMCIgZHk9Ii4zZW0iIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5OTkiIGZvbnQtc2l6ZT0iMTAiPkNhciBJbWc8L3RleHQ+PC9zdmc+';
+
+    async function load() {
+      try {
+        const res = await fetch(`${BASE_URL}/xe-trong-bai/`);
+        const data = await res.json();
+        const container = document.getElementById('list');
+        container.innerHTML = data.map(xe => `
+          <div class="xe-card">
+            <img src="${xe.anh_bien_so || PLACEHOLDER}" alt="biển số" onerror="this.src='${PLACEHOLDER}'">
+            <div style="flex:1">
+              <div class="bien-so">${xe.bien_so}</div>
+              <div class="gio-vao">Vào lúc: ${new Date(xe.gio_vao).toLocaleString()}</div>
+              <div>Tạm tính: ${xe.so_tien_tam_tinh.toLocaleString()} đ</div>
+              ${xe.la_xe_ve_thang ? '<span class="badge bg-info">Vé tháng</span>' : ''}
+            </div>
+            ${xe.anh_nguoi_lai ? `<img src="${xe.anh_nguoi_lai}" style="width:50px; height:50px; object-fit:cover; border-radius:50%; margin-left:10px;" alt="Người lái">` : ''}
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    load();
+  </script>
+</body>
+</html>

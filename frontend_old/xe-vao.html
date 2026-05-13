@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Xe vào - Parking MVP</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #121212; color: #fff; }
+    .card-custom { background-color: #1e1e1e; border: 1px solid #333; border-radius: 15px; padding: 20px; }
+    .btn-accent { background-color: #FFD700; color: #000; font-weight: bold; border: none; }
+    .btn-accent:hover { background-color: #e6c200; }
+    .preview-img { max-width: 100%; border-radius: 10px; margin-top: 10px; background: #333; }
+    .hidden { display: none; }
+    .modal-content { background-color: #1e1e1e; color: #fff; }
+  </style>
+</head>
+<body class="container py-4">
+  <h3 class="mb-3">📸 Xe vào</h3>
+
+  <!-- Chụp ảnh chính (biển số hoặc QR) -->
+  <div class="card-custom mb-3">
+    <label for="anhInput" class="form-label">Chụp ảnh biển số / QR</label>
+    <input type="file" id="anhInput" accept="image/*" capture="environment" class="form-control" onchange="guiNhanDien()">
+    <img id="previewAnh" class="preview-img hidden" alt="Ảnh xem trước">
+    <div id="loading" class="text-center mt-2 hidden">
+      <div class="spinner-border text-warning" role="status"></div>
+      <p>Đang xử lý...</p>
+    </div>
+    <div id="errorMsg" class="alert alert-danger mt-2 hidden"></div>
+  </div>
+
+  <!-- Ảnh người lái -->
+  <div class="card-custom mb-3">
+      <label for="anhNguoiLaiInput" class="form-label">Ảnh người lái (bắt buộc)</label>
+      <input type="file" id="anhNguoiLaiInput" accept="image/*" capture="environment" class="form-control" required>
+      <img id="previewNguoiLai" class="preview-img hidden" alt="Ảnh người lái">
+  </div>
+
+  <!-- Kết quả QR vé tháng -->
+  <div id="qrResult" class="card-custom mb-3 hidden">
+    <h5>Vé tháng</h5>
+    <p><strong>Biển số:</strong> <span id="qrBienSo"></span></p>
+    <p><strong>Chủ xe:</strong> <span id="qrTen"></span></p>
+    <p><strong>Ngày hết hạn:</strong> <span id="qrHan"></span></p>
+    <p class="text-warning" id="qrCanhBao"></p>
+    <button class="btn btn-accent w-100" onclick="xacNhanVeThang()">Xác nhận xe vào (Vé tháng)</button>
+  </div>
+
+  <!-- Form xe thường -->
+  <div id="formThuong" class="card-custom mb-3 hidden">
+    <h5>Xe thường</h5>
+    <div class="mb-2">
+      <label>Biển số</label>
+      <input type="text" id="bienSo" class="form-control">
+    </div>
+    <div class="mb-2">
+      <label>Loại xe</label>
+      <select id="loaiXe" class="form-control"></select>
+    </div>
+    <div class="mb-2">
+      <label>Tên chủ xe (không bắt buộc)</label>
+      <input type="text" id="tenChuXe" class="form-control">
+    </div>
+    <div class="mb-2">
+      <label>Số điện thoại (không bắt buộc)</label>
+      <input type="text" id="sdt" class="form-control">
+    </div>
+    <div class="mb-2">
+      <label>Email (không bắt buộc)</label>
+      <input type="text" id="email" class="form-control">
+    </div>
+    <button class="btn btn-accent w-100" onclick="xacNhanThuong()">Xác nhận xe vào</button>
+  </div>
+
+  <!-- Modal hiển thị mã QR sau khi vào thành công -->
+  <div class="modal fade" id="qrModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content" style="background-color: #1e1e1e; color: #fff;">
+        <div class="modal-header">
+          <h5 class="modal-title">🎫 Vé gửi xe</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body text-center">
+          <p><strong>Biển số:</strong> <span id="qrBienSoModal"></span></p>
+          <p><strong>Giờ vào:</strong> <span id="qrGioVaoModal"></span></p>
+          <img id="qrImage" src="" alt="Mã QR" style="max-width: 250px; border-radius: 10px; margin: 15px auto;" />
+          <p class="text-muted">📸 Hãy chụp ảnh màn hình này để xuất trình khi lấy xe.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const BASE_URL = window.location.origin;
+    let currentQR = null;
+    let currentFile = null;
+    let currentFileNguoiLai = null;
+
+    // Load loại xe
+    async function loadLoaiXe() {
+      try {
+        const res = await fetch(`${BASE_URL}/loai-xe/`);
+        const data = await res.json();
+        const select = document.getElementById('loaiXe');
+        select.innerHTML = data.map(lx => `<option value="${lx.id}">${lx.ten}</option>`).join('');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    loadLoaiXe();
+
+    // Preview ảnh
+    function previewFile(file, imgId) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        document.getElementById(imgId).src = e.target.result;
+        document.getElementById(imgId).classList.remove('hidden');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    document.getElementById('anhNguoiLaiInput').addEventListener('change', function() {
+      currentFileNguoiLai = this.files[0];
+      previewFile(currentFileNguoiLai, 'previewNguoiLai');
+    });
+
+    // Hiển thị lỗi
+    function showError(msg) {
+      const errDiv = document.getElementById('errorMsg');
+      if (msg) {
+        errDiv.innerText = msg;
+        errDiv.classList.remove('hidden');
+      } else {
+        errDiv.classList.add('hidden');
+      }
+    }
+
+    // Gửi nhận diện
+    async function guiNhanDien() {
+      const file = document.getElementById('anhInput').files[0];
+      if (!file) return;
+      currentFile = file;
+      previewFile(file, 'previewAnh');
+      document.getElementById('loading').classList.remove('hidden');
+      document.getElementById('qrResult').classList.add('hidden');
+      document.getElementById('formThuong').classList.add('hidden');
+      showError(null);
+
+      const formData = new FormData();
+      formData.append('anh', file);
+
+      try {
+        const res = await fetch(`${BASE_URL}/xe-vao/nhan-dien/`, {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await res.json();
+        document.getElementById('loading').classList.add('hidden');
+
+        if (!res.ok) {
+          // Server trả về lỗi 4xx/5xx
+          const errMsg = data.detail || 'Lỗi không xác định từ server';
+          showError(errMsg);
+          return;
+        }
+
+        // Thành công
+        if (data.loai === 've_thang') {
+          document.getElementById('qrBienSo').innerText = data.bien_so;
+          document.getElementById('qrTen').innerText = data.ten_chu_xe;
+          document.getElementById('qrHan').innerText = data.ngay_het_han;
+          document.getElementById('qrCanhBao').innerText = data.canh_bao || '';
+          currentQR = data;
+          document.getElementById('qrResult').classList.remove('hidden');
+        } else if (data.loai === 'bien_so') {
+          document.getElementById('bienSo').value = data.bien_so_nhan_dien || '';
+          document.getElementById('formThuong').classList.remove('hidden');
+        } else {
+          showError('Không nhận diện được. Vui lòng thử lại.');
+        }
+      } catch (err) {
+        document.getElementById('loading').classList.add('hidden');
+        showError('Lỗi kết nối: ' + err.message);
+      }
+    }
+
+    // Xác nhận xe vào vé tháng
+    async function xacNhanVeThang() {
+      if (!currentQR || !currentFile || !currentFileNguoiLai) {
+        alert("Vui lòng chụp đầy đủ ảnh biển số và ảnh người lái.");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('ma_qr', currentQR.ma_qr);
+      formData.append('anh_bien_so', currentFile);
+      formData.append('anh_nguoi_lai', currentFileNguoiLai);
+
+      try {
+        const res = await fetch(`${BASE_URL}/xe-vao/ve-thang/xac-nhan/`, {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          document.getElementById('qrBienSoModal').innerText = data.bien_so;
+          document.getElementById('qrGioVaoModal').innerText = new Date(data.gio_vao).toLocaleString();
+          document.getElementById('qrImage').src = data.qr_image_url || '';
+          new bootstrap.Modal(document.getElementById('qrModal')).show();
+
+          // Reset
+          currentQR = null;
+          currentFile = null;
+          currentFileNguoiLai = null;
+          document.getElementById('anhInput').value = '';
+          document.getElementById('anhNguoiLaiInput').value = '';
+          document.getElementById('previewAnh').classList.add('hidden');
+          document.getElementById('previewNguoiLai').classList.add('hidden');
+          document.getElementById('qrResult').classList.add('hidden');
+          document.getElementById('formThuong').classList.add('hidden');
+          showError(null);
+        } else {
+          alert('Lỗi: ' + (data.detail || 'Không thể xác nhận'));
+        }
+      } catch (err) {
+        alert('Lỗi kết nối: ' + err.message);
+      }
+    }
+
+    // Xác nhận xe vào thường
+    async function xacNhanThuong() {
+      if (!currentFile || !currentFileNguoiLai) {
+        alert("Vui lòng chụp đầy đủ ảnh biển số và ảnh người lái.");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('id_loai_xe', document.getElementById('loaiXe').value);
+      formData.append('bien_so_xac_nhan', document.getElementById('bienSo').value);
+      formData.append('ten_chu_xe', document.getElementById('tenChuXe').value || '');
+      formData.append('sdt', document.getElementById('sdt').value || '');
+      formData.append('email', document.getElementById('email').value || '');
+      formData.append('cho_phep_lay_ho', false);
+      formData.append('anh_bien_so', currentFile);
+      formData.append('anh_nguoi_lai', currentFileNguoiLai);
+
+      try {
+        const res = await fetch(`${BASE_URL}/xe-vao/ve-thuong/xac-nhan/`, {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          document.getElementById('qrBienSoModal').innerText = data.bien_so;
+          document.getElementById('qrGioVaoModal').innerText = new Date(data.gio_vao).toLocaleString();
+          document.getElementById('qrImage').src = data.qr_image_url || '';
+          new bootstrap.Modal(document.getElementById('qrModal')).show();
+
+          // Reset
+          currentFile = null;
+          currentFileNguoiLai = null;
+          document.getElementById('bienSo').value = '';
+          document.getElementById('tenChuXe').value = '';
+          document.getElementById('sdt').value = '';
+          document.getElementById('email').value = '';
+          document.getElementById('anhInput').value = '';
+          document.getElementById('anhNguoiLaiInput').value = '';
+          document.getElementById('previewAnh').classList.add('hidden');
+          document.getElementById('previewNguoiLai').classList.add('hidden');
+          document.getElementById('formThuong').classList.add('hidden');
+          showError(null);
+        } else {
+          alert('Lỗi: ' + (data.detail || 'Không thể xác nhận'));
+        }
+      } catch (err) {
+        alert('Lỗi kết nối: ' + err.message);
+      }
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

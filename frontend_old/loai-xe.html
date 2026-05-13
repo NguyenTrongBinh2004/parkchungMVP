@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loại xe - Parking MVP</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #121212; color: #fff; }
+    .card-custom { background-color: #1e1e1e; border: 1px solid #333; border-radius: 15px; padding: 15px; margin-bottom: 10px; }
+    .btn-accent { background-color: #FFD700; color: #000; font-weight: bold; border: none; }
+    .btn-accent:hover { background-color: #e6c200; }
+    .modal-content { background-color: #1e1e1e; color: #fff; }
+    .form-control, .form-select { background-color: #2c2c2c; color: #fff; border: 1px solid #444; }
+    .form-control:focus, .form-select:focus { background-color: #2c2c2c; color: #fff; border-color: #FFD700; box-shadow: none; }
+  </style>
+</head>
+<body class="container py-4">
+  <h3 class="mb-3">🏷️ Quản lý Loại xe</h3>
+
+  <!-- Danh sách loại xe -->
+  <div id="listLoaiXe"></div>
+
+  <!-- Nút thêm loại xe (mở modal) -->
+  <button class="btn btn-accent w-100 mt-3" data-bs-toggle="modal" data-bs-target="#addLoaiXeModal">+ Thêm loại xe mới</button>
+
+  <!-- Modal Thêm loại xe -->
+  <div class="modal fade" id="addLoaiXeModal" tabindex="-1" aria-labelledby="addModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="addModalLabel">Thêm loại xe</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form id="formThemLoaiXe">
+            <div class="mb-2">
+              <label class="form-label">Tên loại xe <span class="text-danger">*</span></label>
+              <input type="text" id="ten" class="form-control" required>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Màu sắc</label>
+              <input type="color" id="mau_sac" class="form-control" value="#FFD700">
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Kiểu tính giá</label>
+              <select id="kieu_tinh_gia" class="form-select" onchange="toggleFields()">
+                <option value="theo_luot">Theo lượt</option>
+                <option value="theo_gio">Theo giờ</option>
+                <option value="theo_ngay_dem">Theo ngày đêm</option>
+              </select>
+            </div>
+
+            <!-- Fields theo lượt -->
+            <div id="group_luot" class="mb-2">
+              <label class="form-label">Giá mỗi lượt <span class="text-danger">*</span></label>
+              <input type="number" id="gia_luot" class="form-control" value="0">
+            </div>
+
+            <!-- Fields theo giờ -->
+            <div id="group_gio" class="mb-2 hidden">
+              <label class="form-label">Cấu hình giá theo giờ (JSON) <span class="text-danger">*</span></label>
+              <input type="text" id="cau_hinh_theo_gio" class="form-control" placeholder='[{"den_gio":4,"gia":4000},{"moi_gio_tiep":5000}]'>
+              <small class="text-muted">VD: [{"den_gio":2,"gia":15000},{"moi_gio_tiep":20000}]</small>
+            </div>
+
+            <!-- Fields theo ngày đêm -->
+            <div id="group_ngay_dem" class="mb-2 hidden">
+              <label class="form-label">Giá ngày <span class="text-danger">*</span></label>
+              <input type="number" id="gia_ngay" class="form-control" value="0">
+              <label class="form-label mt-2">Giá đêm <span class="text-danger">*</span></label>
+              <input type="number" id="gia_dem" class="form-control" value="0">
+              <label class="form-label mt-2">Giá ngày đêm <span class="text-danger">*</span></label>
+              <input type="number" id="gia_ngay_dem" class="form-control" value="0">
+            </div>
+
+            <div class="mb-2">
+              <label class="form-label">Giá vé tháng (nếu có)</label>
+              <input type="number" id="gia_ve_thang" class="form-control" value="">
+            </div>
+
+            <button type="submit" class="btn btn-accent w-100">Thêm</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const BASE_URL = window.location.origin;
+    document.addEventListener('DOMContentLoaded', loadLoaiXe);
+
+    // Load danh sách loại xe
+    async function loadLoaiXe() {
+      try {
+        const res = await fetch(`${BASE_URL}/loai-xe/`);
+        const data = await res.json();
+        const container = document.getElementById('listLoaiXe');
+        if (data.length === 0) {
+          container.innerHTML = '<p class="text-muted">Chưa có loại xe nào.</p>';
+          return;
+        }
+        container.innerHTML = data.map(lx => {
+            let chiTietGia = '';
+            if (lx.kieu_tinh_gia === 'theo_luot') {
+                chiTietGia = `Giá lượt: ${Number(lx.gia_luot).toLocaleString()} đ`;
+            } else if (lx.kieu_tinh_gia === 'theo_gio') {
+                let cauHinh = lx.cau_hinh_theo_gio;
+                if (typeof cauHinh === 'string') {
+                    try { cauHinh = JSON.parse(cauHinh); } catch(e) { cauHinh = []; }
+                }
+                if (Array.isArray(cauHinh) && cauHinh.length > 0) {
+                    const parts = cauHinh.map(bac => {
+                        if (bac.den_gio) return `${bac.den_gio}h đầu: ${bac.gia.toLocaleString()}đ/h`;
+                        if (bac.moi_gio_tiep) return `Tiếp theo: ${bac.moi_gio_tiep.toLocaleString()}đ/h`;
+                        return '';
+                    });
+                    chiTietGia = 'Giá giờ: ' + parts.join(', ');
+                } else {
+                    chiTietGia = 'Cấu hình giờ không rõ';
+                }
+            } else if (lx.kieu_tinh_gia === 'theo_ngay_dem') {
+                chiTietGia = `Ngày: ${Number(lx.gia_ngay || 0).toLocaleString()}đ, Đêm: ${Number(lx.gia_dem || 0).toLocaleString()}đ, Ngày-đêm: ${Number(lx.gia_ngay_dem || 0).toLocaleString()}đ`;
+            }
+
+            const giaVeThang = lx.gia_ve_thang ? `Giá vé tháng: ${Number(lx.gia_ve_thang).toLocaleString()} đ` : 'Chưa đặt vé tháng';
+
+            const badge = lx.kieu_tinh_gia === 'theo_luot' ? 'Theo lượt' :
+                        lx.kieu_tinh_gia === 'theo_gio' ? 'Theo giờ' : 'Theo ngày đêm';
+
+            return `
+            <div class="card-custom">
+                <div class="d-flex justify-content-between">
+                <div>
+                    <strong>${lx.ten}</strong> 
+                    <span style="display:inline-block;width:12px;height:12px;background-color:${lx.mau_sac};border-radius:50%;"></span>
+                </div>
+                <span class="badge bg-secondary">${badge}</span>
+                </div>
+                <div>${chiTietGia}</div>
+                <div>${giaVeThang}</div>
+            </div>
+            `;
+        }).join('');
+      } catch (err) {
+        console.error(err);
+        alert('Lỗi tải danh sách loại xe');
+      }
+    }
+
+    // Ẩn/hiện các trường theo kiểu tính giá
+    function toggleFields() {
+      const kieu = document.getElementById('kieu_tinh_gia').value;
+      document.getElementById('group_luot').classList.toggle('hidden', kieu !== 'theo_luot');
+      document.getElementById('group_gio').classList.toggle('hidden', kieu !== 'theo_gio');
+      document.getElementById('group_ngay_dem').classList.toggle('hidden', kieu !== 'theo_ngay_dem');
+    }
+    // Khởi tạo trạng thái ban đầu
+    toggleFields();
+
+    // Xử lý submit form
+    document.getElementById('formThemLoaiXe').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const formData = new FormData();
+      formData.append('ten', document.getElementById('ten').value);
+      formData.append('mau_sac', document.getElementById('mau_sac').value);
+      formData.append('kieu_tinh_gia', document.getElementById('kieu_tinh_gia').value);
+      
+      const kieu = document.getElementById('kieu_tinh_gia').value;
+      if (kieu === 'theo_luot') {
+        formData.append('gia_luot', document.getElementById('gia_luot').value);
+      } else if (kieu === 'theo_gio') {
+        formData.append('cau_hinh_theo_gio', document.getElementById('cau_hinh_theo_gio').value);
+      } else if (kieu === 'theo_ngay_dem') {
+        formData.append('gia_ngay', document.getElementById('gia_ngay').value);
+        formData.append('gia_dem', document.getElementById('gia_dem').value);
+        formData.append('gia_ngay_dem', document.getElementById('gia_ngay_dem').value);
+      }
+      
+      const giaVeThang = document.getElementById('gia_ve_thang').value;
+      if (giaVeThang) formData.append('gia_ve_thang', giaVeThang);
+
+      try {
+        const res = await fetch(`${BASE_URL}/loai-xe/`, { method: 'POST', body: formData });
+        if (res.ok) {
+          alert('Thêm loại xe thành công!');
+          // Đóng modal và load lại danh sách
+          const modal = bootstrap.Modal.getInstance(document.getElementById('addLoaiXeModal'));
+          modal.hide();
+          loadLoaiXe();
+          // Reset form
+          document.getElementById('formThemLoaiXe').reset();
+          toggleFields();
+        } else {
+          const err = await res.json();
+          alert('Lỗi: ' + JSON.stringify(err.detail));
+        }
+      } catch (err) {
+        alert('Lỗi kết nối: ' + err.message);
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
