@@ -27,4 +27,4 @@ check_zalo_template.py
 !uploads/bien_so/.gitkeep
 !uploads/nguoi_lai/.gitkeep
 !uploads/qr/.gitkeep
-node_modules/"node_modules/" 
+node_modules/
