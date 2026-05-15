@@ -1,27 +1,29 @@
-# Bỏ qua môi trường ảo
+# Môi trường ảo
 venv/
 
-# Bỏ qua bộ nhớ đệm Python
+# Python cache
 __pycache__/
 *.pyc
-*.pyo
 
-# Bỏ qua file cấu hình bảo mật
+# File cấu hình bảo mật
 .env
 
-# Bỏ qua các file rác của hệ thống/IDE
+# IDE / Hệ thống
 .vscode/
+*.log
 
-# Bỏ qua thư mục uploads (ảnh thực tế, QR...)
+# Uploads (ảnh thật, QR...) – KHÔNG commit
 uploads/bien_so/*
 uploads/nguoi_lai/*
 uploads/qr/*
 
-# Bỏ qua file build frontend (có thể build lại)
+# File build frontend – có thể build lại
 frontend/assets/
 
-# Bỏ qua file test tạm
+# Script test tạm
 check_zalo_template.py
 
-# Bỏ qua file log
-*.log
+# Giữ lại file .gitkeep nếu có
+!uploads/bien_so/.gitkeep
+!uploads/nguoi_lai/.gitkeep
+!uploads/qr/.gitkeep
