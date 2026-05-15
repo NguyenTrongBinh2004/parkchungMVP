@@ -11,7 +11,7 @@ from services.billing_service import BillingService
 from routers import loai_xe, xe_ra, thanh_toan, xe_vao
 from utils import bay_gio_vn, build_url, chuan_hoa_bien_so, tinh_trang_thai, luu_anh
 from dotenv import load_dotenv
-
+from fastapi.middleware.cors import CORSMiddleware
 import mysql.connector
 import re
 from typing import Optional
@@ -21,6 +21,14 @@ import os, uuid, asyncio
 load_dotenv()
 
 app = FastAPI(title="Parking MVP API", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Cho phép tất cả domain (tạm thời để test)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.include_router(loai_xe.router)
 app.include_router(xe_ra.router)
