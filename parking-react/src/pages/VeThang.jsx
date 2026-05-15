@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageLayout, Spinner, Alert, TrangThaiBadge, Modal, fmtTien } from '../components/UI'
 import { veThangApi } from '../services/api'
-
+import { PLACEHOLDER } from '../components/UI';
 function GiaHanModal({ ve, onClose, onSuccess }) {
   const [ghiChu, setGhiChu] = useState('')
   const [loading, setLoading] = useState(false)
@@ -72,46 +72,75 @@ export default function VeThang() {
       )}
 
       {list.map(ve => (
-        <div key={ve.id} className="card" style={{ marginBottom: 10 }}>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-            {/* Ảnh */}
-            {ve.anh_bien_so
-              ? <img src={ve.anh_bien_so} style={{ width: 100, height: 70, objectFit: 'cover', borderRadius: 8 }} alt="biển số" />
-              : <div style={{ width: 100, height: 70, background: '#333', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', color: '#666' }}>No img</div>
-            }
-
-            {/* Thông tin */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{ve.bien_so}</span>
-                <TrangThaiBadge trangThai={ve.trang_thai} />
+        <div key={ve.id} className="card" style={{ marginBottom: 12 }}>
+          <div style={{ display: 'flex', gap: 15, alignItems: 'flex-start' }}>
+            
+            {/* Cột 1: Chứa ảnh Biển số và ảnh Người đăng ký */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
+              <div style={{ textAlign: 'center' }}>
+                <small style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Biển số</small>
+                <img
+                  src={ve.anh_bien_so || PLACEHOLDER}
+                  className="thumb"
+                  alt="Biển số"
+                  onError={e => e.target.src = PLACEHOLDER}
+                />
               </div>
-              <div style={{ fontSize: '0.83rem', color: 'var(--text-muted)', lineHeight: 1.7 }}>
-                <div>Chủ xe: <span style={{ color: 'var(--text)' }}>{ve.ten_chu_xe}</span></div>
-                <div>SĐT: {ve.sdt || 'N/A'}</div>
-                <div>Loại: {ve.ten_loai_xe}</div>
-                <div>Hết hạn: <strong>{ve.ngay_het_han}</strong>{' '}
-                  {ve.so_ngay_con >= 0 ? `(còn ${ve.so_ngay_con} ngày)` : '(đã hết hạn)'}
-                </div>
-                <div>Tiền: <span style={{ color: 'var(--accent)' }}>{fmtTien(ve.so_tien)}</span></div>
-                {ve.ghi_chu && <div>{ve.ghi_chu}</div>}
+              
+              <div style={{ textAlign: 'center' }}>
+                <small style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Người đăng ký</small>
+                <img
+                  src={ve.anh_nguoi_dung || PLACEHOLDER}
+                  className="thumb"
+                  alt="Người dùng"
+                  onError={e => e.target.src = PLACEHOLDER}
+                />
               </div>
             </div>
 
-            {/* QR */}
+            {/* Cột 2: Thông tin chi tiết */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '1.1rem' }}>{ve.bien_so}</span>
+                <TrangThaiBadge trangThai={ve.trang_thai} />
+              </div>
+              
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                <div>Chủ xe: <span style={{ color: 'var(--text)', fontWeight: 500 }}>{ve.ten_chu_xe}</span></div>
+                <div>SĐT: {ve.sdt || 'N/A'}</div>
+                <div>Loại: {ve.ten_loai_xe}</div>
+                <div>Hết hạn: <strong style={{ color: 'var(--text)' }}>{ve.ngay_het_han}</strong> 
+                  <span style={{ marginLeft: 5 }}>({ve.so_ngay_con >= 0 ? `còn ${ve.so_ngay_con} ngày` : 'đã hết hạn'})</span>
+                </div>
+                <div style={{ marginTop: 4 }}>
+                  Tiền: <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{Number(ve.so_tien).toLocaleString('vi-VN')} đ</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Cột 3: Mã QR */}
             {ve.anh_qr && (
-              <img src={ve.anh_qr} style={{ width: 70, height: 70, objectFit: 'contain', borderRadius: 6 }} alt="QR" />
+              <div style={{ flexShrink: 0, textAlign: 'center' }}>
+                <img 
+                  src={ve.anh_qr} 
+                  style={{ width: 70, height: 70, objectFit: 'contain', borderRadius: 6, background: '#fff', padding: 2 }} 
+                  alt="QR" 
+                />
+                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: 4 }}>Mã vé</div>
+              </div>
             )}
           </div>
 
-          {/* Nút gia hạn */}
-          <button
-            className="btn btn-outline btn-sm"
-            style={{ marginTop: '0.75rem', width: 'auto' }}
-            onClick={() => setGiaHanVe(ve)}
-          >
-            🔄 Gia hạn
-          </button>
+          {/* Nút gia hạn phía dưới cùng của card */}
+          <div style={{ borderTop: '1px solid var(--border)', marginTop: 12, paddingTop: 10 }}>
+            <button
+              className="btn btn-outline btn-sm"
+              style={{ width: 'auto' }}
+              onClick={() => setGiaHanVe(ve)}
+            >
+              ➕ Gia hạn vé
+            </button>
+          </div>
         </div>
       ))}
 

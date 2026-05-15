@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react'
 import { PageLayout, Spinner, Alert, ImageInput, Field, HinhThucSelect, fmtDt, fmtTien } from '../components/UI'
 import { xeRaApi, thanhToanApi } from '../services/api'
-
-const PLACEHOLDER = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iIzMzMyIvPjx0ZXh0IHg9IjQwIiB5PSIzMCIgZHk9Ii4zZW0iIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5OTkiIGZvbnQtc2l6ZT0iMTAiPk5vIEltZzwvdGV4dD48L3N2Zz4='
-
+import { PLACEHOLDER } from '../components/UI';
 // Helper tính thời gian đã gửi (chỉ một định nghĩa duy nhất)
 function fmtThoiGianGui(phut) {
   if (phut == null) return null;

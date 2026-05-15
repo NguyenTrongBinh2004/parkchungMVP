@@ -1,9 +1,27 @@
-#Bỏ qua môi trường ảo
+# Bỏ qua môi trường ảo
 venv/
-# bỏ qua bộ nhớ đệm
-__pycache__
+
+# Bỏ qua bộ nhớ đệm Python
+__pycache__/
+*.pyc
+*.pyo
+
 # Bỏ qua file cấu hình bảo mật
-.evn
+.env
+
 # Bỏ qua các file rác của hệ thống/IDE
 .vscode/
-*.pyc
+
+# Bỏ qua thư mục uploads (ảnh thực tế, QR...)
+uploads/bien_so/*
+uploads/nguoi_lai/*
+uploads/qr/*
+
+# Bỏ qua file build frontend (có thể build lại)
+frontend/assets/
+
+# Bỏ qua file test tạm
+check_zalo_template.py
+
+# Bỏ qua file log
+*.log

@@ -30,12 +30,17 @@ def build_url(path: str | None) -> str | None:
     return f"{BASE_URL}/{path}" if path else None
 
 async def luu_anh(file: UploadFile, thu_muc: str) -> str:
-    """Lưu file upload, giới hạn kích thước."""
+    """Lưu file upload, giới hạn kích thước, chống path traversal."""
     os.makedirs(thu_muc, exist_ok=True)
     du_lieu = await file.read(MAX_IMAGE_SIZE + 1)
     if len(du_lieu) > MAX_IMAGE_SIZE:
         raise HTTPException(status_code=413, detail="Ảnh quá lớn (tối đa 10MB).")
-    ten_file = f"{uuid.uuid4().hex}_{file.filename}"
+    
+    # Chỉ lấy phần mở rộng, bỏ tên gốc để chống path traversal
+    ext = os.path.splitext(file.filename)[1] if file.filename else ".jpg"
+    ext = re.sub(r'[^a-zA-Z0-9.]', '', ext)[:10]
+    ten_file = f"{uuid.uuid4().hex}{ext}"
+    
     duong_dan = os.path.join(thu_muc, ten_file)
     async with aiofiles.open(duong_dan, "wb") as f:
         await f.write(du_lieu)
@@ -346,12 +351,28 @@ async def xac_nhan_xe_vao_ve_thuong(
         with KetNoi.cursor(dictionary=True) as ConTro:
             # ── 4. Tạo khách hàng nếu có thông tin ──
             id_khach_hang = None
-            if ten_khach or sdt or email:
+            if sdt or email:   # chỉ xử lý nếu có ít nhất SĐT hoặc email
+                # Dùng ON DUPLICATE KEY UPDATE để tự động cập nhật nếu SĐT đã tồn tại
                 ConTro.execute("""
                     INSERT INTO khach_hang (ten, sdt, email, cho_phep_lay_ho)
-                    VALUES (%s,%s,%s,%s)
+                    VALUES (%s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        ten = VALUES(ten),
+                        email = VALUES(email),
+                        cho_phep_lay_ho = VALUES(cho_phep_lay_ho)
                 """, (ten_khach or "Khách vãng lai", sdt, email, int(cho_phep_lay_ho)))
-                id_khach_hang = ConTro.lastrowid
+
+                # Sau khi thực hiện, lấy id khách hàng:
+                # - Nếu INSERT thành công (bản ghi mới) → lastrowid > 0
+                # - Nếu UPDATE (trùng SĐT) → lastrowid có thể = 0, phải SELECT lại
+                if ConTro.lastrowid > 0:
+                    id_khach_hang = ConTro.lastrowid
+                else:
+                    if sdt:
+                        ConTro.execute("SELECT id FROM khach_hang WHERE sdt = %s", (sdt,))
+                        row = ConTro.fetchone()
+                        if row:
+                            id_khach_hang = row["id"]
 
             ma_phien = f"GX{uuid.uuid4().hex[:8].upper()}"
 
