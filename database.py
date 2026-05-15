@@ -1,8 +1,3 @@
-"""
-database.py — Kết nối CSDL qua Connection Pool
-Thay vì tạo connection mới mỗi request (tốn ~5–20 ms handshake),
-pool tái sử dụng connection đã có sẵn.
-"""
 import os
 import logging
 
@@ -25,9 +20,11 @@ def _khoi_tao_pool() -> pooling.MySQLConnectionPool:
             pool_size=int(os.getenv("DB_POOL_SIZE", 10)),
             pool_reset_session=True,
             host=os.getenv("DB_HOST"),
+            port=int(os.getenv("DB_PORT", 3306)),        # ← thêm PORT (Aiven: 12268)
             user=os.getenv("DB_USER"),
             password=os.getenv("DB_PASSWORD"),
             database=os.getenv("DB_NAME"),
+            ssl_ca=os.getenv("DB_SSL_CA", "ca.pem"),     # ← thêm SSL cert
             autocommit=False,          # mọi commit phải tường minh
             connection_timeout=10,
         )
