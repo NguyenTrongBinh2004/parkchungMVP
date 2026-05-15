@@ -1,6 +1,6 @@
 // Tập trung tất cả các API call vào một nơi
 
-const BASE = ''  // Vite proxy sẽ chuyển tiếp đến localhost:8000
+const BASE = import.meta.env.VITE_API_URL || '';
 
 async function request(url, options = {}) {
   const res = await fetch(BASE + url, options)
