@@ -6,6 +6,7 @@ from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 import mysql.connector
 import aiofiles
+
 from database import lay_ket_noi_CSDL
 from models import PhanHoiXeVao
 from services.qr_service import tao_ma_qr, doc_ma_qr
@@ -16,9 +17,7 @@ from utils import (
     VN_TZ, BASE_URL, MAX_IMAGE_SIZE,
     chuan_hoa_bien_so, bay_gio_vn, build_url, luu_anh
 )
-
 router = APIRouter(prefix="/xe-vao", tags=["Xe Vào"])
-
 
 async def gui_thong_bao(email, sdt, ten_chu_xe, bien_so, gio_vao, duong_dan_qr, ma_phien):
     """Gửi thông báo bất đồng bộ qua email và SMS (Zalo/SMS)."""
