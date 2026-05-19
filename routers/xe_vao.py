@@ -6,45 +6,19 @@ from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 import mysql.connector
 import aiofiles
-
 from database import lay_ket_noi_CSDL
 from models import PhanHoiXeVao
 from services.qr_service import tao_ma_qr, doc_ma_qr
 from services.ocr import nhan_dien_bien_so
 from services.email_service import gui_email_qr
 from services.sms_service import gui_thong_bao_xe_vao
+from utils import (
+    VN_TZ, BASE_URL, MAX_IMAGE_SIZE,
+    chuan_hoa_bien_so, bay_gio_vn, build_url, luu_anh
+)
 
 router = APIRouter(prefix="/xe-vao", tags=["Xe Vào"])
 
-VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
-BASE_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip("/")
-def chuan_hoa_bien_so(bien_so: str) -> str:
-    """Loại bỏ tất cả ký tự không phải chữ cái hoặc số."""
-    return re.sub(r'[^A-Z0-9]', '', bien_so.upper().strip())
-MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
-
-def bay_gio_vn():
-    return datetime.now(VN_TZ).replace(tzinfo=None)
-
-def build_url(path: str | None) -> str | None:
-    return f"{BASE_URL}/{path}" if path else None
-
-async def luu_anh(file: UploadFile, thu_muc: str) -> str:
-    """Lưu file upload, giới hạn kích thước, chống path traversal."""
-    os.makedirs(thu_muc, exist_ok=True)
-    du_lieu = await file.read(MAX_IMAGE_SIZE + 1)
-    if len(du_lieu) > MAX_IMAGE_SIZE:
-        raise HTTPException(status_code=413, detail="Ảnh quá lớn (tối đa 10MB).")
-    
-    # Chỉ lấy phần mở rộng, bỏ tên gốc để chống path traversal
-    ext = os.path.splitext(file.filename)[1] if file.filename else ".jpg"
-    ext = re.sub(r'[^a-zA-Z0-9.]', '', ext)[:10]
-    ten_file = f"{uuid.uuid4().hex}{ext}"
-    
-    duong_dan = os.path.join(thu_muc, ten_file)
-    async with aiofiles.open(duong_dan, "wb") as f:
-        await f.write(du_lieu)
-    return duong_dan.replace("\\", "/")
 
 async def gui_thong_bao(email, sdt, ten_chu_xe, bien_so, gio_vao, duong_dan_qr, ma_phien):
     """Gửi thông báo bất đồng bộ qua email và SMS (Zalo/SMS)."""
