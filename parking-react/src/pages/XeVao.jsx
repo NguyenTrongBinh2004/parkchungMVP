@@ -57,7 +57,11 @@ function SmartPanel() {
   useEffect(() => {
     loaiXeApi.list().then(data => {
       setLoaiXeList(data)
-      if (data.length) setFormThuong(f => ({ ...f, loaiXe: data[0].id }))
+      if (data.length) {
+        // Tự động chọn loại "Ô tô" nếu có, không thì chọn loại đầu tiên
+        const oto = data.find(lx => lx.ten.toLowerCase().includes('ô tô'))
+        setFormThuong(f => ({ ...f, loaiXe: oto ? oto.id : data[0].id }))
+      }
     }).catch(() => {})
   }, [])
 
@@ -312,11 +316,17 @@ function SmartPanel() {
           <Field label="Ghi chú">
             <input value={formThuong.ghiChu} onChange={e => setFormThuong(f => ({ ...f, ghiChu: e.target.value }))} />
           </Field>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: '0.85rem' }}>
-            <input type="checkbox" checked={formThuong.cho_phep_lay_ho}
-              onChange={e => setFormThuong(f => ({ ...f, cho_phep_lay_ho: e.target.checked }))} />
-            Cho phép lấy hộ
-          </label>
+          <Field label="Cho phép lấy hộ">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.88rem' }}>
+              <input
+                type="checkbox"
+                checked={formThuong.cho_phep_lay_ho}
+                onChange={e => setFormThuong(f => ({ ...f, cho_phep_lay_ho: e.target.checked }))}
+                style={{ width: 'auto', accentColor: 'var(--accent)' }}
+              />
+              <span>Có</span>
+            </label>
+          </Field>
           <button className="btn btn-accent" onClick={xacNhanThuong} disabled={loading}>
             Xác nhận xe vào
           </button>
