@@ -19,11 +19,10 @@ export const loaiXeApi = {
 // ─── Xe vào ───
 export const xeVaoApi = {
   nhanDien: (formData) => request('/xe-vao/nhan-dien/', { method: 'POST', body: formData }),
-  kiemTraBienSo: (formData) => request('/xe-vao/kiem-tra-bien-so/', { method: 'POST', body: formData }),
+  kiemTraBienSo: (formData) => request('/xe-vao/kiem-tra-bien-so/', { method: 'POST', body: formData }), // thêm dòng này
   xacNhanVeThang: (formData) => request('/xe-vao/ve-thang/xac-nhan/', { method: 'POST', body: formData }),
   xacNhanThuong: (formData) => request('/xe-vao/ve-thuong/xac-nhan/', { method: 'POST', body: formData }),
 }
-
 // ─── Xe ra ───
 export const xeRaApi = {
   nhanDien: (formData) => request('/xe-ra/nhan-dien/', { method: 'POST', body: formData }),
