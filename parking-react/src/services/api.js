@@ -13,6 +13,7 @@ async function request(url, options = {}) {
 export const loaiXeApi = {
   list: () => request('/loai-xe/'),
   create: (formData) => request('/loai-xe/', { method: 'POST', body: formData }),
+  delete: (id) => request(`/loai-xe/${id}`, { method: 'DELETE' }),
 }
 
 // ─── Xe vào ───

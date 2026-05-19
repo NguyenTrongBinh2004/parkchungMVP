@@ -221,6 +221,22 @@ export default function LoaiXe() {
     load()
   }, [])
 
+  // ── THÊM HÀM XÓA ──
+  const handleXoa = async (id, tenLoai) => {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa loại xe "${tenLoai}" không?`)) {
+      return
+    }
+
+    try {
+      await loaiXeApi.delete(id)
+      // Xóa thành công -> load lại danh sách (hoặc xóa khỏi state cục bộ)
+      load()
+    } catch (err) {
+      // Backend sẽ trả detail lỗi (vd: "Không thể xóa vì đang có vé tháng...")
+      setError(err.message)
+    }
+  }
+
   return (
     <PageLayout title="🏷️ Loại xe" backTo="/">
       {loading && <Spinner />}
@@ -259,6 +275,24 @@ export default function LoaiXe() {
             {lx.gia_ve_thang
               ? `Vé tháng: ${Number(lx.gia_ve_thang).toLocaleString('vi-VN')} đ`
               : 'Chưa đặt vé tháng'}
+          </div>
+
+          {/* NÚT XÓA */}
+          <div style={{ marginTop: 8 }}>
+            <button
+              onClick={() => handleXoa(lx.id, lx.ten)}
+              style={{
+                background: 'var(--danger, #e74c3c)',
+                color: 'white',
+                border: 'none',
+                padding: '4px 12px',
+                borderRadius: 4,
+                cursor: 'pointer',
+                fontSize: '0.85rem',
+              }}
+            >
+              🗑 Xóa
+            </button>
           </div>
         </div>
       ))}

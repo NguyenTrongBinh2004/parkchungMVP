@@ -56,12 +56,13 @@ class BillingService:
                 so_ngay = (gio_ra.date() - gio_vao.date()).days
                 fee = so_ngay * int(loai_xe.get("gia_ngay_dem") or minimum)
 
-            return _lam_tron_nghin(max(fee, minimum) if minimum else fee)
+            return _lam_tron_nghin(fee)
         # ── Theo giờ ───────────────────────────────────────────
         elif kieu == "theo_gio":
             cau_hinh = loai_xe.get("cau_hinh_theo_gio")
             if not cau_hinh:
-                return _lam_tron_nghin(minimum)
+                # Nếu không có cấu hình giờ, dùng giá lượt làm fallback
+                return _lam_tron_nghin(minimum) 
 
             if isinstance(cau_hinh, str):
                 try:
@@ -70,24 +71,26 @@ class BillingService:
                     logger.error("Lỗi parse cấu hình giờ: %s", exc)
                     return _lam_tron_nghin(minimum)
 
-            so_gio = so_phut / 60
-            tong_tien = 0.0
-            con_lai = so_gio
+            # === SỬA 1: Làm tròn lên số giờ nguyên (mỗi giờ tính trọn 1 giờ) ===
+            so_gio = math.ceil(so_phut / 60)
+            tong_tien = 0
+            gio_bat_dau = 0
 
             for bac in cau_hinh:
                 if "den_gio" in bac:
-                    gio_trong_bac = min(con_lai, bac["den_gio"])
-                    tong_tien += gio_trong_bac * bac["gia"]
-                    con_lai -= gio_trong_bac
-                    if con_lai <= 0:
+                    gio_ket_thuc = bac["den_gio"]
+                    so_gio_trong_bac = max(0, min(so_gio, gio_ket_thuc) - gio_bat_dau)
+                    tong_tien += so_gio_trong_bac * bac["gia"]
+                    gio_bat_dau = gio_ket_thuc
+                    if so_gio <= gio_ket_thuc:
                         break
                 elif "moi_gio_tiep" in bac:
-                    tong_tien += con_lai * bac["moi_gio_tiep"]
+                    so_gio_con_lai = so_gio - gio_bat_dau
+                    if so_gio_con_lai > 0:
+                        tong_tien += so_gio_con_lai * bac["moi_gio_tiep"]
                     break
 
-            fee = round(tong_tien)
-            # Áp dụng mức tối thiểu
-            return _lam_tron_nghin(max(fee, minimum) if minimum else fee)
-
-        # ── Fallback ───────────────────────────────────────────
-        return  _lam_tron_nghin(minimum)
+            fee = int(tong_tien)
+            # === SỬA 2: KHÔNG dùng minimum (giá lượt) làm sàn cho tính theo giờ ===
+            return _lam_tron_nghin(fee)
+            return _lam_tron_nghin(fee)

@@ -83,8 +83,14 @@ async def nhan_dien_xe_vao(
     # ── 2. OCR biển số ──
     bien_so_ocr = nhan_dien_bien_so(du_lieu_anh)
     if not bien_so_ocr:
-        raise HTTPException(status_code=400, detail="Không nhận diện được QR hay biển số trong ảnh.")
+        # Không raise lỗi, trả về trạng thái yêu cầu nhập tay
+        return {
+            "loai": "yeu_cau_nhap_tay",
+            "bien_so_nhan_dien": "",
+            "ghi_chu": "Không nhận diện được biển số từ ảnh. Vui lòng nhập biển số thủ công."
+        }
 
+    # Nếu có biển số, tiếp tục trả về như cũ
     return {
         "loai": "bien_so",
         "bien_so_nhan_dien": bien_so_ocr,

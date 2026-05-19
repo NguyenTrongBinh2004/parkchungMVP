@@ -36,8 +36,9 @@ export default function XeVao() {
   // Luồng nghiệp vụ
   const [step, setStep] = useState('idle')
   // 'idle'          – chưa có kết quả nhận diện
-  // 'ocr_confirm'   – hiển thị ô biển số để sửa + nút Tìm xe
-  // 'qr_detected'   – quét được QR vé tháng từ ảnh
+  // 'ocr_confirm'   – hiển thị ô biển số (có kết quả OCR) để sửa + nút Tìm xe
+  // 'manual_entry'  – nhập tay biển số khi không nhận diện được
+  // 'qr_detected'   – quét được QR vé tháng từ ảnh (ít dùng)
   // 've_thang_view' – đã xác định là vé tháng, hiển thị thông tin
   // 'thuong_form'   – xe thường, hiển thị form đầy đủ
 
@@ -86,12 +87,17 @@ export default function XeVao() {
     try {
       const data = await xeVaoApi.nhanDien(fd)
       if (data.loai === 've_thang_qr') {
-        setQrData(data);            
-        setStep('ve_thang_view');
+        setQrData(data)
+        setStep('ve_thang_view')
       } else if (data.loai === 'bien_so' && data.bien_so_nhan_dien) {
         setForm(f => ({ ...f, bienSo: data.bien_so_nhan_dien }))
         setStep('ocr_confirm')
+      } else if (data.loai === 'yeu_cau_nhap_tay') {
+        // Backend trả về yêu cầu nhập tay (không OCR được)
+        setForm(f => ({ ...f, bienSo: '' }))
+        setStep('manual_entry')
       } else {
+        // Trường hợp không xác định (dự phòng)
         setStep('thuong_form')
         setError(data.ghi_chu || 'Không nhận diện được biển số. Vui lòng nhập tay.')
       }
@@ -103,7 +109,7 @@ export default function XeVao() {
     }
   }
 
-  // ─── Kiểm tra biển số (sau khi user sửa) ───
+  // ─── Kiểm tra biển số (sau khi user sửa/nhập tay) ───
   async function kiemTraBienSo() {
     const bs = form.bienSo.trim()
     if (!bs) {
@@ -125,7 +131,7 @@ export default function XeVao() {
       }
     } catch (err) {
       setError(err.message)
-      // Giữ nguyên step ocr_confirm để user sửa lại biển số
+      // Giữ nguyên step hiện tại (ocr_confirm hoặc manual_entry) để user sửa lại biển số
     } finally {
       setLoadingNhanDien(false)
     }
@@ -266,10 +272,10 @@ export default function XeVao() {
         </Alert>
       )}
 
-      {/* Bước: Xác nhận biển số (sau OCR) */}
-      {step === 'ocr_confirm' && (
+      {/* Bước: Xác nhận biển số (sau OCR hoặc nhập tay) */}
+      {(step === 'ocr_confirm' || step === 'manual_entry') && (
         <div className="card" style={{ marginBottom: '0.75rem' }}>
-          <Field label="Biển số nhận diện (sửa nếu cần)">
+          <Field label={step === 'manual_entry' ? 'Nhập biển số thủ công' : 'Biển số nhận diện (sửa nếu cần)'}>
             <input
               value={form.bienSo}
               onChange={e => setForm(f => ({ ...f, bienSo: e.target.value }))}
@@ -298,7 +304,7 @@ export default function XeVao() {
         </div>
       )}
 
-      {/* Bước: Quét QR vé tháng (chưa có chi tiết) */}
+      {/* Bước: Quét QR vé tháng (chưa có chi tiết) - giữ nguyên để tương thích */}
       {step === 'qr_detected' && (
         <div className="card" style={{ marginBottom: '0.75rem', borderColor: 'var(--info)' }}>
           <h5 style={{ marginBottom: '0.75rem', color: 'var(--info)' }}>🎫 Vé tháng (QR)</h5>

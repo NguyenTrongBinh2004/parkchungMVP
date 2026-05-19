@@ -1,5 +1,5 @@
 # routers/loai_xe.py
-from fastapi import APIRouter, Depends, HTTPException, Form
+from fastapi import APIRouter, Depends, HTTPException, Form, status
 from typing import Optional
 import mysql.connector
 import json
@@ -72,3 +72,24 @@ def tao_loai_xe(
     except mysql.connector.Error as err:
         if KetNoi: KetNoi.rollback()
         raise HTTPException(status_code=500, detail=f"Lỗi CSDL: {err}")
+    
+@router.delete("/{loai_xe_id}")
+def xoa_loai_xe(loai_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
+    with KetNoi.cursor(dictionary=True) as ConTro:
+        # Kiểm tra tồn tại
+        ConTro.execute("SELECT id FROM loai_xe WHERE id = %s", (loai_xe_id,))
+        if not ConTro.fetchone():
+            raise HTTPException(status_code=404, detail="Không tìm thấy loại xe.")
+        
+        # Kiểm tra ràng buộc: nếu có vé tháng hoặc xe đang dùng loại này thì không xóa
+        ConTro.execute("SELECT COUNT(*) as cnt FROM ve_thang WHERE loai_xe_id = %s", (loai_xe_id,))
+        if ConTro.fetchone()['cnt'] > 0:
+            raise HTTPException(status_code=400, detail="Không thể xóa vì đang có vé tháng sử dụng loại xe này.")
+        
+        # Nếu bạn có bảng xe riêng (xe khách vãng lai) cũng nên kiểm tra, tạm bỏ qua.
+        
+        # Thực hiện xóa
+        ConTro.execute("DELETE FROM loai_xe WHERE id = %s", (loai_xe_id,))
+        KetNoi.commit()
+        
+    return {"message": f"Đã xóa loại xe ID {loai_xe_id} thành công."}
