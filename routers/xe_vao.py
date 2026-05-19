@@ -10,7 +10,7 @@ import aiofiles
 from database import lay_ket_noi_CSDL
 from models import PhanHoiXeVao
 from services.qr_service import tao_ma_qr, doc_ma_qr
-from services.ocr import nhan_dien_bien_so
+# ❌ ĐÃ XÓA: from services.ocr import nhan_dien_bien_so
 from services.email_service import gui_email_qr
 from services.sms_service import gui_thong_bao_xe_vao
 
@@ -18,9 +18,10 @@ router = APIRouter(prefix="/xe-vao", tags=["Xe Vào"])
 
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip("/")
+
 def chuan_hoa_bien_so(bien_so: str) -> str:
-    """Loại bỏ tất cả ký tự không phải chữ cái hoặc số."""
     return re.sub(r'[^A-Z0-9]', '', bien_so.upper().strip())
+
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 def bay_gio_vn():
@@ -30,54 +31,49 @@ def build_url(path: str | None) -> str | None:
     return f"{BASE_URL}/{path}" if path else None
 
 async def luu_anh(file: UploadFile, thu_muc: str) -> str:
-    """Lưu file upload, giới hạn kích thước, chống path traversal."""
     os.makedirs(thu_muc, exist_ok=True)
     du_lieu = await file.read(MAX_IMAGE_SIZE + 1)
     if len(du_lieu) > MAX_IMAGE_SIZE:
         raise HTTPException(status_code=413, detail="Ảnh quá lớn (tối đa 10MB).")
-    
-    # Chỉ lấy phần mở rộng, bỏ tên gốc để chống path traversal
     ext = os.path.splitext(file.filename)[1] if file.filename else ".jpg"
     ext = re.sub(r'[^a-zA-Z0-9.]', '', ext)[:10]
     ten_file = f"{uuid.uuid4().hex}{ext}"
-    
     duong_dan = os.path.join(thu_muc, ten_file)
     async with aiofiles.open(duong_dan, "wb") as f:
         await f.write(du_lieu)
     return duong_dan.replace("\\", "/")
 
 async def gui_thong_bao(email, sdt, ten_chu_xe, bien_so, gio_vao, duong_dan_qr, ma_phien):
-    """Gửi thông báo bất đồng bộ qua email và SMS (Zalo/SMS)."""
     if email:
         asyncio.create_task(gui_email_qr(
             den=email, ten_chu_xe=ten_chu_xe, bien_so=bien_so,
             gio_vao=str(gio_vao), duong_dan_qr=duong_dan_qr
         ))
     if sdt:
-        # gui_thong_bao_xe_vao chỉ cần sdt, bien_so, ma_phien
         asyncio.create_task(asyncio.to_thread(
             gui_thong_bao_xe_vao, sdt, bien_so, ma_phien
         ))
 
+
 # ───────────────────────────────────────────
-# 1. NHẬN DIỆN (CHỈ OCR / QR, KHÔNG DB)
+# 1. NHẬN DIỆN (QR → fallback nhập tay)
 # ───────────────────────────────────────────
 @router.post("/nhan-dien/")
 async def nhan_dien_xe_vao(
     anh: UploadFile = File(...),
-    KetNoi=Depends(lay_ket_noi_CSDL)   # thêm dòng này
+    KetNoi=Depends(lay_ket_noi_CSDL)
 ):
     du_lieu_anh = await anh.read(MAX_IMAGE_SIZE + 1)
     if len(du_lieu_anh) > MAX_IMAGE_SIZE:
         raise HTTPException(status_code=413, detail="Ảnh quá lớn (tối đa 10MB).")
 
-    # ── 1. Thử QR trước ──
+    # ── Thử QR trước (qr_service đã có tiền xử lý ảnh tốt hơn) ──
     try:
         du_lieu_qr = doc_ma_qr(du_lieu_anh)
         ma_qr = du_lieu_qr.get("ma_qr")
         loai_qr = du_lieu_qr.get("loai")
+
         if loai_qr == "ve_thang" and ma_qr:
-            # Tìm vé tháng trong DB
             with KetNoi.cursor(dictionary=True) as ConTro:
                 ConTro.execute("""
                     SELECT v.*, k.ten AS ten_chu_xe, k.sdt, k.cho_phep_lay_ho
@@ -103,36 +99,30 @@ async def nhan_dien_xe_vao(
                     "cho_phep_lay_ho": bool(ve.get("cho_phep_lay_ho", False)),
                     "ghi_chu": ve.get("ghi_chu") or "Đọc QR vé tháng thành công. Xác nhận để cho xe vào."
                 }
-            # Nếu QR không tìm thấy vé (hết hạn hoặc sai) → rơi xuống OCR
     except Exception:
-        pass  # QR không hợp lệ → tiếp tục OCR
+        pass  # QR không đọc được → nhập tay
 
-    # ── 2. OCR biển số ──
-    bien_so_ocr = nhan_dien_bien_so(du_lieu_anh)
-    if not bien_so_ocr:
-        raise HTTPException(status_code=400, detail="Không nhận diện được QR hay biển số trong ảnh.")
-
+    # ── Fallback: yêu cầu nhập biển số thủ công ──
     return {
         "loai": "bien_so",
-        "bien_so_nhan_dien": bien_so_ocr,
-        "ghi_chu": "Kiểm tra và sửa biển số nếu cần, sau đó nhấn Kiểm tra."
+        "bien_so_nhan_dien": "",
+        "ghi_chu": "Không nhận diện được QR. Vui lòng nhập biển số thủ công."
     }
 
+
 # ───────────────────────────────────────────
-# 2. KIỂM TRA BIỂN SỐ (SAU KHI NGƯỜI DÙNG SỬA / XÁC NHẬN)
+# 2. KIỂM TRA BIỂN SỐ
 # ───────────────────────────────────────────
 @router.post("/kiem-tra-bien-so/")
 def kiem_tra_bien_so(
     bien_so: str = Form(...),
     KetNoi=Depends(lay_ket_noi_CSDL)
 ):
-    # Chuẩn hóa biển số đầu vào
     bien_so_sach = chuan_hoa_bien_so(bien_so)
     if len(bien_so_sach) < 5:
         raise HTTPException(status_code=422, detail="Biển số quá ngắn.")
 
     with KetNoi.cursor(dictionary=True) as ConTro:
-        # Kiểm tra xe đang trong bãi (dùng chuẩn hóa)
         ConTro.execute(
             """SELECT id FROM phien_gui_xe
             WHERE REPLACE(REPLACE(REPLACE(bien_so, '-', ''), '.', ''), ' ', '') = %s
@@ -142,7 +132,6 @@ def kiem_tra_bien_so(
         if ConTro.fetchone():
             raise HTTPException(status_code=400, detail="Xe này hiện đang trong bãi.")
 
-        # Tìm vé tháng còn hạn (dùng chuẩn hóa)
         ConTro.execute("""
             SELECT v.*, k.ten AS ten_chu_xe, k.sdt, k.email, k.cho_phep_lay_ho
             FROM ve_thang v
@@ -152,7 +141,6 @@ def kiem_tra_bien_so(
         """, (bien_so_sach, date.today()))
         ve_thang = ConTro.fetchone()
 
-    # Phần còn lại giữ nguyên (xử lý kết quả ve_thang hoặc trả về xe_thuong)
     if ve_thang:
         so_ngay_con = (ve_thang["ngay_het_han"] - date.today()).days
         return {
@@ -164,18 +152,18 @@ def kiem_tra_bien_so(
             "ngay_het_han": str(ve_thang["ngay_het_han"]),
             "so_ngay_con": so_ngay_con,
             "canh_bao": f"⚠️ Vé tháng còn {so_ngay_con} ngày" if so_ngay_con <= 7 else None,
-            "anh_bien_so":   build_url(ve_thang.get("duong_dan_anh_bien_so")),
+            "anh_bien_so": build_url(ve_thang.get("duong_dan_anh_bien_so")),
             "anh_nguoi_dung": build_url(ve_thang.get("duong_dan_anh_nguoi_dung")),
             "cho_phep_lay_ho": bool(ve_thang.get("cho_phep_lay_ho", False)),
             "ghi_chu": "Tìm thấy vé tháng. Xác nhận để cho xe vào."
         }
 
-    # Không có vé tháng → xe thường
     return {
         "loai": "xe_thuong",
-        "bien_so": bien_so,  # giữ nguyên input để hiển thị
+        "bien_so": bien_so,
         "ghi_chu": "Không có vé tháng. Tiếp tục cho xe vào dạng vé thường."
     }
+
 
 # ───────────────────────────────────────────
 # 3. XE VÀO – VÉ THÁNG
@@ -190,7 +178,6 @@ async def xac_nhan_xe_vao_ve_thang(
 ):
     bay_gio = bay_gio_vn()
     try:
-        # ── 1. Kiểm tra vé tháng ──
         with KetNoi.cursor(dictionary=True) as ConTro:
             ConTro.execute("""
                 SELECT v.*, k.ten AS ten_chu_xe, k.sdt, k.email, k.cho_phep_lay_ho
@@ -203,7 +190,6 @@ async def xac_nhan_xe_vao_ve_thang(
         if not ve_thang:
             raise HTTPException(status_code=404, detail="Vé tháng không còn hạn.")
 
-        # ── 2. Kiểm tra xe đang trong bãi ──
         bien_so = ve_thang["bien_so"]
         bien_so_sach = chuan_hoa_bien_so(bien_so)
         with KetNoi.cursor(dictionary=True) as ConTro:
@@ -216,18 +202,14 @@ async def xac_nhan_xe_vao_ve_thang(
             if ConTro.fetchone():
                 raise HTTPException(status_code=400, detail="Xe này hiện đang trong bãi.")
 
-        # ── 3. Lưu ảnh ──
         duong_dan_bien_so   = await luu_anh(anh_bien_so,   "uploads/bien_so")
         duong_dan_nguoi_lai = await luu_anh(anh_nguoi_lai, "uploads/nguoi_lai") if anh_nguoi_lai else None
 
-        bien_so      = ve_thang["bien_so"]
         duoi_bien_so = re.sub(r'[^0-9]', '', bien_so)[-5:]
         ma_phien     = f"GX{uuid.uuid4().hex[:8].upper()}"
 
-        # ── 4. Tạo QR riêng cho phiên (trước khi INSERT) ──
         du_lieu_qr_phien = {
-            "ma_phien": ma_phien,
-            "bien_so": bien_so,
+            "ma_phien": ma_phien, "bien_so": bien_so,
             "ten_chu_xe": ve_thang["ten_chu_xe"],
             "sdt": ve_thang.get("sdt") or "",
             "gio_vao": str(bay_gio),
@@ -236,7 +218,6 @@ async def xac_nhan_xe_vao_ve_thang(
         }
         ma_qr_moi, duong_dan_qr_moi = tao_ma_qr(du_lieu_qr_phien)
 
-        # ── 5. INSERT phiên (duy nhất 1 commit) ──
         with KetNoi.cursor(dictionary=True) as ConTro:
             try:
                 ConTro.execute("""
@@ -259,7 +240,6 @@ async def xac_nhan_xe_vao_ve_thang(
                 KetNoi.rollback()
                 raise HTTPException(status_code=400, detail="Xe này hiện đang trong bãi (biển số trùng).")
 
-        # ── 6. Gửi thông báo ──
         so_ngay_con    = (ve_thang["ngay_het_han"] - date.today()).days
         ghi_chu_tra_ve = f"Vé tháng còn {so_ngay_con} ngày" if so_ngay_con <= 7 else "Vé tháng hợp lệ"
         if ghi_chu:
@@ -268,8 +248,7 @@ async def xac_nhan_xe_vao_ve_thang(
         await gui_thong_bao(
             ve_thang.get("email"), ve_thang.get("sdt"),
             ve_thang["ten_chu_xe"], bien_so, bay_gio,
-            duong_dan_qr_moi,
-            ma_phien
+            duong_dan_qr_moi, ma_phien
         )
 
         return {
@@ -286,6 +265,7 @@ async def xac_nhan_xe_vao_ve_thang(
         raise HTTPException(status_code=500, detail=f"Lỗi CSDL: {err}")
     except HTTPException:
         raise
+
 
 # ───────────────────────────────────────────
 # 4. XE VÀO – XE THƯỜNG
@@ -312,13 +292,12 @@ async def xac_nhan_xe_vao_ve_thuong(
         raise HTTPException(status_code=422, detail="Email không hợp lệ.")
 
     bay_gio      = bay_gio_vn()
-    bien_so_goc  = bien_so_xac_nhan.upper().strip()          # Giữ nguyên để lưu DB
-    bien_so_sach = chuan_hoa_bien_so(bien_so_xac_nhan)       # Dùng để so sánh
+    bien_so_goc  = bien_so_xac_nhan.upper().strip()
+    bien_so_sach = chuan_hoa_bien_so(bien_so_xac_nhan)
     duoi_bien_so = bien_so_sach[-5:] if len(bien_so_sach) >= 5 else bien_so_sach
     ten_khach    = ten_chu_xe.strip() if ten_chu_xe else None
 
     try:
-        # ── 1. Validate loại xe và kiểm tra vé tháng (chuẩn hóa) ──
         with KetNoi.cursor(dictionary=True) as ConTro:
             ConTro.execute("SELECT id FROM loai_xe WHERE id=%s", (id_loai_xe,))
             if not ConTro.fetchone():
@@ -334,7 +313,6 @@ async def xac_nhan_xe_vao_ve_thuong(
                 raise HTTPException(status_code=400,
                     detail="Xe đang có vé tháng. Vui lòng cho xe vào bằng chức năng quét QR.")
 
-        # ── 2. Kiểm tra xe đang trong bãi (chuẩn hóa) ──
             ConTro.execute(
                 """SELECT id FROM phien_gui_xe
                 WHERE REPLACE(REPLACE(REPLACE(bien_so, '-', ''), '.', ''), ' ', '') = %s
@@ -344,15 +322,12 @@ async def xac_nhan_xe_vao_ve_thuong(
             if ConTro.fetchone():
                 raise HTTPException(status_code=400, detail="Xe này hiện đang trong bãi.")
 
-        # ── 3. Lưu ảnh ──
         duong_dan_bien_so   = await luu_anh(anh_bien_so,   "uploads/bien_so")
         duong_dan_nguoi_lai = await luu_anh(anh_nguoi_lai, "uploads/nguoi_lai") if anh_nguoi_lai else None
 
         with KetNoi.cursor(dictionary=True) as ConTro:
-            # ── 4. Tạo khách hàng nếu có thông tin ──
             id_khach_hang = None
-            if sdt or email:   # chỉ xử lý nếu có ít nhất SĐT hoặc email
-                # Dùng ON DUPLICATE KEY UPDATE để tự động cập nhật nếu SĐT đã tồn tại
+            if sdt or email:
                 ConTro.execute("""
                     INSERT INTO khach_hang (ten, sdt, email, cho_phep_lay_ho)
                     VALUES (%s, %s, %s, %s)
@@ -362,9 +337,6 @@ async def xac_nhan_xe_vao_ve_thuong(
                         cho_phep_lay_ho = VALUES(cho_phep_lay_ho)
                 """, (ten_khach or "Khách vãng lai", sdt, email, int(cho_phep_lay_ho)))
 
-                # Sau khi thực hiện, lấy id khách hàng:
-                # - Nếu INSERT thành công (bản ghi mới) → lastrowid > 0
-                # - Nếu UPDATE (trùng SĐT) → lastrowid có thể = 0, phải SELECT lại
                 if ConTro.lastrowid > 0:
                     id_khach_hang = ConTro.lastrowid
                 else:
@@ -376,7 +348,6 @@ async def xac_nhan_xe_vao_ve_thuong(
 
             ma_phien = f"GX{uuid.uuid4().hex[:8].upper()}"
 
-            # ── 5. Tạo QR phiên ──
             du_lieu_qr = {
                 "ma_phien": ma_phien, "bien_so": bien_so_goc,
                 "ten_chu_xe": ten_khach or "Khách vãng lai", "sdt": sdt or "",
@@ -386,7 +357,6 @@ async def xac_nhan_xe_vao_ve_thuong(
             }
             ma_qr, duong_dan_qr = tao_ma_qr(du_lieu_qr)
 
-            # ── 6. INSERT phiên ──
             try:
                 ConTro.execute("""
                     INSERT INTO phien_gui_xe
@@ -405,7 +375,6 @@ async def xac_nhan_xe_vao_ve_thuong(
                 KetNoi.rollback()
                 raise HTTPException(status_code=400, detail="Xe này hiện đang trong bãi (biển số trùng).")
 
-        # ── 7. Gửi thông báo ──
         await gui_thong_bao(
             email, sdt, ten_khach or "Khách vãng lai", bien_so_goc, bay_gio,
             duong_dan_qr, ma_phien
