@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException, Form, UploadFile, File
 
 from database import lay_ket_noi_CSDL
 from services.qr_service import doc_ma_qr
-from services.ocr import nhan_dien_bien_so
 from services.billing_service import BillingService
 from utils import bay_gio_vn, build_url, chuan_hoa_bien_so
 
@@ -39,16 +38,15 @@ def _so_tien_tam(phien: dict, KetNoi, bay_gio) -> int:
         return BillingService.tinh_tien_chi_tiet(cur.fetchone(), phien["gio_vao"], bay_gio)
 
 
-# ── 1. Nhận diện thông minh (QR ưu tiên → OCR) ────────────────
+# ── 1. Nhận diện thông minh (QR ưu tiên → nhập tay) ──────────
 @router.post("/nhan-dien/")
 async def nhan_dien_xe_ra(
     anh: UploadFile = File(...),
     KetNoi=Depends(lay_ket_noi_CSDL),
 ):
     du_lieu_anh = await anh.read()
-    await anh.seek(0)
 
-    # Thử đọc QR trước
+    # Thử đọc QR trước (qr_service đã có tiền xử lý ảnh tốt hơn)
     try:
         du_lieu_qr = doc_ma_qr(du_lieu_anh)
         ma_qr = du_lieu_qr.get("ma_qr")
@@ -75,15 +73,14 @@ async def nhan_dien_xe_ra(
             }
     except HTTPException:
         raise
-    except (ValueError, KeyError):
-        pass  # Không đọc được QR → thử OCR
+    except Exception:
+        pass  # Không đọc được QR → nhập tay
 
-    # OCR biển số
-    bien_so_ocr = nhan_dien_bien_so(du_lieu_anh)
+    # Fallback: yêu cầu nhập biển số thủ công
     return {
         "loai": "bien_so",
-        "bien_so_nhan_dien": bien_so_ocr or "",
-        "ghi_chu": "Kiểm tra và sửa biển số nếu cần, sau đó gửi POST /xe-ra/bien-so/.",
+        "bien_so_nhan_dien": "",
+        "ghi_chu": "Không nhận diện được QR. Vui lòng nhập biển số thủ công.",
     }
 
 
@@ -96,7 +93,7 @@ async def quet_qr_xem_thong_tin(
     try:
         du_lieu_qr = doc_ma_qr(await anh_qr.read())
         ma_qr = du_lieu_qr.get("ma_qr")
-    except (ValueError, KeyError):
+    except Exception:
         raise HTTPException(status_code=400, detail="Ảnh QR không hợp lệ hoặc không đọc được.")
 
     if not ma_qr:
@@ -135,7 +132,6 @@ def kiem_tra_xe_ra_bien_so(
 
     try:
         with KetNoi.cursor(dictionary=True) as cur:
-            # Tìm chính xác
             cur.execute(
                 """
                 SELECT p.*, k.ten AS ten_chu_xe, k.sdt, k.cho_phep_lay_ho
