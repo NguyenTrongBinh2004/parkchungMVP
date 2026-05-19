@@ -55,16 +55,22 @@ function SmartPanel() {
 
   // Lấy danh sách loại xe
   useEffect(() => {
-    loaiXeApi.list().then(data => {
-      setLoaiXeList(data)
-      if (data.length) {
-        // Tự động chọn loại "Ô tô" nếu có, không thì chọn loại đầu tiên
-        const oto = data.find(lx => lx.ten.toLowerCase().includes('ô tô'))
-        setFormThuong(f => ({ ...f, loaiXe: oto ? oto.id : data[0].id }))
-      }
-    }).catch(() => {})
+      loaiXeApi.list().then(data => {
+        setLoaiXeList(data)
+        if (data.length) {
+          const oto = data.find(lx =>
+            lx.ten.toLowerCase().replace(/\s+/g, '').includes('ôtô')
+          );
+          const fallback = data.find(lx =>
+            lx.ten.toLowerCase().replace(/\s+/g, '').includes('oto')
+          );
+          setFormThuong(f => ({
+            ...f,
+            loaiXe: oto ? oto.id : (fallback ? fallback.id : data[0].id)
+          }))
+        }
+      }).catch(() => {})
   }, [])
-
   // Chụp ảnh biển số / QR
   async function handleFileBienSo(e) {
     const file = e.target.files[0]
