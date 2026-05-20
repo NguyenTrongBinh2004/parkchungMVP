@@ -376,10 +376,210 @@ function SmartPanel() {
 
 // ─── Tab Biển số (nhập tay không cần ảnh) ───
 function BienSoPanel({ bienSoMacDinh }) {
-  // Giữ nguyên code hiện tại của BienSoPanel (đã có ở trên)
-  // ...
-}
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [ticket, setTicket] = useState(null)
 
+  const [fileBienSo, setFileBienSo] = useState(null)
+  const [fileNguoiLai, setFileNguoiLai] = useState(null)
+  const previewBS = useObjectURL(fileBienSo)
+  const previewNL = useObjectURL(fileNguoiLai)
+
+  const [bienSo, setBienSo] = useState('')
+  const [result, setResult] = useState(null)   // { loai: 've_thang' | 'xe_thuong' }
+  const [showFormThuong, setShowFormThuong] = useState(false)
+  const [formThuong, setFormThuong] = useState({
+    loaiXe: '', tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false
+  })
+  const [loaiXeList, setLoaiXeList] = useState([])
+
+  // Lấy danh sách loại xe
+  useEffect(() => {
+    loaiXeApi.list().then(data => {
+      setLoaiXeList(data)
+      if (data.length) {
+        const oto = data.find(lx =>
+          lx.ten.toLowerCase().replace(/\s+/g, '').includes('ôtô')
+        );
+        const fallback = data.find(lx =>
+          lx.ten.toLowerCase().replace(/\s+/g, '').includes('oto')
+        );
+        setFormThuong(f => ({
+          ...f,
+          loaiXe: oto ? oto.id : (fallback ? fallback.id : data[0].id)
+        }))
+      }
+    }).catch(() => {})
+  }, [])
+
+  // Khi nhận biển số từ SmartPanel (chụp ảnh), tự động điền và tìm
+  useEffect(() => {
+    if (bienSoMacDinh && bienSoMacDinh.trim()) {
+      setBienSo(bienSoMacDinh.trim())
+      kiemTra(bienSoMacDinh.trim())
+    }
+  }, [bienSoMacDinh])
+
+  async function kiemTra(bs) {
+    const searchBien = bs || bienSo.trim()
+    if (!searchBien) return
+    setLoading(true)
+    setError(null)
+    setResult(null)
+    setShowFormThuong(false)
+    const fd = new FormData()
+    fd.append('bien_so', searchBien)
+    try {
+      const data = await xeVaoApi.kiemTraBienSo(fd)
+      if (data.loai === 've_thang') {
+        setResult(data)
+      } else if (data.loai === 'xe_thuong') {
+        setResult(data)
+        setShowFormThuong(true)
+      } else {
+        setError('Không tìm thấy xe.')
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function xacNhanThuong() {
+    if (!fileBienSo || !fileNguoiLai) {
+      setError('Vui lòng chụp đầy đủ ảnh biển số và người lái')
+      return
+    }
+    setLoading(true)
+    const fd = new FormData()
+    fd.append('id_loai_xe', formThuong.loaiXe)
+    fd.append('bien_so_xac_nhan', bienSo.trim().toUpperCase())
+    fd.append('ten_chu_xe', formThuong.tenChuXe || '')
+    fd.append('sdt', formThuong.sdt || '')
+    fd.append('email', formThuong.email || '')
+    fd.append('ghi_chu', formThuong.ghiChu || '')
+    fd.append('cho_phep_lay_ho', formThuong.cho_phep_lay_ho)
+    fd.append('anh_bien_so', fileBienSo)
+    fd.append('anh_nguoi_lai', fileNguoiLai)
+    try {
+      const data = await xeVaoApi.xacNhanThuong(fd)
+      setTicket(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="card">
+      <Field label="Nhập biển số">
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input value={bienSo} onChange={e => setBienSo(e.target.value)}
+            placeholder="VD: 51F-12345" style={{ flex: 1, textTransform: 'uppercase' }}
+            onKeyDown={e => e.key === 'Enter' && kiemTra()} />
+          <button className="btn btn-secondary btn-sm" onClick={() => kiemTra()} disabled={loading}>
+            Kiểm tra
+          </button>
+        </div>
+      </Field>
+
+      <div className="card" style={{ marginBottom: '0.75rem' }}>
+        <label className="form-label">Ảnh biển số <span style={{ color: 'var(--danger)' }}>*</span></label>
+        <input type="file" accept="image/*" capture="environment" onChange={e => setFileBienSo(e.target.files[0])} />
+        <div style={{ marginTop: 4, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+          Hoặc <label style={{ color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline' }}>
+            <input type="file" accept="image/*" onChange={e => setFileBienSo(e.target.files[0])} style={{ display: 'none' }} />
+            chọn ảnh từ thư viện
+          </label>
+        </div>
+        {previewBS && <img src={previewBS} style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 8, marginTop: 8 }} />}
+      </div>
+      <div className="card" style={{ marginBottom: '0.75rem' }}>
+        <label className="form-label">Ảnh người lái <span style={{ color: 'var(--danger)' }}>*</span></label>
+        <input type="file" accept="image/*" capture="user" onChange={e => setFileNguoiLai(e.target.files[0])} />
+        <div style={{ marginTop: 4, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+          Hoặc <label style={{ color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline' }}>
+            <input type="file" accept="image/*" onChange={e => setFileNguoiLai(e.target.files[0])} style={{ display: 'none' }} />
+            chọn ảnh từ thư viện
+          </label>
+        </div>
+        {previewNL && <img src={previewNL} style={{ width: 120, height: 120, objectFit: 'cover', borderRadius: '50%', marginTop: 8 }} />}
+      </div>
+
+      {loading && <Spinner />}
+      {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
+
+      {/* Kết quả kiểm tra là vé tháng */}
+      {result?.loai === 've_thang' && (
+        <div className="card" style={{ borderColor: 'var(--info)', marginBottom: '0.75rem' }}>
+          <h5 style={{ color: 'var(--info)' }}>🎫 Vé tháng</h5>
+          <p><strong>Biển số:</strong> {result.bien_so}</p>
+          <p><strong>Chủ xe:</strong> {result.ten_chu_xe}</p>
+          <p><strong>Hết hạn:</strong> {result.ngay_het_han}</p>
+          {result.canh_bao && <p style={{ color: 'var(--warning)' }}>⚠️ {result.canh_bao}</p>}
+          {result.ghi_chu && <p><strong>Ghi chú:</strong> {result.ghi_chu}</p>}
+          {result.anh_bien_so && <img src={result.anh_bien_so} style={{ maxWidth: '100%', borderRadius: 8, marginTop: 8 }} alt="Biển số vé tháng" />}
+          {result.anh_nguoi_dung && <img src={result.anh_nguoi_dung} style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: '50%', marginTop: 8 }} alt="Người dùng" />}
+          <button className="btn btn-accent" disabled={loading}>
+            Xác nhận xe vào (Vé tháng)
+          </button>
+        </div>
+      )}
+
+      {/* Form xe thường */}
+      {showFormThuong && (
+        <div className="card" style={{ marginBottom: '0.75rem' }}>
+          <h5 style={{ marginBottom: '0.75rem' }}>🚗 Xe thường</h5>
+          <Field label="Biển số">
+            <input value={bienSo} disabled style={{ textTransform: 'uppercase' }} />
+          </Field>
+          <Field label="Loại xe" required>
+            <select value={formThuong.loaiXe} onChange={e => setFormThuong(f => ({ ...f, loaiXe: e.target.value }))}>
+              {loaiXeList.map(lx => <option key={lx.id} value={lx.id}>{lx.ten}</option>)}
+            </select>
+          </Field>
+          <Field label="Tên chủ xe">
+            <input value={formThuong.tenChuXe} onChange={e => setFormThuong(f => ({ ...f, tenChuXe: e.target.value }))} />
+          </Field>
+          <Field label="Số điện thoại">
+            <input value={formThuong.sdt} onChange={e => setFormThuong(f => ({ ...f, sdt: e.target.value }))} inputMode="tel" />
+          </Field>
+          <Field label="Email">
+            <input type="email" value={formThuong.email} onChange={e => setFormThuong(f => ({ ...f, email: e.target.value }))} />
+          </Field>
+          <Field label="Ghi chú">
+            <input value={formThuong.ghiChu} onChange={e => setFormThuong(f => ({ ...f, ghiChu: e.target.value }))} />
+          </Field>
+          <Field label="Cho phép lấy hộ">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.88rem' }}>
+              <input type="checkbox" checked={formThuong.cho_phep_lay_ho}
+                onChange={e => setFormThuong(f => ({ ...f, cho_phep_lay_ho: e.target.checked }))}
+                style={{ width: 'auto', accentColor: 'var(--accent)' }} />
+              <span>Có</span>
+            </label>
+          </Field>
+          <button className="btn btn-accent" onClick={xacNhanThuong} disabled={loading}>
+            Xác nhận xe vào
+          </button>
+        </div>
+      )}
+
+      {ticket && (
+        <Modal onClose={() => setTicket(null)} title="🎫 Vé gửi xe">
+          <div style={{ textAlign: 'center' }}>
+            <p><strong>Biển số:</strong> <span style={{ fontFamily: 'var(--font-mono)' }}>{ticket.bien_so}</span></p>
+            <p style={{ color: 'var(--text-muted)' }}>Giờ vào: {fmtDt(ticket.gio_vao)}</p>
+            {ticket.qr_image_url && <img src={ticket.qr_image_url} alt="QR" style={{ width: 220, borderRadius: 10 }} />}
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>📸 Chụp màn hình để xuất trình khi lấy xe.</p>
+            <button className="btn btn-accent" style={{ marginTop: '1rem' }} onClick={() => setTicket(null)}>Đóng</button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  )
+}
 // ─── Trang chính XeVao ───
 export default function XeVao() {
   const [tab, setTab] = useState('smart')
