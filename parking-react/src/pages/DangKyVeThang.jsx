@@ -266,8 +266,11 @@ export default function DangKyVeThang() {
             {ticket.qr_image_url && (
                 <img
                     src={ticket.qr_image_url}
-                    alt="QR"
-                    style={{ width: 200, borderRadius: 10, margin: '0 auto' }}
+                    alt="QR Code"
+                    style={{ width: 200, borderRadius: 10, margin: '0 auto', display: 'block' }}
+                    onError={(e) => {
+                        console.error("Không thể tải ảnh QR từ Backend:", e.target.src);
+                    }}
                 />
             )}
             <button
