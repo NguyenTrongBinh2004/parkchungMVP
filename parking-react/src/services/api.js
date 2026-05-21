@@ -47,4 +47,5 @@ export const veThangApi = {
   dangKy: (formData) => request('/dang-ky-ve-thang/', { method: 'POST', body: formData }),
   giaHan: (idVe, formData) => request(`/ve-thang/${idVe}/gia-han/`, { method: 'POST', body: formData }),
   lichSu: (idVe) => request(`/ve-thang/${idVe}/lich-su/`),
-}
+  xoa: (idVe) => request(`/ve-thang/${idVe}`, { method: 'DELETE' }),
+};

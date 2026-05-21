@@ -451,6 +451,37 @@ def lich_su_ve_thang(id_ve: int, KetNoi=Depends(lay_ket_noi_CSDL)):
         )
         return cur.fetchall()
 
+@app.delete("/ve-thang/{id_ve}")
+def xoa_ve_thang(id_ve: int, KetNoi=Depends(lay_ket_noi_CSDL)):
+    try:
+        with KetNoi.cursor(dictionary=True) as cur:
+            # Kiểm tra vé tồn tại
+            cur.execute("SELECT * FROM ve_thang WHERE id = %s", (id_ve,))
+            ve = cur.fetchone()
+            if not ve:
+                raise HTTPException(status_code=404, detail="Không tìm thấy vé tháng.")
+
+            # Kiểm tra xem có xe nào đang trong bãi dùng vé này không
+            cur.execute(
+                "SELECT id FROM phien_gui_xe WHERE id_ve_thang = %s AND is_in_bai = 1 LIMIT 1",
+                (id_ve,)
+            )
+            if cur.fetchone():
+                raise HTTPException(
+                    status_code=400,
+                    detail="Không thể xóa vé tháng đang có xe trong bãi. Vui lòng cho xe ra trước."
+                )
+
+            # Tiến hành xóa (bảng lich_su_ve_thang sẽ tự động xóa theo nhờ ON DELETE CASCADE)
+            cur.execute("DELETE FROM ve_thang WHERE id = %s", (id_ve,))
+            KetNoi.commit()
+            return {"message": f"Đã xóa vé tháng {ve['bien_so']} thành công."}
+
+    except mysql.connector.Error as err:
+        KetNoi.rollback()
+        raise HTTPException(status_code=500, detail=f"Lỗi CSDL: {err}")
+    except HTTPException:
+        raise
 
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):

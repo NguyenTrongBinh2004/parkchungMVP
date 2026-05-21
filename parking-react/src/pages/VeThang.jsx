@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { PageLayout, Spinner, Alert, TrangThaiBadge, Modal, fmtTien } from '../components/UI'
 import { veThangApi } from '../services/api'
 import { PLACEHOLDER } from '../components/UI';
+
 function GiaHanModal({ ve, onClose, onSuccess }) {
   const [ghiChu, setGhiChu] = useState('')
   const [loading, setLoading] = useState(false)
@@ -131,14 +132,30 @@ export default function VeThang() {
             )}
           </div>
 
-          {/* Nút gia hạn phía dưới cùng của card */}
-          <div style={{ borderTop: '1px solid var(--border)', marginTop: 12, paddingTop: 10 }}>
+          {/* Nút gia hạn và xóa phía dưới cùng của card */}
+          <div style={{ borderTop: '1px solid var(--border)', marginTop: 12, paddingTop: 10, display: 'flex', gap: 8 }}>
             <button
               className="btn btn-outline btn-sm"
               style={{ width: 'auto' }}
               onClick={() => setGiaHanVe(ve)}
             >
               ➕ Gia hạn vé
+            </button>
+            <button
+              className="btn btn-sm"
+              style={{ width: 'auto', background: 'var(--danger)', color: '#fff' }}
+              onClick={async () => {
+                if (window.confirm(`Bạn có chắc muốn xóa vé tháng ${ve.bien_so}?`)) {
+                  try {
+                    await veThangApi.xoa(ve.id);
+                    load();
+                  } catch (err) {
+                    alert(err.message);
+                  }
+                }
+              }}
+            >
+              🗑️ Xóa
             </button>
           </div>
         </div>
