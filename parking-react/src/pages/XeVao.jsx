@@ -86,7 +86,6 @@ function VeThangCard({ result, onXacNhan, loading }) {
     if (!fileNguoiLai) { setLocalError('Vui lòng chụp ảnh người lái'); return }
     setLocalError(null)
 
-    // Nén ảnh trước khi gửi
     const compressedBS = await compressImage(fileBienSo)
     const compressedNL = await compressImage(fileNguoiLai)
     onXacNhan(compressedBS, compressedNL)
@@ -107,7 +106,6 @@ function VeThangCard({ result, onXacNhan, loading }) {
         </p>
       )}
 
-      {/* Ảnh đối chiếu từ hồ sơ */}
       {(result.anh_bien_so || result.anh_nguoi_dung) && (
         <div style={{ marginTop: 8, marginBottom: 8 }}>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 6 }}>📋 Ảnh hồ sơ đối chiếu:</p>
@@ -160,12 +158,14 @@ function SmartPanel() {
   const refScan = useRef(null)
   const refScanLib = useRef(null)
 
+  // Ảnh thực tế sẽ lưu vào DB (chụp cùng lúc với scan hoặc sau)
+  const [fileBienSoThucTe, setFileBienSoThucTe] = useState(null)
+  const [fileNguoiLaiThucTe, setFileNguoiLaiThucTe] = useState(null)
+
   // Luồng
   const [bienSoText, setBienSoText] = useState('')
   const [result, setResult] = useState(null)
   const [showFormThuong, setShowFormThuong] = useState(false)
-  const [fileBienSoThuong, setFileBienSoThuong] = useState(null)
-  const [fileNguoiLaiThuong, setFileNguoiLaiThuong] = useState(null)
   const [formThuong, setFormThuong] = useState({
     loaiXe: '', tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false,
   })
@@ -225,7 +225,7 @@ function SmartPanel() {
         setShowFormThuong(false)
       } else if (data.loai === 'xe_thuong') {
         setResult(data)
-        setShowFormThuong(true)
+        setShowFormThuong(true)   // hiển thị form thông tin, KHÔNG yêu cầu chụp lại ảnh
       } else {
         setError('Không xác định được loại xe.')
       }
@@ -242,7 +242,7 @@ function SmartPanel() {
     setLoading(true)
     const fd = new FormData()
     fd.append('ma_qr', result.ma_qr)
-    fd.append('anh_bien_so', fileBienSoThucTe)    // ảnh biển số thực tế
+    fd.append('anh_bien_so', fileBienSoThucTe)
     fd.append('anh_nguoi_lai', fileNguoiLai)
     try {
       const data = await xeVaoApi.xacNhanVeThang(fd)
@@ -257,13 +257,14 @@ function SmartPanel() {
   }
 
   async function xacNhanThuong() {
-    if (!fileBienSoThuong) { setError('Vui lòng chụp ảnh biển số'); return }
-    if (!fileNguoiLaiThuong) { setError('Vui lòng chụp ảnh người lái'); return }
+    // Sử dụng ảnh thực tế đã chụp từ đầu, không cần chụp lại
+    if (!fileBienSoThucTe) { setError('Vui lòng chụp ảnh biển số (phía trên)'); return }
+    if (!fileNguoiLaiThucTe) { setError('Vui lòng chụp ảnh người lái (phía trên)'); return }
     if (!formThuong.loaiXe) { setError('Vui lòng chọn loại xe'); return }
     setLoading(true)
 
-    const compressedBS = await compressImage(fileBienSoThuong)
-    const compressedNL = await compressImage(fileNguoiLaiThuong)
+    const compressedBS = await compressImage(fileBienSoThucTe)
+    const compressedNL = await compressImage(fileNguoiLaiThucTe)
 
     const fd = new FormData()
     fd.append('id_loai_xe', formThuong.loaiXe)
@@ -289,8 +290,8 @@ function SmartPanel() {
 
   function resetForm() {
     setFileScan(null)
-    setFileBienSoThuong(null)
-    setFileNguoiLaiThuong(null)
+    setFileBienSoThucTe(null)
+    setFileNguoiLaiThucTe(null)
     setBienSoText('')
     setResult(null)
     setShowFormThuong(false)
@@ -318,6 +319,13 @@ function SmartPanel() {
         {previewScan && (
           <img src={previewScan} alt="scan" style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 8, marginTop: 8 }} />
         )}
+      </div>
+
+      {/* Ảnh thực tế (chụp ngay từ đầu, dùng cho cả vé thường và vé tháng) */}
+      <div className="card" style={{ marginBottom: '0.75rem' }}>
+        <h5 style={{ marginBottom: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Ảnh lưu vào hệ thống</h5>
+        <ImagePicker label="Ảnh biển số xe (thực tế)" required file={fileBienSoThucTe} onFile={setFileBienSoThucTe} />
+        <ImagePicker label="Ảnh người lái" required file={fileNguoiLaiThucTe} onFile={setFileNguoiLaiThucTe} />
       </div>
 
       {loading && <Spinner />}
@@ -354,7 +362,7 @@ function SmartPanel() {
         <VeThangCard result={result} onXacNhan={xacNhanVeThang} loading={loading} />
       )}
 
-      {/* Form xe thường */}
+      {/* Form xe thường — chỉ hiển thị thông tin, không yêu cầu chụp lại ảnh */}
       {showFormThuong && (
         <div className="card" style={{ marginBottom: '0.75rem' }}>
           <h5 style={{ marginBottom: '0.75rem' }}>🚗 Xe thường</h5>
@@ -387,11 +395,6 @@ function SmartPanel() {
             </label>
           </Field>
 
-          <div style={{ borderTop: '1px solid var(--border)', marginTop: 10, paddingTop: 10 }}>
-            <ImagePicker label="Ảnh biển số xe" required file={fileBienSoThuong} onFile={setFileBienSoThuong} />
-            <ImagePicker label="Ảnh người lái" required file={fileNguoiLaiThuong} onFile={setFileNguoiLaiThuong} />
-          </div>
-
           <button className="btn btn-accent" onClick={xacNhanThuong} disabled={loading}>
             ✅ Xác nhận xe vào
           </button>
@@ -417,14 +420,18 @@ function SmartPanel() {
 
 // ─── Tab Biển số (nhập tay hoàn toàn) ──────────────────────────
 function BienSoPanel() {
+  // Tương tự SmartPanel nhưng không có phần scan, thay bằng input biển số thủ công
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [ticket, setTicket] = useState(null)
   const [bienSo, setBienSo] = useState('')
   const [result, setResult] = useState(null)
   const [showFormThuong, setShowFormThuong] = useState(false)
+
+  // Ảnh thực tế (chụp cùng lúc hoặc sau)
   const [fileBienSo, setFileBienSo] = useState(null)
   const [fileNguoiLai, setFileNguoiLai] = useState(null)
+
   const [formThuong, setFormThuong] = useState({
     loaiXe: '', tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false
   })
@@ -520,6 +527,12 @@ function BienSoPanel() {
         </div>
       </Field>
 
+      {/* Ảnh thực tế (chụp sẵn) */}
+      <div style={{ marginTop: '0.75rem', borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+        <ImagePicker label="Ảnh biển số xe" required file={fileBienSo} onFile={setFileBienSo} />
+        <ImagePicker label="Ảnh người lái" required file={fileNguoiLai} onFile={setFileNguoiLai} />
+      </div>
+
       {loading && <Spinner />}
       {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
 
@@ -554,11 +567,6 @@ function BienSoPanel() {
               <span>Có</span>
             </label>
           </Field>
-
-          <div style={{ borderTop: '1px solid var(--border)', marginTop: 10, paddingTop: 10 }}>
-            <ImagePicker label="Ảnh biển số xe" required file={fileBienSo} onFile={setFileBienSo} />
-            <ImagePicker label="Ảnh người lái" required file={fileNguoiLai} onFile={setFileNguoiLai} />
-          </div>
           <button className="btn btn-accent" onClick={xacNhanThuong} disabled={loading}>✅ Xác nhận xe vào</button>
         </div>
       )}
