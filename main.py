@@ -179,8 +179,8 @@ async def dang_ky_ve_thang(
                 if row:
                     id_khach_hang = row["id"]
                     cur.execute(
-                        "UPDATE khach_hang SET ten=%s, email=%s, dia_chi=%s WHERE id=%s",
-                        (ten_chu_xe, email, dia_chi, id_khach_hang),
+                        "UPDATE khach_hang SET ten=%s, email=%s, dia_chi=%s, cho_phep_lay_ho=%s WHERE id=%s",
+                        (ten_chu_xe, email, dia_chi, int(cho_phep_lay_ho), id_khach_hang),
                     )
                 else:
                     # Kiểm tra SĐT trùng với vé tháng còn hạn khác

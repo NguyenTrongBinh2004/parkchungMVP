@@ -129,15 +129,23 @@ export default function DangKyVeThang() {
   })
 
 useEffect(() => {
+  // Reset form về mặc định khi vào trang
+  setForm({
+    bien_so: '',
+    id_loai_xe: '',
+    ten_chu_xe: '',
+    sdt: '',
+    email: '',
+    dia_chi: '',
+    ghi_chu: '',
+    cho_phep_lay_ho: false,
+  })
+  // Lấy danh sách loại xe và set mặc định Ô tô
   loaiXeApi.list().then(data => {
     setLoaiXeList(data)
     if (data.length) {
-      const oto = data.find(lx =>
-        lx.ten.toLowerCase().replace(/\s+/g, '').includes('ôtô')
-      )
-      const fallback = data.find(lx =>
-        lx.ten.toLowerCase().replace(/\s+/g, '').includes('oto')
-      )
+      const oto = data.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('ôtô'))
+      const fallback = data.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('oto'))
       const defaultId = oto ? oto.id : (fallback ? fallback.id : data[0].id)
       setForm(f => ({ ...f, id_loai_xe: defaultId }))
     }
