@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageLayout, Spinner, Alert, Field, Modal } from '../components/UI'
 import { veThangApi, loaiXeApi } from '../services/api'
-const API = import.meta.env.VITE_API_URL || '';
 
-// ─── Hook tiện ích quản lý Object URL cho file ảnh ───
+const API = import.meta.env.VITE_API_URL || ''  // Domain backend
+
 function useObjectURL(file) {
   const [url, setUrl] = useState(null)
   useEffect(() => {
@@ -16,7 +16,6 @@ function useObjectURL(file) {
   return url
 }
 
-// ─── Component chính ───
 export default function DangKyVeThang() {
   const navigate = useNavigate()
   const [loaiXeList, setLoaiXeList] = useState([])
@@ -24,13 +23,11 @@ export default function DangKyVeThang() {
   const [error, setError] = useState(null)
   const [ticket, setTicket] = useState(null)
 
-  // File ảnh
-  const [fileBienSo,   setFileBienSo]   = useState(null)
+  const [fileBienSo, setFileBienSo] = useState(null)
   const [fileNguoiDung, setFileNguoiDung] = useState(null)
   const previewBS = useObjectURL(fileBienSo)
   const previewND = useObjectURL(fileNguoiDung)
 
-  // Form data
   const [form, setForm] = useState({
     bien_so: '',
     id_loai_xe: '',
@@ -42,24 +39,23 @@ export default function DangKyVeThang() {
     cho_phep_lay_ho: false,
   })
 
-  // Lấy danh sách loại xe
+  // Lấy danh sách loại xe và mặc định chọn Ô tô
   useEffect(() => {
-      loaiXeApi.list().then(data => {
-          setLoaiXeList(data);
-          if (data.length) {
-              const oto = data.find(lx =>
-                  lx.ten.toLowerCase().replace(/\s+/g, '').includes('ôtô')
-              );
-              const fallback = data.find(lx =>
-                  lx.ten.toLowerCase().replace(/\s+/g, '').includes('oto')
-              );
-              const defaultId = oto ? oto.id : (fallback ? fallback.id : data[0].id);
-              setForm(f => ({ ...f, id_loai_xe: defaultId }));
-          }
-      }).catch(() => {});
-  }, []);
+    loaiXeApi.list().then(data => {
+      setLoaiXeList(data)
+      if (data.length) {
+        const oto = data.find(lx =>
+          lx.ten.toLowerCase().replace(/\s+/g, '').includes('ôtô')
+        )
+        const fallback = data.find(lx =>
+          lx.ten.toLowerCase().replace(/\s+/g, '').includes('oto')
+        )
+        const defaultId = oto ? oto.id : (fallback ? fallback.id : data[0].id)
+        setForm(f => ({ ...f, id_loai_xe: defaultId }))
+      }
+    }).catch(() => {})
+  }, [])
 
-  // Helper cập nhật state form
   function upd(field) {
     return e => {
       const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value
@@ -67,7 +63,6 @@ export default function DangKyVeThang() {
     }
   }
 
-  // Xử lý chọn file
   function handleFile(setter) {
     return e => {
       const f = e.target.files[0]
@@ -76,11 +71,9 @@ export default function DangKyVeThang() {
     }
   }
 
-  // Submit form
   async function submit(e) {
     e.preventDefault()
 
-    // Validation
     if (!form.bien_so.trim()) {
       setError('Vui lòng nhập biển số.')
       return
@@ -212,6 +205,18 @@ export default function DangKyVeThang() {
               onChange={handleFile(setFileBienSo)}
               required
             />
+            <div style={{ marginTop: 4, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+              Hoặc{' '}
+              <label style={{ color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline' }}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFile(setFileBienSo)}
+                  style={{ display: 'none' }}
+                />
+                chọn ảnh từ thư viện
+              </label>
+            </div>
             {previewBS && (
               <img
                 src={previewBS}
@@ -228,6 +233,18 @@ export default function DangKyVeThang() {
               onChange={handleFile(setFileNguoiDung)}
               required
             />
+            <div style={{ marginTop: 4, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+              Hoặc{' '}
+              <label style={{ color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline' }}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFile(setFileNguoiDung)}
+                  style={{ display: 'none' }}
+                />
+                chọn ảnh từ thư viện
+              </label>
+            </div>
             {previewND && (
               <img
                 src={previewND}
@@ -251,13 +268,37 @@ export default function DangKyVeThang() {
       </form>
 
       {/* Modal hiển thị kết quả */}
-      {ticket.ma_qr && (
-          <img
+      {ticket && (
+        <Modal onClose={() => navigate('/ve-thang')} title="✅ Đăng ký thành công">
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ marginBottom: 8 }}>
+              Biển số:{' '}
+              <strong style={{ fontFamily: 'var(--font-mono)' }}>{ticket.bien_so}</strong>
+            </p>
+            <p style={{ marginBottom: 8 }}>
+              Hết hạn: <strong>{ticket.ngay_het_han}</strong>
+            </p>
+            <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem' }}>
+              {Number(ticket.so_tien).toLocaleString('vi-VN')} đ
+            </p>
+            <img
               src={ticket.qr_image_url || `${API}/uploads/qr/${ticket.ma_qr}.png`}
               alt="QR Code"
               style={{ width: 200, borderRadius: 10, margin: '0 auto', display: 'block' }}
               onError={(e) => {
-                  console.error("Không thể tải ảnh QR từ Backend:", e.target.src);
+                console.error("Không thể tải ảnh QR từ Backend:", e.target.src);
               }}
-          />
+            />
+            <button
+              className="btn btn-accent"
+              style={{ marginTop: '1rem' }}
+              onClick={() => navigate('/ve-thang')}
+            >
+              Quay về danh sách
+            </button>
+          </div>
+        </Modal>
       )}
+    </PageLayout>
+  )
+}
