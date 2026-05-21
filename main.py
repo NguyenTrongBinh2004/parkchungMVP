@@ -298,7 +298,9 @@ async def dang_ky_ve_thang(
             "ten_chu_xe": ten_chu_xe, "sdt": sdt, "email": email,
             "bien_so": bien_so_chuan, "id_loai_xe": id_loai_xe,
             "ngay_dang_ky": hom_nay, "ngay_het_han": ngay_het_han,
-            "so_tien": so_tien, "ma_qr": ma_qr, "ghi_chu": ghi_chu,
+            "so_tien": so_tien, "ma_qr": ma_qr,
+            "qr_image_url": build_url(duong_dan_qr),   # ← thêm dòng này
+            "ghi_chu": ghi_chu,
             "trang_thai": "con_han",
             "so_ngay_con": (ngay_het_han - date.today()).days,
         }

@@ -44,21 +44,19 @@ export default function DangKyVeThang() {
   // Lấy danh sách loại xe
   useEffect(() => {
       loaiXeApi.list().then(data => {
-        setLoaiXeList(data)
-        if (data.length) {
-          const oto = data.find(lx =>
-            lx.ten.toLowerCase().replace(/\s+/g, '').includes('ôtô')
-          );
-          const fallback = data.find(lx =>
-            lx.ten.toLowerCase().replace(/\s+/g, '').includes('oto')
-          );
-          setFormThuong(f => ({
-            ...f,
-            loaiXe: oto ? oto.id : (fallback ? fallback.id : data[0].id)
-          }))
-        }
-      }).catch(() => {})
-  }, [])
+          setLoaiXeList(data);
+          if (data.length) {
+              const oto = data.find(lx =>
+                  lx.ten.toLowerCase().replace(/\s+/g, '').includes('ôtô')
+              );
+              const fallback = data.find(lx =>
+                  lx.ten.toLowerCase().replace(/\s+/g, '').includes('oto')
+              );
+              const defaultId = oto ? oto.id : (fallback ? fallback.id : data[0].id);
+              setForm(f => ({ ...f, id_loai_xe: defaultId }));
+          }
+      }).catch(() => {});
+  }, []);
 
   // Helper cập nhật state form
   function upd(field) {
@@ -265,12 +263,12 @@ export default function DangKyVeThang() {
             <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem' }}>
               {Number(ticket.so_tien).toLocaleString('vi-VN')} đ
             </p>
-            {ticket.ma_qr && (
-              <img
-                src={`/uploads/qr/${ticket.ma_qr}.png`}
-                alt="QR"
-                style={{ width: 200, borderRadius: 10, margin: '0 auto' }}
-              />
+            {ticket.qr_image_url && (
+                <img
+                    src={ticket.qr_image_url}
+                    alt="QR"
+                    style={{ width: 200, borderRadius: 10, margin: '0 auto' }}
+                />
             )}
             <button
               className="btn btn-accent"
