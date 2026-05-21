@@ -128,12 +128,21 @@ export default function DangKyVeThang() {
     cho_phep_lay_ho: false,
   })
 
-  useEffect(() => {
-    loaiXeApi.list().then(data => {
-      setLoaiXeList(data)
-      if (data.length) setForm(f => ({ ...f, id_loai_xe: data[0].id }))
-    }).catch(() => {})
-  }, [])
+useEffect(() => {
+  loaiXeApi.list().then(data => {
+    setLoaiXeList(data)
+    if (data.length) {
+      const oto = data.find(lx =>
+        lx.ten.toLowerCase().replace(/\s+/g, '').includes('ôtô')
+      )
+      const fallback = data.find(lx =>
+        lx.ten.toLowerCase().replace(/\s+/g, '').includes('oto')
+      )
+      const defaultId = oto ? oto.id : (fallback ? fallback.id : data[0].id)
+      setForm(f => ({ ...f, id_loai_xe: defaultId }))
+    }
+  }).catch(() => {})
+}, [])
 
   function upd(field) {
     return e => {
