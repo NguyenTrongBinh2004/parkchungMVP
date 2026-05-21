@@ -125,6 +125,18 @@ function SmartPanel({ onChuyenTabBienSo }) {
         id="smart-file"
         onChange={handleFile}
       />
+      <div style={{ marginTop: 4, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+        Hoặc{' '}
+        <label style={{ color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline' }}>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFile}
+            style={{ display: 'none' }}
+          />
+          chọn ảnh từ thư viện
+        </label>
+      </div>
       {loading && <Spinner />}
       {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
       {success && <Alert type="success">✅ Thanh toán thành công!</Alert>}
@@ -217,6 +229,18 @@ function QRPanel() {
   return (
     <div className="card">
       <ImageInput key={resetKey} label="Chụp ảnh QR" id="qr-file" onChange={handleFile} />
+      <div style={{ marginTop: 4, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+        Hoặc{' '}
+        <label style={{ color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline' }}>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFile}
+            style={{ display: 'none' }}
+          />
+          chọn ảnh từ thư viện
+        </label>
+      </div>
       {loading && <Spinner />}
       {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
       {success && <Alert type="success">✅ Thanh toán thành công!</Alert>}
