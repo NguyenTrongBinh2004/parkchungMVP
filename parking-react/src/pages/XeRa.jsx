@@ -2,6 +2,22 @@ import { useState, useEffect } from 'react'
 import { PageLayout, Spinner, Alert, ImageInput, Field, HinhThucSelect, fmtDt, fmtTien } from '../components/UI'
 import { xeRaApi, thanhToanApi } from '../services/api'
 import { PLACEHOLDER } from '../components/UI';
+import imageCompression from 'browser-image-compression';
+
+async function compressImage(file) {
+  const options = {
+    maxSizeMB: 0.3,
+    maxWidthOrHeight: 1024,
+    useWebWorker: true,
+  };
+  try {
+    const compressedFile = await imageCompression(file, options);
+    return compressedFile;
+  } catch (error) {
+    console.warn('Nén ảnh thất bại, dùng ảnh gốc:', error);
+    return file;
+  }
+}
 // Helper tính thời gian đã gửi (chỉ một định nghĩa duy nhất)
 function fmtThoiGianGui(phut) {
   if (phut == null) return null;
@@ -69,26 +85,27 @@ function SmartPanel({ onChuyenTabBienSo }) {
   const [bienSoText, setBienSoText] = useState('')
 
   async function handleFile(e) {
-    const file = e.target.files[0]
-    if (!file) return
-    setLoading(true)
-    setError(null)
-    setResult(null)
-    setSuccess(false)
-    setBienSoText('')
-    const fd = new FormData()
-    fd.append('anh', file)
-    try {
-      const data = await xeRaApi.nhanDien(fd)
-      setResult(data)
-      if (data.loai === 'bien_so') {
-        setBienSoText(data.bien_so_nhan_dien || '')
+      const file = e.target.files[0]
+      if (!file) return
+      setLoading(true)
+      setError(null)
+      setResult(null)
+      setSuccess(false)
+      setBienSoText('')
+      try {
+        const compressedFile = await compressImage(file)
+        const fd = new FormData()
+        fd.append('anh', compressedFile)
+        const data = await xeRaApi.nhanDien(fd)
+        setResult(data)
+        if (data.loai === 'bien_so') {
+          setBienSoText(data.bien_so_nhan_dien || '')
+        }
+      } catch (err) {
+        setError(err.message)
+      } finally {
+        setLoading(false)
       }
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
   }
 
   async function thanhToanQR() {
@@ -190,23 +207,24 @@ function QRPanel() {
   const [resetKey, setResetKey] = useState(0)
 
   async function handleFile(e) {
-    const file = e.target.files[0]
-    if (!file) return
-    setLoading(true)
-    setError(null)
-    setXe(null)
-    setSuccess(false)
-    const fd = new FormData()
-    fd.append('anh_qr', file)
-    try {
-      const data = await xeRaApi.quetQR(fd)
-      if (data.ma_qr) setXe(data)
-      else setError('Không tìm thấy xe.')
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
+      const file = e.target.files[0]
+      if (!file) return
+      setLoading(true)
+      setError(null)
+      setXe(null)
+      setSuccess(false)
+      try {
+        const compressedFile = await compressImage(file)
+        const fd = new FormData()
+        fd.append('anh_qr', compressedFile)
+        const data = await xeRaApi.quetQR(fd)
+        if (data.ma_qr) setXe(data)
+        else setError('Không tìm thấy xe.')
+      } catch (err) {
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
   }
 
   async function thanhToan() {

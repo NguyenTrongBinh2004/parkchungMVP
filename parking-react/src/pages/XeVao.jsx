@@ -1,7 +1,22 @@
 import { useState, useEffect, useRef } from 'react'
 import { PageLayout, Spinner, Alert, Field, Modal, fmtDt } from '../components/UI'
 import { xeVaoApi, loaiXeApi } from '../services/api'
+import imageCompression from 'browser-image-compression';
 
+async function compressImage(file) {
+  const options = {
+    maxSizeMB: 0.3,            // ảnh đầu ra tối đa 300KB
+    maxWidthOrHeight: 1024,    // giới hạn kích thước ảnh
+    useWebWorker: true,
+  };
+  try {
+    const compressedFile = await imageCompression(file, options);
+    return compressedFile;
+  } catch (error) {
+    console.warn('Nén ảnh thất bại, dùng ảnh gốc:', error);
+    return file; // fallback về ảnh gốc nếu lỗi
+  }
+}
 function useObjectURL(file) {
   const [url, setUrl] = useState(null)
   useEffect(() => {
@@ -73,38 +88,41 @@ function SmartPanel() {
   }, [])
 
   // Chụp ảnh biển số / QR
-  async function handleFileBienSo(e) {
-    const file = e.target.files[0]
-    if (!file) return
-    setFileBienSo(file)
-    setError(null)
-    setResult(null)
-    setShowFormThuong(false)
-    setSuccess(false)
-    setBienSoText('')
-    setLoading(true)
+async function handleFileBienSo(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    setError(null);
+    setResult(null);
+    setShowFormThuong(false);
+    setSuccess(false);
+    setBienSoText('');
+    setLoading(true);
 
-    const fd = new FormData()
-    fd.append('anh', file)
     try {
-      const data = await xeVaoApi.nhanDien(fd)
-      if (data.loai === 've_thang_qr') {
-        // QR vé tháng: hiển thị luôn
-        setResult(data)
-      } else {
-        // Nhận diện biển số (có hoặc không có ký tự)
-        setBienSoText(data.bien_so_nhan_dien || '')
-        setResult({ loai: 'bien_so' })
-      }
+        // Nén ảnh trước khi upload
+        const compressedFile = await compressImage(file);
+        // Lưu file đã nén vào state để dùng cho xác nhận sau này
+        setFileBienSo(compressedFile);
+        
+        const fd = new FormData();
+        fd.append('anh', compressedFile);
+        const data = await xeVaoApi.nhanDien(fd);
+        
+        if (data.loai === 've_thang_qr') {
+            setResult(data);
+        } else {
+            setBienSoText(data.bien_so_nhan_dien || '');
+            setResult({ loai: 'bien_so' });
+        }
     } catch (err) {
-      setError(err.message)
-      // Nếu lỗi vẫn cho phép nhập tay
-      setBienSoText('')
-      setResult({ loai: 'bien_so' })
+        setError(err.message);
+        setBienSoText('');
+        setResult({ loai: 'bien_so' });
     } finally {
-      setLoading(false)
+        setLoading(false);
     }
-  }
+}
 
   // Chụp ảnh người lái (từ camera hoặc chọn từ thư viện)
   function handleFileNguoiLai(e) {
@@ -146,33 +164,37 @@ function SmartPanel() {
 
   // Xác nhận vào cho vé tháng
   async function xacNhanVeThang() {
-    if (!result?.ma_qr || !fileBienSo) {
-      setError('Vui lòng chụp ảnh biển số')
-      return
-    }
-    if (!fileNguoiLai) {
-      setError('Vui lòng chụp ảnh người lái')
-      return
-    }
-    setLoading(true)
-    const fd = new FormData()
-    fd.append('ma_qr', result.ma_qr)
-    fd.append('anh_bien_so', fileBienSo)
-    fd.append('anh_nguoi_lai', fileNguoiLai)
-    try {
-      const data = await xeVaoApi.xacNhanVeThang(fd)
-      setTicket(data)
-      setSuccess(true)
-      resetForm()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
+      if (!result?.ma_qr || !fileBienSo) {
+          setError('Vui lòng chụp ảnh biển số');
+          return;
+      }
+      if (!fileNguoiLai) {
+          setError('Vui lòng chụp ảnh người lái');
+          return;
+      }
+      setLoading(true);
+      try {
+          // Nén cả hai ảnh trước khi gửi
+          const compressedBS = await compressImage(fileBienSo);
+          const compressedNL = await compressImage(fileNguoiLai);
+          
+          const fd = new FormData();
+          fd.append('ma_qr', result.ma_qr);
+          fd.append('anh_bien_so', compressedBS);
+          fd.append('anh_nguoi_lai', compressedNL);
+          
+          const data = await xeVaoApi.xacNhanVeThang(fd);
+          setTicket(data);
+          setSuccess(true);
+          resetForm();
+      } catch (err) {
+          setError(err.message);
+      } finally {
+          setLoading(false);
+      }
   }
-
   // Xác nhận vào cho xe thường
-  async function xacNhanThuong() {
+async function xacNhanThuong() {
     if (!fileBienSo || !fileNguoiLai) {
       setError('Vui lòng chụp đầy đủ ảnh biển số và người lái')
       return
@@ -182,17 +204,21 @@ function SmartPanel() {
       return
     }
     setLoading(true)
-    const fd = new FormData()
-    fd.append('id_loai_xe', formThuong.loaiXe)
-    fd.append('bien_so_xac_nhan', bienSoText.trim().toUpperCase())
-    fd.append('ten_chu_xe', formThuong.tenChuXe || '')
-    fd.append('sdt', formThuong.sdt || '')
-    fd.append('email', formThuong.email || '')
-    fd.append('ghi_chu', formThuong.ghiChu || '')
-    fd.append('cho_phep_lay_ho', formThuong.cho_phep_lay_ho)
-    fd.append('anh_bien_so', fileBienSo)
-    fd.append('anh_nguoi_lai', fileNguoiLai)
     try {
+      const compressedBS = await compressImage(fileBienSo)
+      const compressedNL = await compressImage(fileNguoiLai)
+
+      const fd = new FormData()
+      fd.append('id_loai_xe', formThuong.loaiXe)
+      fd.append('bien_so_xac_nhan', bienSoText.trim().toUpperCase())
+      fd.append('ten_chu_xe', formThuong.tenChuXe || '')
+      fd.append('sdt', formThuong.sdt || '')
+      fd.append('email', formThuong.email || '')
+      fd.append('ghi_chu', formThuong.ghiChu || '')
+      fd.append('cho_phep_lay_ho', formThuong.cho_phep_lay_ho)
+      fd.append('anh_bien_so', compressedBS)
+      fd.append('anh_nguoi_lai', compressedNL)
+
       const data = await xeVaoApi.xacNhanThuong(fd)
       setTicket(data)
       setSuccess(true)
@@ -202,7 +228,7 @@ function SmartPanel() {
     } finally {
       setLoading(false)
     }
-  }
+}
 
   function resetForm() {
     setFileBienSo(null)
@@ -452,17 +478,21 @@ function BienSoPanel({ bienSoMacDinh }) {
       return
     }
     setLoading(true)
-    const fd = new FormData()
-    fd.append('id_loai_xe', formThuong.loaiXe)
-    fd.append('bien_so_xac_nhan', bienSo.trim().toUpperCase())
-    fd.append('ten_chu_xe', formThuong.tenChuXe || '')
-    fd.append('sdt', formThuong.sdt || '')
-    fd.append('email', formThuong.email || '')
-    fd.append('ghi_chu', formThuong.ghiChu || '')
-    fd.append('cho_phep_lay_ho', formThuong.cho_phep_lay_ho)
-    fd.append('anh_bien_so', fileBienSo)
-    fd.append('anh_nguoi_lai', fileNguoiLai)
     try {
+      const compressedBS = await compressImage(fileBienSo)
+      const compressedNL = await compressImage(fileNguoiLai)
+
+      const fd = new FormData()
+      fd.append('id_loai_xe', formThuong.loaiXe)
+      fd.append('bien_so_xac_nhan', bienSo.trim().toUpperCase())
+      fd.append('ten_chu_xe', formThuong.tenChuXe || '')
+      fd.append('sdt', formThuong.sdt || '')
+      fd.append('email', formThuong.email || '')
+      fd.append('ghi_chu', formThuong.ghiChu || '')
+      fd.append('cho_phep_lay_ho', formThuong.cho_phep_lay_ho)
+      fd.append('anh_bien_so', compressedBS)
+      fd.append('anh_nguoi_lai', compressedNL)
+
       const data = await xeVaoApi.xacNhanThuong(fd)
       setTicket(data)
     } catch (err) {
@@ -470,7 +500,7 @@ function BienSoPanel({ bienSoMacDinh }) {
     } finally {
       setLoading(false)
     }
-  }
+}
 
   return (
     <div className="card">
