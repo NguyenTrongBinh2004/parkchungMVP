@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageLayout, Spinner, Alert, Field, Modal } from '../components/UI'
 import { veThangApi, loaiXeApi } from '../services/api'
+const API = import.meta.env.VITE_API_URL || '';
 
 // ─── Hook tiện ích quản lý Object URL cho file ảnh ───
 function useObjectURL(file) {
@@ -250,39 +251,13 @@ export default function DangKyVeThang() {
       </form>
 
       {/* Modal hiển thị kết quả */}
-      {ticket && (
-        <Modal onClose={() => navigate('/ve-thang')} title="✅ Đăng ký thành công">
-          <div style={{ textAlign: 'center' }}>
-            <p style={{ marginBottom: 8 }}>
-              Biển số:{' '}
-              <strong style={{ fontFamily: 'var(--font-mono)' }}>{ticket.bien_so}</strong>
-            </p>
-            <p style={{ marginBottom: 8 }}>
-              Hết hạn: <strong>{ticket.ngay_het_han}</strong>
-            </p>
-            <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem' }}>
-              {Number(ticket.so_tien).toLocaleString('vi-VN')} đ
-            </p>
-            {ticket.qr_image_url && (
-                <img
-                    src={ticket.qr_image_url}
-                    alt="QR Code"
-                    style={{ width: 200, borderRadius: 10, margin: '0 auto', display: 'block' }}
-                    onError={(e) => {
-                        console.error("Không thể tải ảnh QR từ Backend:", e.target.src);
-                    }}
-                />
-            )}
-            <button
-              className="btn btn-accent"
-              style={{ marginTop: '1rem' }}
-              onClick={() => navigate('/ve-thang')}
-            >
-              Quay về danh sách
-            </button>
-          </div>
-        </Modal>
+      {ticket.ma_qr && (
+          <img
+              src={ticket.qr_image_url || `${API}/uploads/qr/${ticket.ma_qr}.png`}
+              alt="QR Code"
+              style={{ width: 200, borderRadius: 10, margin: '0 auto', display: 'block' }}
+              onError={(e) => {
+                  console.error("Không thể tải ảnh QR từ Backend:", e.target.src);
+              }}
+          />
       )}
-    </PageLayout>
-  )
-}
