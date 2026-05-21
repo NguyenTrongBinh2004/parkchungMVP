@@ -203,6 +203,10 @@ async def dang_ky_ve_thang(
                 row = cur.fetchone()
                 if row:
                     id_khach_hang = row["id"]
+                    cur.execute(
+                        "UPDATE khach_hang SET ten=%s, sdt=%s, dia_chi=%s, cho_phep_lay_ho=%s WHERE id=%s",
+                        (ten_chu_xe, sdt, dia_chi, int(cho_phep_lay_ho), id_khach_hang),
+                    )
                 else:
                     cur.execute(
                         """
