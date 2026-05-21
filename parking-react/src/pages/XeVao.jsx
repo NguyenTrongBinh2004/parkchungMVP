@@ -11,6 +11,13 @@ async function compressImage(file) {
   catch (e) { console.warn('Nén ảnh lỗi, dùng gốc:', e); return file }
 }
 
+// Tải ảnh từ URL về File object
+async function urlToFile(url, filename) {
+  const res = await fetch(url)
+  const blob = await res.blob()
+  return new File([blob], filename, { type: blob.type })
+}
+
 function useObjectURL(file) {
   const [url, setUrl] = useState(null)
   useEffect(() => {
@@ -54,7 +61,7 @@ function ImagePicker({ label, required, file, onFile, refInput }) {
   )
 }
 
-// Card vé tháng (yêu cầu ảnh biển số thực tế + người lái) – dùng khi phát hiện vé tháng
+// Card vé tháng (dùng khi cần chụp lại ảnh – dự phòng)
 function VeThangCard({ result, onXacNhan, loading }) {
   const [fileBienSo, setFileBienSo] = useState(null)
   const [fileNguoiLai, setFileNguoiLai] = useState(null)
@@ -109,9 +116,8 @@ function SmartPanel() {
   const [ticket, setTicket] = useState(null)
   const [success, setSuccess] = useState(false)
 
-  // Ảnh biển số (dùng cho cả nhận diện và lưu DB)
+  // Ảnh biển số (dùng chung cho nhận diện và lưu DB cho xe thường)
   const [fileBienSo, setFileBienSo] = useState(null)
-  const previewBS = useObjectURL(fileBienSo)
   // Ảnh người lái
   const [fileNguoiLai, setFileNguoiLai] = useState(null)
 
@@ -152,11 +158,11 @@ function SmartPanel() {
       const data = await xeVaoApi.nhanDien(fd)
 
       if (data.loai === 've_thang_qr') {
-        // Ảnh vừa chụp là QR -> không dùng làm ảnh biển số lưu DB
-        setFileBienSo(null)   // xóa ảnh QR, chờ chụp ảnh biển số thực tế trong VeThangCard
-        setResult(data)
+        // Ảnh vừa chụp là QR -> không dùng làm ảnh biển số lưu DB, xóa đi
+        setFileBienSo(null)
+        setResult(data)   // dữ liệu vé tháng đầy đủ (có anh_bien_so, anh_nguoi_dung)
       } else {
-        // Ảnh là biển số thực -> giữ lại để lưu DB
+        // Ảnh là biển số thực -> giữ lại để lưu DB cho xe thường
         setBienSoText(data.bien_so_nhan_dien || '')
         setResult({ loai: 'bien_so' })
       }
@@ -179,11 +185,11 @@ function SmartPanel() {
     try {
       const data = await xeVaoApi.kiemTraBienSo(fd)
       if (data.loai === 've_thang') {
-        setResult(data)
+        setResult(data)   // dữ liệu vé tháng (có anh_bien_so, anh_nguoi_dung)
         setShowFormThuong(false)
       } else if (data.loai === 'xe_thuong') {
         setResult(data)
-        setShowFormThuong(true)   // chỉ hiện form thông tin, không yêu cầu chụp lại ảnh
+        setShowFormThuong(true)   // chỉ hiện form thông tin, ảnh đã có
       } else {
         setError('Không xác định được loại xe.')
       }
@@ -194,8 +200,39 @@ function SmartPanel() {
     }
   }
 
-  // Xác nhận vé tháng (ảnh từ VeThangCard)
-  async function xacNhanVeThang(fileBienSoThucTe, fileNguoiLaiThucTe) {
+  // Xác nhận vé tháng – dùng ảnh từ hồ sơ (url) tải về thành file
+  async function xacNhanVeThangAuto() {
+    if (!result?.ma_qr) { setError('Thiếu mã QR vé tháng'); return }
+    setLoading(true)
+    try {
+      // Tải ảnh từ URL hồ sơ
+      const fileBS = result.anh_bien_so ? await urlToFile(result.anh_bien_so, 'bien_so.jpg') : null
+      const fileNL = result.anh_nguoi_dung ? await urlToFile(result.anh_nguoi_dung, 'nguoi_dung.jpg') : null
+      if (!fileBS || !fileNL) {
+        setError('Không tìm thấy ảnh hồ sơ. Vui lòng chụp lại.');
+        setLoading(false);
+        return;
+      }
+      const compressedBS = await compressImage(fileBS)
+      const compressedNL = await compressImage(fileNL)
+
+      const fd = new FormData()
+      fd.append('ma_qr', result.ma_qr)
+      fd.append('anh_bien_so', compressedBS)
+      fd.append('anh_nguoi_lai', compressedNL)
+      const data = await xeVaoApi.xacNhanVeThang(fd)
+      setTicket(data)
+      setSuccess(true)
+      resetForm()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Xác nhận vé tháng thủ công (khi không có ảnh hồ sơ)
+  async function xacNhanVeThangManual(fileBienSoThucTe, fileNguoiLaiThucTe) {
     if (!result?.ma_qr) { setError('Thiếu mã QR vé tháng'); return }
     setLoading(true)
     const fd = new FormData()
@@ -256,6 +293,9 @@ function SmartPanel() {
     setFormThuong({ loaiXe: loaiXeList[0]?.id || '', tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false })
   }
 
+  // Kiểm tra xem result có đủ ảnh hồ sơ để tự động xác nhận không
+  const hasProfileImages = result && (result.anh_bien_so || result.anh_nguoi_dung)
+
   return (
     <div>
       {/* Ảnh biển số (dùng cho nhận diện và lưu DB) */}
@@ -272,9 +312,23 @@ function SmartPanel() {
       {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
       {success && <Alert type="success">✅ Xe vào thành công!</Alert>}
 
-      {/* QR vé tháng nhận diện được -> hiển thị VeThangCard yêu cầu ảnh thực tế */}
+      {/* QR vé tháng nhận diện được -> tự động xác nhận nếu có ảnh hồ sơ, nếu không thì dùng VeThangCard */}
       {result?.loai === 've_thang_qr' && (
-        <VeThangCard result={result} onXacNhan={xacNhanVeThang} loading={loading} />
+        hasProfileImages ? (
+          <div className="card" style={{ borderColor: 'var(--info)', marginBottom: '0.75rem' }}>
+            <h5 style={{ color: 'var(--info)', marginBottom: '0.75rem' }}>🎫 Vé tháng</h5>
+            <p><strong>Biển số:</strong> {result.bien_so}</p>
+            <p><strong>Chủ xe:</strong> {result.ten_chu_xe}</p>
+            <p><strong>Hết hạn:</strong> {result.ngay_het_han}</p>
+            {result.so_ngay_con <= 7 && <p style={{ color: 'var(--warning)' }}>⚠️ Vé tháng còn {result.so_ngay_con} ngày</p>}
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>✅ Hệ thống sẽ tự động dùng ảnh hồ sơ đã lưu.</p>
+            <button className="btn btn-accent" onClick={xacNhanVeThangAuto} disabled={loading} style={{ marginTop: 8 }}>
+              ✅ Xác nhận xe vào (Vé tháng)
+            </button>
+          </div>
+        ) : (
+          <VeThangCard result={result} onXacNhan={xacNhanVeThangManual} loading={loading} />
+        )
       )}
 
       {/* Nhận diện biển số -> cho sửa và kiểm tra */}
@@ -289,9 +343,23 @@ function SmartPanel() {
         </div>
       )}
 
-      {/* Kiểm tra ra vé tháng (từ nhập biển số) -> VeThangCard */}
+      {/* Kết quả kiểm tra là vé tháng (từ nhập biển số) -> tự động nếu có ảnh */}
       {result?.loai === 've_thang' && (
-        <VeThangCard result={result} onXacNhan={xacNhanVeThang} loading={loading} />
+        hasProfileImages ? (
+          <div className="card" style={{ borderColor: 'var(--info)', marginBottom: '0.75rem' }}>
+            <h5 style={{ color: 'var(--info)', marginBottom: '0.75rem' }}>🎫 Vé tháng</h5>
+            <p><strong>Biển số:</strong> {result.bien_so}</p>
+            <p><strong>Chủ xe:</strong> {result.ten_chu_xe}</p>
+            <p><strong>Hết hạn:</strong> {result.ngay_het_han}</p>
+            {result.so_ngay_con <= 7 && <p style={{ color: 'var(--warning)' }}>⚠️ Vé tháng còn {result.so_ngay_con} ngày</p>}
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>✅ Hệ thống sẽ tự động dùng ảnh hồ sơ đã lưu.</p>
+            <button className="btn btn-accent" onClick={xacNhanVeThangAuto} disabled={loading} style={{ marginTop: 8 }}>
+              ✅ Xác nhận xe vào (Vé tháng)
+            </button>
+          </div>
+        ) : (
+          <VeThangCard result={result} onXacNhan={xacNhanVeThangManual} loading={loading} />
+        )
       )}
 
       {/* Form xe thường (chỉ hiển thị thông tin, ảnh đã có sẵn) */}
@@ -335,7 +403,6 @@ function SmartPanel() {
 
 // ─── Tab Biển số (nhập tay) ────────────────────────────────────
 function BienSoPanel() {
-  // Tương tự SmartPanel nhưng nhập biển số thủ công thay vì scan
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [ticket, setTicket] = useState(null)
@@ -380,7 +447,33 @@ function BienSoPanel() {
     }
   }
 
-  async function xacNhanVeThang(fileBienSoThucTe, fileNguoiLaiThucTe) {
+  async function xacNhanVeThangAuto() {
+    if (!result?.ma_qr) { setError('Thiếu mã QR vé tháng'); return }
+    setLoading(true)
+    try {
+      const fileBS = result.anh_bien_so ? await urlToFile(result.anh_bien_so, 'bien_so.jpg') : null
+      const fileNL = result.anh_nguoi_dung ? await urlToFile(result.anh_nguoi_dung, 'nguoi_dung.jpg') : null
+      if (!fileBS || !fileNL) {
+        setError('Không tìm thấy ảnh hồ sơ. Vui lòng chụp lại.');
+        setLoading(false);
+        return;
+      }
+      const compressedBS = await compressImage(fileBS)
+      const compressedNL = await compressImage(fileNL)
+      const fd = new FormData()
+      fd.append('ma_qr', result.ma_qr)
+      fd.append('anh_bien_so', compressedBS)
+      fd.append('anh_nguoi_lai', compressedNL)
+      const data = await xeVaoApi.xacNhanVeThang(fd)
+      setTicket(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function xacNhanVeThangManual(fileBienSoThucTe, fileNguoiLaiThucTe) {
     if (!result?.ma_qr) return
     setLoading(true)
     const fd = new FormData()
@@ -423,6 +516,8 @@ function BienSoPanel() {
     }
   }
 
+  const hasProfileImages = result && (result.anh_bien_so || result.anh_nguoi_dung)
+
   return (
     <div className="card">
       <Field label="Nhập biển số">
@@ -441,7 +536,21 @@ function BienSoPanel() {
       {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
 
       {result?.loai === 've_thang' && (
-        <VeThangCard result={result} onXacNhan={xacNhanVeThang} loading={loading} />
+        hasProfileImages ? (
+          <div className="card" style={{ borderColor: 'var(--info)', marginTop: '0.75rem' }}>
+            <h5 style={{ color: 'var(--info)', marginBottom: '0.75rem' }}>🎫 Vé tháng</h5>
+            <p><strong>Biển số:</strong> {result.bien_so}</p>
+            <p><strong>Chủ xe:</strong> {result.ten_chu_xe}</p>
+            <p><strong>Hết hạn:</strong> {result.ngay_het_han}</p>
+            {result.so_ngay_con <= 7 && <p style={{ color: 'var(--warning)' }}>⚠️ Vé tháng còn {result.so_ngay_con} ngày</p>}
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>✅ Hệ thống sẽ tự động dùng ảnh hồ sơ đã lưu.</p>
+            <button className="btn btn-accent" onClick={xacNhanVeThangAuto} disabled={loading} style={{ marginTop: 8 }}>
+              ✅ Xác nhận xe vào (Vé tháng)
+            </button>
+          </div>
+        ) : (
+          <VeThangCard result={result} onXacNhan={xacNhanVeThangManual} loading={loading} />
+        )
       )}
 
       {showFormThuong && (
