@@ -1,3 +1,4 @@
+import asyncio
 import aiosmtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -8,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+SMTP_PORT = int(os.getenv("SMTP_PORT", 587))  # ← port 587
 SMTP_USER = os.getenv("SMTP_USER")
 SMTP_PASS = os.getenv("SMTP_PASS")
 
@@ -40,20 +41,30 @@ async def gui_email_qr(
     """
     msg.attach(MIMEText(noi_dung_html, "html"))
 
-    with open(duong_dan_qr, "rb") as f:
-        anh = MIMEImage(f.read())
-        anh.add_header("Content-ID", "<ma_qr>")
-        msg.attach(anh)
-
     try:
-        await aiosmtplib.send(
-            msg,
-            hostname=SMTP_HOST,
-            port=SMTP_PORT,
-            username=SMTP_USER,
-            password=SMTP_PASS,
-            start_tls=True
-        )
-        print(f"Đã gửi email đến {den}")
+        with open(duong_dan_qr, "rb") as f:
+            anh = MIMEImage(f.read())
+            anh.add_header("Content-ID", "<ma_qr>")
+            msg.attach(anh)
     except Exception as e:
-        print(f"Lỗi gửi email: {e}")
+        print(f"Không thể đọc file QR: {e}")
+
+    for attempt in range(2):
+        try:
+            print(f"Thử gửi email lần {attempt+1}/2...")
+            await aiosmtplib.send(
+                msg,
+                hostname=SMTP_HOST,
+                port=SMTP_PORT,
+                username=SMTP_USER,
+                password=SMTP_PASS,
+                start_tls=True,          # ← STARTTLS cho port 587
+                timeout=10
+            )
+            print(f"Đã gửi email đến {den}")
+            return
+        except Exception as e:
+            print(f"Lỗi gửi email lần {attempt+1}: {type(e).__name__} - {e}")
+            if attempt == 0:
+                await asyncio.sleep(2)
+    print(f"Gửi email thất bại sau 2 lần thử.")
