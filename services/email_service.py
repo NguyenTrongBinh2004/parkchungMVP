@@ -1,7 +1,7 @@
 import os
 import resend
 from dotenv import load_dotenv
-
+import base64
 load_dotenv()
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
@@ -35,7 +35,7 @@ async def gui_email_qr(den, ten_chu_xe, bien_so, gio_vao, duong_dan_qr):
             with open(duong_dan_qr, "rb") as f:
                 params["attachments"] = [{
                     "filename": "qr.png",
-                    "content": f.read(),
+                    "content": base64.b64encode(f.read()).decode(),
                     "content_id": "ma_qr",
                 }]
 
