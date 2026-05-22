@@ -1,45 +1,98 @@
-import { useState, useEffect } from 'react'
-import { PageLayout, Spinner, Alert, ImageInput, Field, HinhThucSelect, fmtDt, fmtTien } from '../components/UI'
+import { useState, useEffect, useRef } from 'react'
+import { PageLayout, Spinner, Alert, Field, HinhThucSelect, fmtDt, fmtTien } from '../components/UI'
 import { xeRaApi, thanhToanApi } from '../services/api'
-import { PLACEHOLDER } from '../components/UI';
-import imageCompression from 'browser-image-compression';
+import { PLACEHOLDER } from '../components/UI'
+import imageCompression from 'browser-image-compression'
 
 async function compressImage(file) {
   const options = {
     maxSizeMB: 0.3,
     maxWidthOrHeight: 1024,
     useWebWorker: true,
-  };
+  }
   try {
-    const compressedFile = await imageCompression(file, options);
-    return compressedFile;
+    return await imageCompression(file, options)
   } catch (error) {
-    console.warn('Nén ảnh thất bại, dùng ảnh gốc:', error);
-    return file;
+    console.warn('Nén ảnh thất bại, dùng ảnh gốc:', error)
+    return file
   }
 }
-// Helper tính thời gian đã gửi (chỉ một định nghĩa duy nhất)
-function fmtThoiGianGui(phut) {
-  if (phut == null) return null;
-  const h = Math.floor(phut / 60);
-  const m = phut % 60;
-  const parts = [];
-  if (h > 0) parts.push(`${h}h`);
-  if (m > 0) parts.push(`${m}p`);
-  return `${phut} phút${parts.length ? ` (${parts.join(' ')})` : ''}`;
+
+function useObjectURL(file) {
+  const [url, setUrl] = useState(null)
+  useEffect(() => {
+    if (!file) { setUrl(null); return }
+    const objUrl = URL.createObjectURL(file)
+    setUrl(objUrl)
+    return () => URL.revokeObjectURL(objUrl)
+  }, [file])
+  return url
 }
 
-// Component hiển thị đầy đủ thông tin xe
+// ─── Component chọn ảnh (camera + thư viện) ────────────────────
+function ImagePicker({ label, required, file, onFile }) {
+  const refCam = useRef(null)
+  const refLib = useRef(null)
+  const preview = useObjectURL(file)
+
+  function onChange(e) {
+    if (e.target.files[0]) onFile(e.target.files[0])
+  }
+
+  return (
+    <div style={{ marginBottom: '0.85rem' }}>
+      <label className="form-label">
+        {label}{required && <span style={{ color: 'var(--danger)' }}> *</span>}
+      </label>
+      <input ref={refCam} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onChange} />
+      <input ref={refLib} type="file" accept="image/*" style={{ display: 'none' }} onChange={onChange} />
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => refCam.current.click()} style={{ flex: 1 }}>
+          📷 Chụp
+        </button>
+        <button type="button" className="btn btn-outline btn-sm" onClick={() => refLib.current.click()} style={{ flex: 1 }}>
+          🖼 Thư viện
+        </button>
+      </div>
+      {preview ? (
+        <div style={{ position: 'relative', marginTop: 8 }}>
+          <img src={preview} alt="" style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 8 }} />
+          <button type="button" onClick={() => onFile(null)}
+            style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,0.6)', border: 'none', color: '#fff', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            ✕
+          </button>
+        </div>
+      ) : (
+        <div style={{ marginTop: 8, border: '2px dashed #444', borderRadius: 8, padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+          Chưa có ảnh
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Helper hiển thị thời gian gửi ───
+function fmtThoiGianGui(phut) {
+  if (phut == null) return null
+  const h = Math.floor(phut / 60)
+  const m = phut % 60
+  const parts = []
+  if (h > 0) parts.push(`${h}h`)
+  if (m > 0) parts.push(`${m}p`)
+  return `${phut} phút${parts.length ? ` (${parts.join(' ')})` : ''}`
+}
+
+// ─── Component hiển thị đầy đủ thông tin xe ─────────────────
 function XeInfo({ xe }) {
   const thoiGianGui = xe.thoi_gian_gui_phut != null
     ? fmtThoiGianGui(xe.thoi_gian_gui_phut)
     : (() => {
-        if (!xe.gio_vao) return null;
-        const vao = new Date(xe.gio_vao);
-        const now = new Date();
-        const diffPhut = Math.floor((now - vao) / 60000);
-        return fmtThoiGianGui(diffPhut);
-      })();
+        if (!xe.gio_vao) return null
+        const vao = new Date(xe.gio_vao)
+        const now = new Date()
+        const diffPhut = Math.floor((now - vao) / 60000)
+        return fmtThoiGianGui(diffPhut)
+      })()
 
   return (
     <div style={{ marginBottom: '0.75rem' }}>
@@ -70,10 +123,10 @@ function XeInfo({ xe }) {
         )}
       </div>
     </div>
-  );
+  )
 }
 
-// ─── Tab chụp ảnh thông minh ───
+// ─── Tab chụp ảnh thông minh ─────────────────────────────────
 function SmartPanel({ onChuyenTabBienSo }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -83,29 +136,31 @@ function SmartPanel({ onChuyenTabBienSo }) {
 
   const [htttQR, setHtttQR] = useState('tien_mat')
   const [bienSoText, setBienSoText] = useState('')
+  const [fileScan, setFileScan] = useState(null)   // ảnh đã chọn
 
-  async function handleFile(e) {
-      const file = e.target.files[0]
-      if (!file) return
-      setLoading(true)
-      setError(null)
-      setResult(null)
-      setSuccess(false)
-      setBienSoText('')
-      try {
-        const compressedFile = await compressImage(file)
-        const fd = new FormData()
-        fd.append('anh', compressedFile)
-        const data = await xeRaApi.nhanDien(fd)
-        setResult(data)
-        if (data.loai === 'bien_so') {
-          setBienSoText(data.bien_so_nhan_dien || '')
-        }
-      } catch (err) {
-        setError(err.message)
-      } finally {
-        setLoading(false)
+  async function handleFile(file) {
+    if (!file) return
+    setFileScan(file)
+    setLoading(true)
+    setError(null)
+    setResult(null)
+    setSuccess(false)
+    setBienSoText('')
+
+    try {
+      const compressed = await compressImage(file)
+      const fd = new FormData()
+      fd.append('anh', compressed)
+      const data = await xeRaApi.nhanDien(fd)
+      setResult(data)
+      if (data.loai === 'bien_so') {
+        setBienSoText(data.bien_so_nhan_dien || '')
       }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function thanhToanQR() {
@@ -117,6 +172,7 @@ function SmartPanel({ onChuyenTabBienSo }) {
       await thanhToanApi.xacNhanQR(result.ma_qr, fd)
       setSuccess(true)
       setResult(null)
+      setFileScan(null)
       setResetKey(k => k + 1)
     } catch (err) {
       setError(err.message)
@@ -136,24 +192,13 @@ function SmartPanel({ onChuyenTabBienSo }) {
 
   return (
     <div className="card">
-      <ImageInput
-        key={resetKey}
+      <ImagePicker
         label="Chụp ảnh (QR hoặc biển số)"
-        id="smart-file"
-        onChange={handleFile}
+        required
+        file={fileScan}
+        onFile={handleFile}
       />
-      <div style={{ marginTop: 4, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-        Hoặc{' '}
-        <label style={{ color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline' }}>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleFile}
-            style={{ display: 'none' }}
-          />
-          chọn ảnh từ thư viện
-        </label>
-      </div>
+
       {loading && <Spinner />}
       {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
       {success && <Alert type="success">✅ Thanh toán thành công!</Alert>}
@@ -197,7 +242,7 @@ function SmartPanel({ onChuyenTabBienSo }) {
   )
 }
 
-// ─── Tab quét QR ───
+// ─── Tab quét QR ─────────────────────────────────────────────
 function QRPanel() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -205,26 +250,28 @@ function QRPanel() {
   const [httt, setHttt] = useState('tien_mat')
   const [success, setSuccess] = useState(false)
   const [resetKey, setResetKey] = useState(0)
+  const [fileQR, setFileQR] = useState(null)
 
-  async function handleFile(e) {
-      const file = e.target.files[0]
-      if (!file) return
-      setLoading(true)
-      setError(null)
-      setXe(null)
-      setSuccess(false)
-      try {
-        const compressedFile = await compressImage(file)
-        const fd = new FormData()
-        fd.append('anh_qr', compressedFile)
-        const data = await xeRaApi.quetQR(fd)
-        if (data.ma_qr) setXe(data)
-        else setError('Không tìm thấy xe.')
-      } catch (err) {
-        setError(err.message)
-      } finally {
-        setLoading(false)
-      }
+  async function handleFile(file) {
+    if (!file) return
+    setFileQR(file)
+    setLoading(true)
+    setError(null)
+    setXe(null)
+    setSuccess(false)
+
+    try {
+      const compressed = await compressImage(file)
+      const fd = new FormData()
+      fd.append('anh_qr', compressed)
+      const data = await xeRaApi.quetQR(fd)
+      if (data.ma_qr) setXe(data)
+      else setError('Không tìm thấy xe.')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function thanhToan() {
@@ -236,6 +283,7 @@ function QRPanel() {
       await thanhToanApi.xacNhanQR(xe.ma_qr, fd)
       setSuccess(true)
       setXe(null)
+      setFileQR(null)
       setResetKey(k => k + 1)
     } catch (err) {
       setError(err.message)
@@ -246,19 +294,13 @@ function QRPanel() {
 
   return (
     <div className="card">
-      <ImageInput key={resetKey} label="Chụp ảnh QR" id="qr-file" onChange={handleFile} />
-      <div style={{ marginTop: 4, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-        Hoặc{' '}
-        <label style={{ color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline' }}>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleFile}
-            style={{ display: 'none' }}
-          />
-          chọn ảnh từ thư viện
-        </label>
-      </div>
+      <ImagePicker
+        label="Chụp ảnh QR"
+        required
+        file={fileQR}
+        onFile={handleFile}
+      />
+
       {loading && <Spinner />}
       {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
       {success && <Alert type="success">✅ Thanh toán thành công!</Alert>}
@@ -275,7 +317,7 @@ function QRPanel() {
   )
 }
 
-// ─── Tab Biển số ───
+// ─── Tab Biển số ─────────────────────────────────────────────
 function BienSoPanel({ bienSoMacDinh }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -403,7 +445,7 @@ function BienSoPanel({ bienSoMacDinh }) {
   )
 }
 
-// ─── Trang chính XeRa ───
+// ─── Trang chính XeRa ────────────────────────────────────────
 export default function XeRa() {
   const [tab, setTab] = useState('smart')
   const [bienSoTuSmart, setBienSoTuSmart] = useState('')
