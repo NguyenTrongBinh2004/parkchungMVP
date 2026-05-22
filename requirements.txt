@@ -10,3 +10,4 @@ pillow==12.2.0
 opencv-python-headless==4.13.0.92
 qrcode==8.2
 email-validator==2.2.0
+pyzbar==0.1.9
