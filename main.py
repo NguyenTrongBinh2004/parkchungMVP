@@ -131,6 +131,7 @@ async def dang_ky_ve_thang(
 ):
     sdt   = sdt.strip()   if sdt   else None
     email = email.strip() if email else None
+    print(f"DEBUG DANG KY VE THANG: email = {repr(email)}")   # thêm dòng này
 
     if sdt and not re.match(r"^(0|\+84)[0-9]{8,10}$", sdt):
         raise HTTPException(status_code=422, detail="Số điện thoại không hợp lệ.")

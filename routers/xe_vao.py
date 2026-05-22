@@ -284,6 +284,7 @@ async def xac_nhan_xe_vao_ve_thuong(
 ):
     sdt   = sdt.strip()   if sdt   else None
     email = email.strip() if email else None
+    print(f"DEBUG XE THUONG: email = {repr(email)}")
 
     if sdt and not re.match(r'^(0|\+84)[0-9]{8,10}$', sdt):
         raise HTTPException(status_code=422, detail="Số điện thoại không hợp lệ.")
