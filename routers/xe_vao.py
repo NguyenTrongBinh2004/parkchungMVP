@@ -38,7 +38,7 @@ async def gui_thong_bao(email, sdt, ten_chu_xe, bien_so, gio_vao, duong_dan_qr, 
 @router.post("/nhan-dien/")
 async def nhan_dien_xe_vao(
     anh: UploadFile = File(...),
-    KetNoi=Depends(lay_ket_noi_CSDL)   # thêm dòng này
+    KetNoi=Depends(lay_ket_noi_CSDL)
 ):
     du_lieu_anh = await anh.read(MAX_IMAGE_SIZE + 1)
     if len(du_lieu_anh) > MAX_IMAGE_SIZE:

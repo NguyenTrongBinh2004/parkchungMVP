@@ -140,7 +140,12 @@ function SmartPanel() {
   }, [])
 
   async function handleBienSoFile(file) {
-    if (!file) return
+    if (!file) {
+        setFileBienSo(null)
+        setResult(null)
+        setBienSoText('')
+        return
+    }
     setFileBienSo(file)
     setError(null)
     setResult(null)
