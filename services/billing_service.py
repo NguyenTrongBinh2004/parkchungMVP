@@ -93,4 +93,3 @@ class BillingService:
             fee = int(tong_tien)
             # === SỬA 2: KHÔNG dùng minimum (giá lượt) làm sàn cho tính theo giờ ===
             return _lam_tron_nghin(fee)
-            return _lam_tron_nghin(fee)
