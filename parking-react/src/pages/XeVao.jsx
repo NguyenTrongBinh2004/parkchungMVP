@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { PageLayout, Spinner, Alert, Field, Modal, fmtDt } from '../components/UI'
 import { xeVaoApi, loaiXeApi } from '../services/api'
 
+// ─── Hook tạo ObjectURL cho file ───
 function useObjectURL(file) {
   const [url, setUrl] = useState(null)
   useEffect(() => {
@@ -14,7 +15,7 @@ function useObjectURL(file) {
 }
 
 // ─── Tab Chụp ảnh (luồng chính) ───
-function SmartPanel() {
+function SmartPanel({ onChuyenTabBienSo }) {
   const [loaiXeList, setLoaiXeList] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -42,16 +43,17 @@ function SmartPanel() {
     cho_phep_lay_ho: false,
   })
 
+  // Lấy danh sách loại xe, tự động chọn "ô tô" nếu có
   useEffect(() => {
     loaiXeApi.list().then(data => {
       setLoaiXeList(data)
       if (data.length) {
         const oto = data.find(lx =>
           lx.ten.toLowerCase().replace(/\s+/g, '').includes('ôtô')
-        );
+        )
         const fallback = data.find(lx =>
           lx.ten.toLowerCase().replace(/\s+/g, '').includes('oto')
-        );
+        )
         setFormThuong(f => ({
           ...f,
           loaiXe: oto ? oto.id : (fallback ? fallback.id : data[0].id)
@@ -60,6 +62,7 @@ function SmartPanel() {
     }).catch(() => {})
   }, [])
 
+  // Xử lý khi chọn ảnh biển số
   async function handleFileBienSo(e) {
     const file = e.target.files[0]
     if (!file) return
@@ -96,6 +99,7 @@ function SmartPanel() {
     setFileNguoiLai(file)
   }
 
+  // Kiểm tra biển số
   async function kiemTraBienSo() {
     const bs = bienSoText.trim()
     if (!bs) {
@@ -127,7 +131,7 @@ function SmartPanel() {
   // Dùng chung cho cả ve_thang_qr và ve_thang
   async function xacNhanVeThang() {
     if (!result?.ma_qr) {
-      setError('Không tìm thấy mã QR vé tháng.')
+      setError('Không tìm thấy mã QR vé tháng. Vui lòng thử lại hoặc chuyển sang tab Biển số.')
       return
     }
     if (!fileBienSo) {
@@ -145,7 +149,6 @@ function SmartPanel() {
     fd.append('anh_nguoi_lai', fileNguoiLai)
     try {
       const data = await xeVaoApi.xacNhanVeThang(fd)
-      // Xoá card vé tháng TRƯỚC khi hiện modal
       setResult(null)
       setShowFormThuong(false)
       setTicket(data)
@@ -264,12 +267,13 @@ function SmartPanel() {
       {result?.loai === 'bien_so' && (
         <div className="card" style={{ marginBottom: '0.75rem' }}>
           <Field label="Biển số (sửa nếu cần)">
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <input
                 value={bienSoText}
                 onChange={e => setBienSoText(e.target.value)}
                 placeholder="Nhập biển số"
-                style={{ textTransform: 'uppercase', flex: 1 }}
+                style={{ textTransform: 'uppercase', flex: 1, minWidth: '120px' }}
+                onKeyDown={e => e.key === 'Enter' && kiemTraBienSo()}
               />
               <button
                 className="btn btn-accent btn-sm"
@@ -279,6 +283,15 @@ function SmartPanel() {
               >
                 Kiểm tra
               </button>
+              {bienSoText.trim() && (
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => onChuyenTabBienSo(bienSoText.trim())}
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  🔢 Nhập tay
+                </button>
+              )}
             </div>
           </Field>
         </div>
@@ -473,6 +486,7 @@ function BienSoPanel({ bienSoMacDinh }) {
   })
   const [loaiXeList, setLoaiXeList] = useState([])
 
+  // Lấy danh sách loại xe
   useEffect(() => {
     loaiXeApi.list().then(data => {
       setLoaiXeList(data)
@@ -480,6 +494,7 @@ function BienSoPanel({ bienSoMacDinh }) {
     }).catch(() => {})
   }, [])
 
+  // Khi nhận biển số từ tab Chụp ảnh, tự động điền và kiểm tra
   useEffect(() => {
     if (bienSoMacDinh && bienSoMacDinh.trim()) {
       setBienSo(bienSoMacDinh.trim())
@@ -499,6 +514,10 @@ function BienSoPanel({ bienSoMacDinh }) {
     try {
       const data = await xeVaoApi.kiemTraBienSo(fd)
       if (data.loai === 've_thang') {
+        // Nếu API không trả về ma_qr, có thể hiển thị thông báo thân thiện
+        if (!data.ma_qr) {
+          setError('Vé tháng này chưa có mã QR. Vui lòng liên hệ quản lý.')
+        }
         setResult(data)
       } else if (data.loai === 'xe_thuong') {
         setResult(data)
@@ -534,6 +553,8 @@ function BienSoPanel({ bienSoMacDinh }) {
       setTicket(data)
       setFileBienSo(null)
       setFileNguoiLai(null)
+      // Reset input file người lái (nếu cần)
+      setError(null)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -544,6 +565,10 @@ function BienSoPanel({ bienSoMacDinh }) {
   async function xacNhanThuong() {
     if (!fileBienSo || !fileNguoiLai) {
       setError('Vui lòng chụp đầy đủ ảnh biển số và người lái')
+      return
+    }
+    if (!formThuong.loaiXe) {
+      setError('Vui lòng chọn loại xe')
       return
     }
     setLoading(true)
@@ -675,10 +700,18 @@ export default function XeVao() {
   const [tab, setTab] = useState('smart')
   const [bienSoTuSmart, setBienSoTuSmart] = useState('')
 
+  // Callback để chuyển sang tab Biển số kèm biển số
   const chuyenTabBienSo = (bienSo) => {
     setBienSoTuSmart(bienSo)
     setTab('bien')
   }
+
+  // Xóa biển số cũ khi chuyển tab để tránh tự động kiểm tra lại
+  useEffect(() => {
+    if (tab !== 'bien') {
+      setBienSoTuSmart('')
+    }
+  }, [tab])
 
   const tabs = [
     { id: 'smart', label: '📷 Chụp ảnh' },
@@ -699,7 +732,7 @@ export default function XeVao() {
           </button>
         ))}
       </div>
-      {tab === 'smart' && <SmartPanel />}
+      {tab === 'smart' && <SmartPanel onChuyenTabBienSo={chuyenTabBienSo} />}
       {tab === 'qr'    && <QRPanel />}
       {tab === 'bien'  && <BienSoPanel bienSoMacDinh={bienSoTuSmart} />}
     </PageLayout>
