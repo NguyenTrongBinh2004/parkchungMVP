@@ -3,17 +3,14 @@ import { PageLayout, Spinner, Alert, Field, Modal, fmtDt } from '../components/U
 import { xeVaoApi, loaiXeApi } from '../services/api'
 import imageCompression from 'browser-image-compression'
 
-// Không dùng biến API, để nguyên nếu cần
 const API = import.meta.env.VITE_API_URL || ''
 
-// Nén ảnh trước khi upload
 async function compressImage(file) {
   const options = { maxSizeMB: 0.3, maxWidthOrHeight: 1024, useWebWorker: true }
   try { return await imageCompression(file, options) }
   catch (e) { console.warn('Nén ảnh lỗi, dùng gốc:', e); return file }
 }
 
-// Chuyển URL thành File, có kiểm tra lỗi và content-type
 async function urlToFile(url, filename) {
   try {
     const res = await fetch(url)
@@ -28,7 +25,6 @@ async function urlToFile(url, filename) {
   }
 }
 
-// Hook tạo ObjectURL
 function useObjectURL(file) {
   const [url, setUrl] = useState(null)
   useEffect(() => {
@@ -40,7 +36,7 @@ function useObjectURL(file) {
   return url
 }
 
-// Component chọn ảnh: chụp hoặc thư viện
+// Component chọn ảnh: camera + thư viện
 function ImagePicker({ label, required, file, onFile, refInput }) {
   const refCam = refInput || useRef(null)
   const refLib = useRef(null)
@@ -96,7 +92,6 @@ function VeThangCard({ result, onXacNhan, loading }) {
       {result.so_ngay_con <= 7 && <p style={{ color: 'var(--warning)' }}>⚠️ Vé tháng còn {result.so_ngay_con} ngày</p>}
       {result.ghi_chu && <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>📝 {result.ghi_chu}</p>}
 
-      {/* Chỉ hiển thị ảnh hồ sơ nếu có (tham khảo) */}
       {(result.anh_bien_so || result.anh_nguoi_dung) && (
         <div style={{ marginTop: 8, marginBottom: 8 }}>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 6 }}>📋 Ảnh hồ sơ đối chiếu:</p>
@@ -138,8 +133,8 @@ function SmartPanel() {
     loaiXe: '', tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false,
   })
 
-  // Kiểm tra ảnh hồ sơ có tải được không
-  const [profileImagesValid, setProfileImagesValid] = useState(false)
+  // Trạng thái: nếu ảnh hồ sơ lỗi, chuyển sang giao diện chụp ảnh thủ công
+  const [autoModeFailed, setAutoModeFailed] = useState(false)
 
   useEffect(() => {
     loaiXeApi.list().then(data => {
@@ -152,30 +147,9 @@ function SmartPanel() {
     }).catch(() => {})
   }, [])
 
-  // Khi result có ảnh hồ sơ, kiểm tra xem có load được không
+  // Reset autoModeFailed khi result thay đổi
   useEffect(() => {
-    if (result && (result.anh_bien_so || result.anh_nguoi_dung)) {
-      const urls = [result.anh_bien_so, result.anh_nguoi_dung].filter(Boolean)
-      let loaded = 0
-      let failed = false
-      urls.forEach(url => {
-        const img = new Image()
-        img.onload = () => {
-          loaded++
-          if (loaded === urls.length) setProfileImagesValid(true)
-        }
-        img.onerror = () => {
-          failed = true
-          setProfileImagesValid(false)
-        }
-        img.src = url
-      })
-      // Nếu không có ảnh nào (lỗi ngay lập tức), cần set false
-      if (urls.length === 0) setProfileImagesValid(false)
-    } else {
-      setProfileImagesValid(false)
-    }
-    // Reset khi result thay đổi
+    setAutoModeFailed(false)
   }, [result])
 
   async function handleBienSoFile(file) {
@@ -200,7 +174,7 @@ function SmartPanel() {
       const data = await xeVaoApi.nhanDien(fd)
 
       if (data.loai === 've_thang_qr') {
-        setFileBienSo(null)   // ảnh QR, không lưu DB
+        setFileBienSo(null)
         setResult(data)
       } else {
         setBienSoText(data.bien_so_nhan_dien || '')
@@ -243,9 +217,9 @@ function SmartPanel() {
       const fileBS = result.anh_bien_so ? await urlToFile(result.anh_bien_so, 'bien_so.jpg') : null
       const fileNL = result.anh_nguoi_dung ? await urlToFile(result.anh_nguoi_dung, 'nguoi_dung.jpg') : null
       if (!fileBS || !fileNL) {
-        // Ảnh không tải được, yêu cầu chụp lại
-        setProfileImagesValid(false) // chuyển sang giao diện thủ công
-        setError('Ảnh hồ sơ không khả dụng. Vui lòng chụp ảnh thực tế.')
+        // Ảnh hồ sơ lỗi -> chuyển sang giao diện chụp ảnh thực tế
+        setAutoModeFailed(true)
+        setError('Ảnh hồ sơ không khả dụng, vui lòng chụp ảnh thực tế.')
         setLoading(false)
         return
       }
@@ -314,20 +288,20 @@ function SmartPanel() {
     setResult(null)
     setShowFormThuong(false)
     setError(null)
-    setProfileImagesValid(false)
+    setAutoModeFailed(false)
     setFormThuong({ loaiXe: loaiXeList[0]?.id || '', tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false })
   }
 
-  const hasProfileImages = result && (result.anh_bien_so || result.anh_nguoi_dung) && profileImagesValid
+  // Xác định có nên hiển thị giao diện tự động không
+  const hasProfileImages = result && (result.anh_bien_so || result.anh_nguoi_dung) && !autoModeFailed
+  const isVeThangQR = result?.loai === 've_thang_qr'
+  const isVeThang = result?.loai === 've_thang'
 
   return (
     <div>
-      {/* Ảnh biển số (dùng cho nhận diện và lưu DB) */}
       <div className="card" style={{ marginBottom: '0.75rem' }}>
         <ImagePicker label="Ảnh biển số xe" required file={fileBienSo} onFile={handleBienSoFile} />
       </div>
-
-      {/* Ảnh người lái */}
       <div className="card" style={{ marginBottom: '0.75rem' }}>
         <ImagePicker label="Ảnh người lái" required file={fileNguoiLai} onFile={setFileNguoiLai} />
       </div>
@@ -337,7 +311,7 @@ function SmartPanel() {
       {success && <Alert type="success">✅ Xe vào thành công!</Alert>}
 
       {/* QR vé tháng nhận diện được */}
-      {result?.loai === 've_thang_qr' && (
+      {isVeThangQR && (
         hasProfileImages ? (
           <div className="card" style={{ borderColor: 'var(--info)', marginBottom: '0.75rem' }}>
             <h5 style={{ color: 'var(--info)', marginBottom: '0.75rem' }}>🎫 Vé tháng</h5>
@@ -347,35 +321,21 @@ function SmartPanel() {
             {result.so_ngay_con <= 7 && <p style={{ color: 'var(--warning)' }}>⚠️ Vé tháng còn {result.so_ngay_con} ngày</p>}
             {result.ghi_chu && <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>📝 {result.ghi_chu}</p>}
             <div style={{ margin: '10px 0', padding: '10px', background: 'rgba(13, 202, 240, 0.07)', borderRadius: 8, border: '1px solid rgba(13,202,240,0.2)' }}>
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                📋 Ảnh hồ sơ đối chiếu
-              </p>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>📋 Ảnh hồ sơ đối chiếu</p>
               <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-                {result.anh_bien_so && (
-                  <div style={{ textAlign: 'center' }}>
-                    <img src={result.anh_bien_so} alt="Biển số hồ sơ" style={{ width: 130, height: 80, objectFit: 'cover', borderRadius: 6, border: '2px solid var(--border)' }} />
-                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 3 }}>Biển số đăng ký</div>
-                  </div>
-                )}
-                {result.anh_nguoi_dung && (
-                  <div style={{ textAlign: 'center' }}>
-                    <img src={result.anh_nguoi_dung} alt="Người dùng hồ sơ" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: '50%', border: '2px solid var(--border)' }} />
-                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 3 }}>Chủ xe đăng ký</div>
-                  </div>
-                )}
+                {result.anh_bien_so && <img src={result.anh_bien_so} alt="Biển số hồ sơ" style={{ width: 130, height: 80, objectFit: 'cover', borderRadius: 6, border: '2px solid var(--border)' }} />}
+                {result.anh_nguoi_dung && <img src={result.anh_nguoi_dung} alt="Người dùng hồ sơ" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: '50%', border: '2px solid var(--border)' }} />}
               </div>
             </div>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>✅ Hệ thống sẽ tự động dùng ảnh hồ sơ đã lưu.</p>
-            <button className="btn btn-accent" onClick={xacNhanVeThangAuto} disabled={loading} style={{ marginTop: 8 }}>
-              ✅ Xác nhận xe vào (Vé tháng)
-            </button>
+            <button className="btn btn-accent" onClick={xacNhanVeThangAuto} disabled={loading} style={{ marginTop: 8 }}>✅ Xác nhận xe vào (Vé tháng)</button>
           </div>
         ) : (
           <VeThangCard result={result} onXacNhan={xacNhanVeThangManual} loading={loading} />
         )
       )}
 
-      {/* Nhận diện biển số -> cho sửa và kiểm tra */}
+      {/* Nhận diện biển số */}
       {result?.loai === 'bien_so' && (
         <div className="card" style={{ marginBottom: '0.75rem' }}>
           <Field label="Biển số (sửa nếu cần)">
@@ -387,8 +347,8 @@ function SmartPanel() {
         </div>
       )}
 
-      {/* Kết quả kiểm tra là vé tháng (từ nhập biển số) */}
-      {result?.loai === 've_thang' && (
+      {/* Kết quả kiểm tra là vé tháng */}
+      {isVeThang && (
         hasProfileImages ? (
           <div className="card" style={{ borderColor: 'var(--info)', marginBottom: '0.75rem' }}>
             <h5 style={{ color: 'var(--info)', marginBottom: '0.75rem' }}>🎫 Vé tháng</h5>
@@ -398,28 +358,14 @@ function SmartPanel() {
             {result.so_ngay_con <= 7 && <p style={{ color: 'var(--warning)' }}>⚠️ Vé tháng còn {result.so_ngay_con} ngày</p>}
             {result.ghi_chu && <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>📝 {result.ghi_chu}</p>}
             <div style={{ margin: '10px 0', padding: '10px', background: 'rgba(13, 202, 240, 0.07)', borderRadius: 8, border: '1px solid rgba(13,202,240,0.2)' }}>
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                📋 Ảnh hồ sơ đối chiếu
-              </p>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>📋 Ảnh hồ sơ đối chiếu</p>
               <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-                {result.anh_bien_so && (
-                  <div style={{ textAlign: 'center' }}>
-                    <img src={result.anh_bien_so} alt="Biển số hồ sơ" style={{ width: 130, height: 80, objectFit: 'cover', borderRadius: 6, border: '2px solid var(--border)' }} />
-                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 3 }}>Biển số đăng ký</div>
-                  </div>
-                )}
-                {result.anh_nguoi_dung && (
-                  <div style={{ textAlign: 'center' }}>
-                    <img src={result.anh_nguoi_dung} alt="Người dùng hồ sơ" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: '50%', border: '2px solid var(--border)' }} />
-                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 3 }}>Chủ xe đăng ký</div>
-                  </div>
-                )}
+                {result.anh_bien_so && <img src={result.anh_bien_so} alt="Biển số hồ sơ" style={{ width: 130, height: 80, objectFit: 'cover', borderRadius: 6, border: '2px solid var(--border)' }} />}
+                {result.anh_nguoi_dung && <img src={result.anh_nguoi_dung} alt="Người dùng hồ sơ" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: '50%', border: '2px solid var(--border)' }} />}
               </div>
             </div>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>✅ Hệ thống sẽ tự động dùng ảnh hồ sơ đã lưu.</p>
-            <button className="btn btn-accent" onClick={xacNhanVeThangAuto} disabled={loading} style={{ marginTop: 8 }}>
-              ✅ Xác nhận xe vào (Vé tháng)
-            </button>
+            <button className="btn btn-accent" onClick={xacNhanVeThangAuto} disabled={loading} style={{ marginTop: 8 }}>✅ Xác nhận xe vào (Vé tháng)</button>
           </div>
         ) : (
           <VeThangCard result={result} onXacNhan={xacNhanVeThangManual} loading={loading} />
@@ -479,7 +425,7 @@ function BienSoPanel() {
 
   const [formThuong, setFormThuong] = useState({ loaiXe: '', tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false })
   const [loaiXeList, setLoaiXeList] = useState([])
-  const [profileImagesValid, setProfileImagesValid] = useState(false)
+  const [autoModeFailed, setAutoModeFailed] = useState(false)
 
   useEffect(() => {
     loaiXeApi.list().then(data => {
@@ -493,26 +439,7 @@ function BienSoPanel() {
   }, [])
 
   useEffect(() => {
-    if (result && (result.anh_bien_so || result.anh_nguoi_dung)) {
-      const urls = [result.anh_bien_so, result.anh_nguoi_dung].filter(Boolean)
-      let loaded = 0
-      let failed = false
-      urls.forEach(url => {
-        const img = new Image()
-        img.onload = () => {
-          loaded++
-          if (loaded === urls.length) setProfileImagesValid(true)
-        }
-        img.onerror = () => {
-          failed = true
-          setProfileImagesValid(false)
-        }
-        img.src = url
-      })
-      if (urls.length === 0) setProfileImagesValid(false)
-    } else {
-      setProfileImagesValid(false)
-    }
+    setAutoModeFailed(false)
   }, [result])
 
   async function kiemTra() {
@@ -539,8 +466,8 @@ function BienSoPanel() {
       const fileBS = result.anh_bien_so ? await urlToFile(result.anh_bien_so, 'bien_so.jpg') : null
       const fileNL = result.anh_nguoi_dung ? await urlToFile(result.anh_nguoi_dung, 'nguoi_dung.jpg') : null
       if (!fileBS || !fileNL) {
-        setProfileImagesValid(false)
-        setError('Ảnh hồ sơ không khả dụng. Vui lòng chụp ảnh thực tế.')
+        setAutoModeFailed(true)
+        setError('Ảnh hồ sơ không khả dụng, vui lòng chụp ảnh thực tế.')
         setLoading(false)
         return
       }
@@ -593,7 +520,7 @@ function BienSoPanel() {
     finally { setLoading(false) }
   }
 
-  const hasProfileImages = result && (result.anh_bien_so || result.anh_nguoi_dung) && profileImagesValid
+  const hasProfileImages = result && (result.anh_bien_so || result.anh_nguoi_dung) && !autoModeFailed
 
   return (
     <div className="card">
@@ -622,28 +549,14 @@ function BienSoPanel() {
             {result.so_ngay_con <= 7 && <p style={{ color: 'var(--warning)' }}>⚠️ Vé tháng còn {result.so_ngay_con} ngày</p>}
             {result.ghi_chu && <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>📝 {result.ghi_chu}</p>}
             <div style={{ margin: '10px 0', padding: '10px', background: 'rgba(13, 202, 240, 0.07)', borderRadius: 8, border: '1px solid rgba(13,202,240,0.2)' }}>
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                📋 Ảnh hồ sơ đối chiếu
-              </p>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>📋 Ảnh hồ sơ đối chiếu</p>
               <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-                {result.anh_bien_so && (
-                  <div style={{ textAlign: 'center' }}>
-                    <img src={result.anh_bien_so} alt="Biển số hồ sơ" style={{ width: 130, height: 80, objectFit: 'cover', borderRadius: 6, border: '2px solid var(--border)' }} />
-                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 3 }}>Biển số đăng ký</div>
-                  </div>
-                )}
-                {result.anh_nguoi_dung && (
-                  <div style={{ textAlign: 'center' }}>
-                    <img src={result.anh_nguoi_dung} alt="Người dùng hồ sơ" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: '50%', border: '2px solid var(--border)' }} />
-                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 3 }}>Chủ xe đăng ký</div>
-                  </div>
-                )}
+                {result.anh_bien_so && <img src={result.anh_bien_so} alt="Biển số hồ sơ" style={{ width: 130, height: 80, objectFit: 'cover', borderRadius: 6, border: '2px solid var(--border)' }} />}
+                {result.anh_nguoi_dung && <img src={result.anh_nguoi_dung} alt="Người dùng hồ sơ" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: '50%', border: '2px solid var(--border)' }} />}
               </div>
             </div>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>✅ Hệ thống sẽ tự động dùng ảnh hồ sơ đã lưu.</p>
-            <button className="btn btn-accent" onClick={xacNhanVeThangAuto} disabled={loading} style={{ marginTop: 8 }}>
-              ✅ Xác nhận xe vào (Vé tháng)
-            </button>
+            <button className="btn btn-accent" onClick={xacNhanVeThangAuto} disabled={loading} style={{ marginTop: 8 }}>✅ Xác nhận xe vào (Vé tháng)</button>
           </div>
         ) : (
           <VeThangCard result={result} onXacNhan={xacNhanVeThangManual} loading={loading} />
