@@ -30,18 +30,18 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* ─── Footer (3 dòng) ─── */}
+      {/* ─── Footer (3 dòng, căn trái) ─── */}
       <div style={{
         marginTop: '2.5rem',
         paddingTop: '1.25rem',
         borderTop: '1px solid var(--border)',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
+        alignItems: 'flex-start',   // 👈 căn trái
         gap: '0.4rem',
         color: 'var(--text-muted)',
         fontSize: '0.85rem',
-        textAlign: 'center'
+        textAlign: 'left'           // 👈 căn trái
       }}>
         {/* Dòng 1: Logo + PARKCHUNG */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
