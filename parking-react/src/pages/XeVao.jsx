@@ -133,7 +133,6 @@ function SmartPanel() {
     loaiXe: '', tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false,
   })
 
-  // Trạng thái: nếu ảnh hồ sơ lỗi, chuyển sang giao diện chụp ảnh thủ công
   const [autoModeFailed, setAutoModeFailed] = useState(false)
 
   useEffect(() => {
@@ -217,7 +216,6 @@ function SmartPanel() {
       const fileBS = result.anh_bien_so ? await urlToFile(result.anh_bien_so, 'bien_so.jpg') : null
       const fileNL = result.anh_nguoi_dung ? await urlToFile(result.anh_nguoi_dung, 'nguoi_dung.jpg') : null
       if (!fileBS || !fileNL) {
-        // Ảnh hồ sơ lỗi -> chuyển sang giao diện chụp ảnh thực tế
         setAutoModeFailed(true)
         setError('Ảnh hồ sơ không khả dụng, vui lòng chụp ảnh thực tế.')
         setLoading(false)
@@ -292,7 +290,6 @@ function SmartPanel() {
     setFormThuong({ loaiXe: loaiXeList[0]?.id || '', tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false })
   }
 
-  // Xác định có nên hiển thị giao diện tự động không
   const hasProfileImages = result && (result.anh_bien_so || result.anh_nguoi_dung) && !autoModeFailed
   const isVeThangQR = result?.loai === 've_thang_qr'
   const isVeThang = result?.loai === 've_thang'
@@ -313,7 +310,7 @@ function SmartPanel() {
       {/* QR vé tháng nhận diện được */}
       {isVeThangQR && (
         hasProfileImages ? (
-          <div className="card" style={{ borderColor: 'var(--info)', marginBottom: '0.75rem' }}>
+          <div className="card" style={{ borderColor: 'var(--info)', marginBottom: '0.75rem' }} key={result.ma_qr || 'auto'}>
             <h5 style={{ color: 'var(--info)', marginBottom: '0.75rem' }}>🎫 Vé tháng</h5>
             <p><strong>Biển số:</strong> {result.bien_so}</p>
             <p><strong>Chủ xe:</strong> {result.ten_chu_xe}</p>
@@ -331,7 +328,7 @@ function SmartPanel() {
             <button className="btn btn-accent" onClick={xacNhanVeThangAuto} disabled={loading} style={{ marginTop: 8 }}>✅ Xác nhận xe vào (Vé tháng)</button>
           </div>
         ) : (
-          <VeThangCard result={result} onXacNhan={xacNhanVeThangManual} loading={loading} />
+          <VeThangCard key={result.ma_qr || 'manual'} result={result} onXacNhan={xacNhanVeThangManual} loading={loading} />
         )
       )}
 
@@ -341,7 +338,7 @@ function SmartPanel() {
           <Field label="Biển số (sửa nếu cần)">
             <div style={{ display: 'flex', gap: 8 }}>
               <input value={bienSoText} onChange={e => setBienSoText(e.target.value)} placeholder="Nhập biển số" style={{ textTransform: 'uppercase', flex: 1 }} />
-              <button className="btn btn-accent btn-sm" onClick={kiemTraBienSo} disabled={loading || !bienSoText.trim()} style={{ whiteSpace: 'nowrap' }}>Kiểm tra</button>
+              <button className="btn btn-accent btn-sm" onClick={kiemTraBienSo} disabled={loading || !bienSoText.trim()} style={{ whiteSpace: 'nowrap' }}>Xác nhận</button>
             </div>
           </Field>
         </div>
@@ -350,7 +347,7 @@ function SmartPanel() {
       {/* Kết quả kiểm tra là vé tháng */}
       {isVeThang && (
         hasProfileImages ? (
-          <div className="card" style={{ borderColor: 'var(--info)', marginBottom: '0.75rem' }}>
+          <div className="card" style={{ borderColor: 'var(--info)', marginBottom: '0.75rem' }} key={result.ma_qr || 'auto'}>
             <h5 style={{ color: 'var(--info)', marginBottom: '0.75rem' }}>🎫 Vé tháng</h5>
             <p><strong>Biển số:</strong> {result.bien_so}</p>
             <p><strong>Chủ xe:</strong> {result.ten_chu_xe}</p>
@@ -368,7 +365,7 @@ function SmartPanel() {
             <button className="btn btn-accent" onClick={xacNhanVeThangAuto} disabled={loading} style={{ marginTop: 8 }}>✅ Xác nhận xe vào (Vé tháng)</button>
           </div>
         ) : (
-          <VeThangCard result={result} onXacNhan={xacNhanVeThangManual} loading={loading} />
+          <VeThangCard key={result.ma_qr || 'manual'} result={result} onXacNhan={xacNhanVeThangManual} loading={loading} />
         )
       )}
 
@@ -479,6 +476,9 @@ function BienSoPanel() {
       fd.append('anh_nguoi_lai', compressedNL)
       const data = await xeVaoApi.xacNhanVeThang(fd)
       setTicket(data)
+      // Reset form trong tab này cũng nên reset result?
+      setResult(null)
+      setShowFormThuong(false)
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }
@@ -493,6 +493,8 @@ function BienSoPanel() {
     try {
       const data = await xeVaoApi.xacNhanVeThang(fd)
       setTicket(data)
+      setResult(null)
+      setShowFormThuong(false)
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }
@@ -516,6 +518,8 @@ function BienSoPanel() {
     try {
       const data = await xeVaoApi.xacNhanThuong(fd)
       setTicket(data)
+      setResult(null)
+      setShowFormThuong(false)
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }
@@ -527,7 +531,7 @@ function BienSoPanel() {
       <Field label="Nhập biển số">
         <div style={{ display: 'flex', gap: 8 }}>
           <input value={bienSo} onChange={e => setBienSo(e.target.value)} placeholder="VD: 51F-12345" style={{ flex: 1, textTransform: 'uppercase' }} onKeyDown={e => e.key === 'Enter' && kiemTra()} />
-          <button className="btn btn-secondary btn-sm" onClick={kiemTra} disabled={loading} style={{ whiteSpace: 'nowrap' }}>Kiểm tra</button>
+          <button className="btn btn-secondary btn-sm" onClick={kiemTra} disabled={loading} style={{ whiteSpace: 'nowrap' }}>Xác nhận</button>
         </div>
       </Field>
 
@@ -541,7 +545,7 @@ function BienSoPanel() {
 
       {result?.loai === 've_thang' && (
         hasProfileImages ? (
-          <div className="card" style={{ borderColor: 'var(--info)', marginTop: '0.75rem' }}>
+          <div className="card" style={{ borderColor: 'var(--info)', marginTop: '0.75rem' }} key={result.ma_qr || 'auto'}>
             <h5 style={{ color: 'var(--info)', marginBottom: '0.75rem' }}>🎫 Vé tháng</h5>
             <p><strong>Biển số:</strong> {result.bien_so}</p>
             <p><strong>Chủ xe:</strong> {result.ten_chu_xe}</p>
@@ -559,7 +563,7 @@ function BienSoPanel() {
             <button className="btn btn-accent" onClick={xacNhanVeThangAuto} disabled={loading} style={{ marginTop: 8 }}>✅ Xác nhận xe vào (Vé tháng)</button>
           </div>
         ) : (
-          <VeThangCard result={result} onXacNhan={xacNhanVeThangManual} loading={loading} />
+          <VeThangCard key={result.ma_qr || 'manual'} result={result} onXacNhan={xacNhanVeThangManual} loading={loading} />
         )
       )}
 
