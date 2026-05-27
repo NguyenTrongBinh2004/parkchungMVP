@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { PageLayout, Spinner, Alert, Field, Modal, fmtDt } from '../components/UI'
 import { xeVaoApi, loaiXeApi } from '../services/api'
 import imageCompression from 'browser-image-compression'
+import { chuanHoaBienSo, isValidBienSo } from '../utils'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -188,26 +189,48 @@ function SmartPanel() {
     }
   }
 
-  async function kiemTraBienSo() {
-    const bs = bienSoText.trim()
-    if (!bs) { setError('Vui lòng nhập biển số'); return }
-    setLoading(true); setError(null)
-    const fd = new FormData()
-    fd.append('bien_so', bs)
-    try {
-      const data = await xeVaoApi.kiemTraBienSo(fd)
-      if (data.loai === 've_thang') {
-        setResult(data)
-        setShowFormThuong(false)
-      } else if (data.loai === 'xe_thuong') {
-        setResult(data)
-        setShowFormThuong(true)
-      } else {
-        setError('Không xác định được loại xe.')
-      }
-    } catch (err) { setError(err.message) }
-    finally { setLoading(false) }
+async function kiemTraBienSo() {
+  const raw = bienSoText.trim();
+  if (!raw) {
+    setError('Vui lòng nhập biển số');
+    return;
   }
+
+  // Chuẩn hóa biển số
+  const cleaned = chuanHoaBienSo(raw);
+
+  // Kiểm tra định dạng
+  if (!isValidBienSo(cleaned)) {
+    setError('Biển số không đúng định dạng (VD: 51F-123.45)');
+    return;
+  }
+
+  // (Tùy chọn) cập nhật lại ô input thành biển số đẹp
+  setBienSoText(cleaned);
+
+  setLoading(true);
+  setError(null);
+
+  const fd = new FormData();
+  fd.append('bien_so', cleaned); // Gửi biển số đã chuẩn hóa
+
+  try {
+    const data = await xeVaoApi.kiemTraBienSo(fd);
+    if (data.loai === 've_thang') {
+      setResult(data);
+      setShowFormThuong(false);
+    } else if (data.loai === 'xe_thuong') {
+      setResult(data);
+      setShowFormThuong(true);
+    } else {
+      setError('Không xác định được loại xe.');
+    }
+  } catch (err) {
+    setError(err.message);
+  } finally {
+    setLoading(false);
+  }
+}
 
   async function xacNhanVeThangAuto() {
     if (!result?.ma_qr) { setError('Thiếu mã QR vé tháng'); return }
@@ -439,22 +462,42 @@ function BienSoPanel() {
     setAutoModeFailed(false)
   }, [result])
 
-  async function kiemTra() {
-    if (!bienSo.trim()) return
-    setLoading(true)
-    setError(null)
-    setResult(null)
-    setShowFormThuong(false)
-    const fd = new FormData()
-    fd.append('bien_so', bienSo.trim())
-    try {
-      const data = await xeVaoApi.kiemTraBienSo(fd)
-      if (data.loai === 've_thang') setResult(data)
-      else if (data.loai === 'xe_thuong') { setResult(data); setShowFormThuong(true) }
-      else setError('Không tìm thấy xe.')
-    } catch (err) { setError(err.message) }
-    finally { setLoading(false) }
+async function kiemTra() {
+  const raw = bienSo.trim();
+  if (!raw) return;
+
+  const cleaned = chuanHoaBienSo(raw);
+  if (!isValidBienSo(cleaned)) {
+    setError('Biển số không đúng định dạng (VD: 51F-123.45)');
+    return;
   }
+
+  setBienSo(cleaned); // Hiển thị lại biển số sạch
+
+  setLoading(true);
+  setError(null);
+  setResult(null);
+  setShowFormThuong(false);
+
+  const fd = new FormData();
+  fd.append('bien_so', cleaned);
+
+  try {
+    const data = await xeVaoApi.kiemTraBienSo(fd);
+    if (data.loai === 've_thang') {
+      setResult(data);
+    } else if (data.loai === 'xe_thuong') {
+      setResult(data);
+      setShowFormThuong(true);
+    } else {
+      setError('Không tìm thấy xe.');
+    }
+  } catch (err) {
+    setError(err.message);
+  } finally {
+    setLoading(false);
+  }
+}
 
   async function xacNhanVeThangAuto() {
     if (!result?.ma_qr) { setError('Thiếu mã QR vé tháng'); return }

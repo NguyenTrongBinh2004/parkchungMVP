@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Form, UploadFile, File
 from database import lay_ket_noi_CSDL
 from services.qr_service import doc_ma_qr
 from services.billing_service import BillingService
-from utils import bay_gio_vn, build_url, chuan_hoa_bien_so
+from utils import bay_gio_vn, build_url, chuan_hoa_bien_so, is_valid_bien_so
 
 router = APIRouter(prefix="/xe-ra", tags=["Quản lý Xe Ra"])
 
@@ -127,8 +127,8 @@ def kiem_tra_xe_ra_bien_so(
     KetNoi=Depends(lay_ket_noi_CSDL),
 ):
     bien_so_sach = chuan_hoa_bien_so(bien_so)
-    if len(bien_so_sach) < 3:
-        raise HTTPException(status_code=400, detail="Vui lòng nhập ít nhất 3 ký tự.")
+    if not is_valid_bien_so(bien_so_sach):
+        raise HTTPException(status_code=400, detail="Biển số không đúng định dạng")
 
     try:
         with KetNoi.cursor(dictionary=True) as cur:

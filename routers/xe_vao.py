@@ -15,7 +15,7 @@ from services.email_service import gui_email_qr
 from services.sms_service import gui_thong_bao_xe_vao
 from utils import (
     VN_TZ, BASE_URL, MAX_IMAGE_SIZE,
-    chuan_hoa_bien_so, bay_gio_vn, build_url, luu_anh
+    chuan_hoa_bien_so, bay_gio_vn, build_url, luu_anh,tach_bien_so, is_valid_bien_so
 )
 router = APIRouter(prefix="/xe-vao", tags=["Xe Vào"])
 
@@ -107,8 +107,8 @@ def kiem_tra_bien_so(
 ):
     # Chuẩn hóa biển số đầu vào
     bien_so_sach = chuan_hoa_bien_so(bien_so)
-    if len(bien_so_sach) < 5:
-        raise HTTPException(status_code=422, detail="Biển số quá ngắn.")
+    if not is_valid_bien_so(bien_so_sach):
+        raise HTTPException(status_code=400, detail="Biển số không đúng định dạng")
 
     with KetNoi.cursor(dictionary=True) as ConTro:
         # Kiểm tra xe đang trong bãi (dùng chuẩn hóa)
@@ -200,7 +200,7 @@ async def xac_nhan_xe_vao_ve_thang(
         duong_dan_nguoi_lai = await luu_anh(anh_nguoi_lai, "uploads/nguoi_lai") if anh_nguoi_lai else None
 
         bien_so      = ve_thang["bien_so"]
-        duoi_bien_so = re.sub(r'[^0-9]', '', bien_so)[-5:]
+        duoi_bien_so = tach_bien_so(bien_so_sach)
         ma_phien     = f"GX{uuid.uuid4().hex[:8].upper()}"
 
         # ── 4. Tạo QR riêng cho phiên (trước khi INSERT) ──
@@ -294,7 +294,7 @@ async def xac_nhan_xe_vao_ve_thuong(
     bay_gio      = bay_gio_vn()
     bien_so_goc  = bien_so_xac_nhan.upper().strip()          # Giữ nguyên để lưu DB
     bien_so_sach = chuan_hoa_bien_so(bien_so_xac_nhan)       # Dùng để so sánh
-    duoi_bien_so = bien_so_sach[-5:] if len(bien_so_sach) >= 5 else bien_so_sach
+    duoi_bien_so = tach_bien_so(bien_so_sach)
     ten_khach    = ten_chu_xe.strip() if ten_chu_xe else None
 
     try:

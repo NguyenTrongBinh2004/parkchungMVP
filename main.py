@@ -9,7 +9,7 @@ from services.email_service import gui_email_qr
 from services.sms_service import gui_thong_bao_ve_thang
 from services.billing_service import BillingService
 from routers import loai_xe, xe_ra, thanh_toan, xe_vao
-from utils import bay_gio_vn, build_url, chuan_hoa_bien_so, tinh_trang_thai, luu_anh
+from utils import bay_gio_vn, build_url, chuan_hoa_bien_so, tinh_trang_thai, luu_anh, is_valid_bien_so
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 import mysql.connector
@@ -145,6 +145,8 @@ async def dang_ky_ve_thang(
 
     bien_so_chuan = bien_so.upper().strip()
     bien_so_sach  = chuan_hoa_bien_so(bien_so_chuan)
+    if not is_valid_bien_so(bien_so_sach):
+        raise HTTPException(status_code=400, detail="Biển số không đúng định dạng")
     hom_nay       = date.today()
     ngay_het_han  = hom_nay + timedelta(days=30)
 

@@ -73,3 +73,44 @@ async def luu_anh(file: UploadFile, thu_muc: str) -> str:
         await f.write(du_lieu)
 
     return duong_dan.replace("\\", "/")
+
+def tach_bien_so(bien_so_sach: str):
+    """
+    Tách biển số đã chuẩn hóa (chỉ chữ hoa + số, không dấu) thành:
+    - phan_dau: phần mã tỉnh + series
+    - duoi_bien_so: dãy số cuối cùng (có thể có 1 chữ cái cuối với biển xanh)
+    """
+    match = re.match(r'^(.+?)(\d+[A-Z]?)$', bien_so_sach)
+    if match:
+        return match.group(1), match.group(2)
+    return bien_so_sach, ''
+
+
+SPECIAL_PREFIXES = [
+    'QK','QH','TC','NN','NG','CV','CA','KV','VT','KT','LD','DA','HC','CD','CC',
+    'AD','BT','LT','PX','RM','XM','HQ','CS','CT','DT'
+]
+
+def is_valid_bien_so(bien_so_sach: str) -> bool:
+    if not (6 <= len(bien_so_sach) <= 10):
+        return False
+    if not re.fullmatch(r'[A-Z0-9]+', bien_so_sach):
+        return False
+    if not any(c.isdigit() for c in bien_so_sach):
+        return False
+    # 2 ký tự đầu
+    prefix2 = bien_so_sach[:2]
+    if not prefix2.isdigit() and prefix2 not in SPECIAL_PREFIXES:
+        return False
+    # phải có ít nhất 1 chữ cái sau phần đầu (tránh toàn số)
+    if not any(c.isalpha() for c in bien_so_sach[2:]):
+        return False
+    # đuôi phải có 3-5 số, có thể kết thúc bằng 1 chữ cái
+    match = re.search(r'\d{3,5}[A-Z]?$', bien_so_sach)
+    if not match:
+        return False
+    # giới hạn số chữ cái (tránh chuỗi như ABCDEFG)
+    letter_count = sum(1 for c in bien_so_sach if c.isalpha())
+    if letter_count > 4:
+        return False
+    return True

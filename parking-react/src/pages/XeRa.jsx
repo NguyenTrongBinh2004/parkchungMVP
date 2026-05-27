@@ -3,6 +3,7 @@ import { PageLayout, Spinner, Alert, Field, HinhThucSelect, fmtDt, fmtTien } fro
 import { xeRaApi, thanhToanApi } from '../services/api'
 import { PLACEHOLDER } from '../components/UI'
 import imageCompression from 'browser-image-compression'
+import { chuanHoaBienSo, isValidBienSo } from '../utils'
 
 async function compressImage(file) {
   const options = {
@@ -181,15 +182,22 @@ function SmartPanel({ onChuyenTabBienSo }) {
     }
   }
 
-  function xacNhanBienSo() {
-    const bs = bienSoText.trim()
-    if (!bs) {
-      setError('Vui lòng nhập biển số')
-      return
-    }
-    onChuyenTabBienSo(bs)
+function xacNhanBienSo() {
+  const raw = bienSoText.trim()
+  if (!raw) {
+    setError('Vui lòng nhập biển số')
+    return
   }
 
+  const cleaned = chuanHoaBienSo(raw)
+  if (!isValidBienSo(cleaned)) {
+    setError('Biển số không đúng định dạng (VD: 51F-123.45)')
+    return
+  }
+
+  setBienSoText(cleaned) // hiển thị lại biển số đẹp
+  onChuyenTabBienSo(cleaned) // chuyển sang tab Biển số với biển đã chuẩn hóa
+}
   return (
     <div className="card">
       <ImagePicker
@@ -335,15 +343,26 @@ function BienSoPanel({ bienSoMacDinh }) {
   }, [bienSoMacDinh]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function kiemTra(bs) {
-    const searchBien = bs || bienSo.trim()
-    if (!searchBien) return
+    const raw = bs || bienSo.trim()
+    if (!raw) return
+
+    const cleaned = chuanHoaBienSo(raw)
+    if (!isValidBienSo(cleaned)) {
+      setError('Biển số không đúng định dạng (VD: 51F-123.45)')
+      return
+    }
+
+    setBienSo(cleaned) // hiển thị lại biển số đã chuẩn hóa
+
     setLoading(true)
     setError(null)
     setXe(null)
     setNhieu(null)
     setSuccess(false)
+
     const fd = new FormData()
-    fd.append('bien_so', searchBien)
+    fd.append('bien_so', cleaned)
+
     try {
       const data = await xeRaApi.timBienSo(fd)
       if (data.nhieu_ket_qua) {
