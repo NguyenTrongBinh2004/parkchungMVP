@@ -189,48 +189,59 @@ function SmartPanel() {
     }
   }
 
-async function kiemTraBienSo() {
-  const raw = bienSoText.trim();
-  if (!raw) {
-    setError('Vui lòng nhập biển số');
-    return;
-  }
+  async function kiemTraBienSo() {
+    const raw = bienSoText.trim();
 
-  // Chuẩn hóa biển số
-  const cleaned = chuanHoaBienSo(raw);
-
-  // Kiểm tra định dạng
-  if (!isValidBienSo(cleaned)) {
-    setError('Biển số không đúng định dạng (VD: 51F-123.45)');
-    return;
-  }
-
-  // (Tùy chọn) cập nhật lại ô input thành biển số đẹp
-  setBienSoText(cleaned);
-
-  setLoading(true);
-  setError(null);
-
-  const fd = new FormData();
-  fd.append('bien_so', cleaned); // Gửi biển số đã chuẩn hóa
-
-  try {
-    const data = await xeVaoApi.kiemTraBienSo(fd);
-    if (data.loai === 've_thang') {
-      setResult(data);
-      setShowFormThuong(false);
-    } else if (data.loai === 'xe_thuong') {
-      setResult(data);
-      setShowFormThuong(true);
-    } else {
-      setError('Không xác định được loại xe.');
+    // 🚲 Nếu để trống biển số → thử gán xe đạp
+    if (!raw) {
+      const xeDap = loaiXeList.find(lx => lx.ten.toLowerCase().includes('đạp'));
+      if (xeDap) {
+        // Tạo biển số tạm duy nhất
+        const tempPlate = 'XD' + Date.now().toString().slice(-6);
+        setBienSoText(tempPlate);
+        setResult({ loai: 'xe_thuong' });
+        setShowFormThuong(true);
+        setFormThuong(f => ({ ...f, loaiXe: xeDap.id }));
+        return;
+      }
+      setError('Vui lòng nhập biển số hoặc thêm loại "Xe đạp" vào danh sách.');
+      return;
     }
-  } catch (err) {
-    setError(err.message);
-  } finally {
-    setLoading(false);
+
+    // 📛 Chuẩn hóa & validate (bỏ qua nếu đang chọn xe đạp)
+    const cleaned = chuanHoaBienSo(raw);
+    const loaiXeObj = loaiXeList.find(lx => lx.id == formThuong.loaiXe);
+    const isBicycle = loaiXeObj?.ten.toLowerCase().includes('đạp');
+
+    if (!isBicycle && !isValidBienSo(cleaned)) {
+      setError('Biển số không đúng định dạng (VD: 51F-123.45)');
+      return;
+    }
+
+    setBienSoText(cleaned);
+    setLoading(true);
+    setError(null);
+
+    const fd = new FormData();
+    fd.append('bien_so', cleaned);
+
+    try {
+      const data = await xeVaoApi.kiemTraBienSo(fd);
+      if (data.loai === 've_thang') {
+        setResult(data);
+        setShowFormThuong(false);
+      } else if (data.loai === 'xe_thuong') {
+        setResult(data);
+        setShowFormThuong(true);
+      } else {
+        setError('Không xác định được loại xe.');
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   }
-}
 
   async function xacNhanVeThangAuto() {
     if (!result?.ma_qr) { setError('Thiếu mã QR vé tháng'); return }
@@ -278,26 +289,36 @@ async function kiemTraBienSo() {
     if (!fileBienSo) { setError('Vui lòng chụp ảnh biển số'); return }
     if (!fileNguoiLai) { setError('Vui lòng chụp ảnh người lái'); return }
     if (!formThuong.loaiXe) { setError('Vui lòng chọn loại xe'); return }
-    setLoading(true)
 
-    const compressedBS = await compressImage(fileBienSo)
-    const compressedNL = await compressImage(fileNguoiLai)
+    // 🚲 Cho phép biển số trống nếu là xe đạp
+    const loaiXeObj = loaiXeList.find(lx => lx.id == formThuong.loaiXe);
+    const isBicycle = loaiXeObj?.ten.toLowerCase().includes('đạp');
+    if (!isBicycle && !bienSoText.trim()) {
+      setError('Vui lòng nhập biển số');
+      return;
+    }
 
-    const fd = new FormData()
-    fd.append('id_loai_xe', formThuong.loaiXe)
-    fd.append('bien_so_xac_nhan', bienSoText.trim().toUpperCase())
-    fd.append('ten_chu_xe', formThuong.tenChuXe || '')
-    fd.append('sdt', formThuong.sdt || '')
-    fd.append('email', formThuong.email || '')
-    fd.append('ghi_chu', formThuong.ghiChu || '')
-    fd.append('cho_phep_lay_ho', formThuong.cho_phep_lay_ho)
-    fd.append('anh_bien_so', compressedBS)
-    fd.append('anh_nguoi_lai', compressedNL)
+    setLoading(true);
+
+    const compressedBS = await compressImage(fileBienSo);
+    const compressedNL = await compressImage(fileNguoiLai);
+
+    const fd = new FormData();
+    fd.append('id_loai_xe', formThuong.loaiXe);
+    fd.append('bien_so_xac_nhan', bienSoText.trim().toUpperCase());
+    fd.append('ten_chu_xe', formThuong.tenChuXe || '');
+    fd.append('sdt', formThuong.sdt || '');
+    fd.append('email', formThuong.email || '');
+    fd.append('ghi_chu', formThuong.ghiChu || '');
+    fd.append('cho_phep_lay_ho', formThuong.cho_phep_lay_ho);
+    fd.append('anh_bien_so', compressedBS);
+    fd.append('anh_nguoi_lai', compressedNL);
+
     try {
-      const data = await xeVaoApi.xacNhanThuong(fd)
-      setTicket(data)
-      setSuccess(true)
-      resetForm()
+      const data = await xeVaoApi.xacNhanThuong(fd);
+      setTicket(data);
+      setSuccess(true);
+      resetForm();
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }
@@ -462,42 +483,59 @@ function BienSoPanel() {
     setAutoModeFailed(false)
   }, [result])
 
-async function kiemTra() {
-  const raw = bienSo.trim();
-  if (!raw) return;
+  async function kiemTra() {
+    const raw = bienSo.trim();
 
-  const cleaned = chuanHoaBienSo(raw);
-  if (!isValidBienSo(cleaned)) {
-    setError('Biển số không đúng định dạng (VD: 51F-123.45)');
-    return;
-  }
-
-  setBienSo(cleaned); // Hiển thị lại biển số sạch
-
-  setLoading(true);
-  setError(null);
-  setResult(null);
-  setShowFormThuong(false);
-
-  const fd = new FormData();
-  fd.append('bien_so', cleaned);
-
-  try {
-    const data = await xeVaoApi.kiemTraBienSo(fd);
-    if (data.loai === 've_thang') {
-      setResult(data);
-    } else if (data.loai === 'xe_thuong') {
-      setResult(data);
-      setShowFormThuong(true);
-    } else {
-      setError('Không tìm thấy xe.');
+    // 🚲 Nếu để trống biển số → thử gán xe đạp
+    if (!raw) {
+      const xeDap = loaiXeList.find(lx => lx.ten.toLowerCase().includes('đạp'));
+      if (xeDap) {
+        const tempPlate = 'XD' + Date.now().toString().slice(-6);
+        setBienSo(tempPlate);
+        setResult({ loai: 'xe_thuong' });
+        setShowFormThuong(true);
+        setFormThuong(f => ({ ...f, loaiXe: xeDap.id }));
+        return;
+      }
+      setError('Vui lòng nhập biển số hoặc thêm loại "Xe đạp" vào danh sách.');
+      return;
     }
-  } catch (err) {
-    setError(err.message);
-  } finally {
-    setLoading(false);
+
+    // 📛 Chuẩn hóa & validate (bỏ qua nếu đang chọn xe đạp)
+    const cleaned = chuanHoaBienSo(raw);
+    const loaiXeObj = loaiXeList.find(lx => lx.id == formThuong.loaiXe);
+    const isBicycle = loaiXeObj?.ten.toLowerCase().includes('đạp');
+
+    if (!isBicycle && !isValidBienSo(cleaned)) {
+      setError('Biển số không đúng định dạng (VD: 51F-123.45)');
+      return;
+    }
+
+    setBienSo(cleaned);
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    setShowFormThuong(false);
+
+    const fd = new FormData();
+    fd.append('bien_so', cleaned);
+
+    try {
+      const data = await xeVaoApi.kiemTraBienSo(fd);
+      if (data.loai === 've_thang') {
+        setResult(data);
+      } else if (data.loai === 'xe_thuong') {
+        setResult(data);
+        setShowFormThuong(true);
+      } else {
+        setError('Không tìm thấy xe.');
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   }
-}
 
   async function xacNhanVeThangAuto() {
     if (!result?.ma_qr) { setError('Thiếu mã QR vé tháng'); return }
@@ -545,24 +583,35 @@ async function kiemTra() {
   async function xacNhanThuong() {
     if (!fileBienSo) { setError('Vui lòng chụp ảnh biển số'); return }
     if (!fileNguoiLai) { setError('Vui lòng chụp ảnh người lái'); return }
-    setLoading(true)
-    const compressedBS = await compressImage(fileBienSo)
-    const compressedNL = await compressImage(fileNguoiLai)
-    const fd = new FormData()
-    fd.append('id_loai_xe', formThuong.loaiXe)
-    fd.append('bien_so_xac_nhan', bienSo.trim().toUpperCase())
-    fd.append('ten_chu_xe', formThuong.tenChuXe || '')
-    fd.append('sdt', formThuong.sdt || '')
-    fd.append('email', formThuong.email || '')
-    fd.append('ghi_chu', formThuong.ghiChu || '')
-    fd.append('cho_phep_lay_ho', formThuong.cho_phep_lay_ho)
-    fd.append('anh_bien_so', compressedBS)
-    fd.append('anh_nguoi_lai', compressedNL)
+
+    // 🚲 Cho phép biển số trống nếu là xe đạp
+    const loaiXeObj = loaiXeList.find(lx => lx.id == formThuong.loaiXe);
+    const isBicycle = loaiXeObj?.ten.toLowerCase().includes('đạp');
+    if (!isBicycle && !bienSo.trim()) {
+      setError('Vui lòng nhập biển số');
+      return;
+    }
+
+    setLoading(true);
+    const compressedBS = await compressImage(fileBienSo);
+    const compressedNL = await compressImage(fileNguoiLai);
+
+    const fd = new FormData();
+    fd.append('id_loai_xe', formThuong.loaiXe);
+    fd.append('bien_so_xac_nhan', bienSo.trim().toUpperCase());
+    fd.append('ten_chu_xe', formThuong.tenChuXe || '');
+    fd.append('sdt', formThuong.sdt || '');
+    fd.append('email', formThuong.email || '');
+    fd.append('ghi_chu', formThuong.ghiChu || '');
+    fd.append('cho_phep_lay_ho', formThuong.cho_phep_lay_ho);
+    fd.append('anh_bien_so', compressedBS);
+    fd.append('anh_nguoi_lai', compressedNL);
+
     try {
-      const data = await xeVaoApi.xacNhanThuong(fd)
-      setTicket(data)
-      setResult(null)
-      setShowFormThuong(false)
+      const data = await xeVaoApi.xacNhanThuong(fd);
+      setTicket(data);
+      setResult(null);
+      setShowFormThuong(false);
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }
