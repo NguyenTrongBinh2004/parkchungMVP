@@ -13,35 +13,38 @@ export default function Dashboard() {
   const navigate = useNavigate()
 
   return (
-    <div style={{ maxWidth: 600, margin: '0 auto', padding: '1.5rem 1rem' }}>
-      <h3 style={{ marginBottom: '1.25rem', fontFamily: 'var(--font-mono)' }}>
-        🏍️ Parking MVP
-      </h3>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-        {MENUS.map(m => (
-          <button
-            key={m.path}
-            className="menu-card"
-            onClick={() => navigate(m.path)}
-          >
-            <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>{m.icon}</div>
-            <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{m.label}</div>
-          </button>
-        ))}
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* Nội dung chính */}
+      <div style={{ flex: 1, maxWidth: 600, margin: '0 auto', padding: '1.5rem 1rem', width: '100%' }}>
+        <h3 style={{ marginBottom: '1.25rem', fontFamily: 'var(--font-mono)' }}>
+          🏍️ Parking MVP
+        </h3>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+          {MENUS.map(m => (
+            <button
+              key={m.path}
+              className="menu-card"
+              onClick={() => navigate(m.path)}
+            >
+              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>{m.icon}</div>
+              <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{m.label}</div>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ─── Footer (3 dòng, căn trái) ─── */}
       <div style={{
-        marginTop: '2.5rem',
-        paddingTop: '1.25rem',
+        padding: '1.25rem 1rem',
         borderTop: '1px solid var(--border)',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'flex-start',   // 👈 căn trái
+        alignItems: 'flex-start',
         gap: '0.4rem',
         color: 'var(--text-muted)',
         fontSize: '0.85rem',
-        textAlign: 'left'           // 👈 căn trái
+        textAlign: 'left',
+        backgroundColor: 'var(--bg)' // để che nội dung bên dưới nếu có
       }}>
         {/* Dòng 1: Logo + PARKCHUNG */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
