@@ -117,7 +117,7 @@ def xe_trong_bai(KetNoi=Depends(lay_ket_noi_CSDL)):
 # ── Đăng ký vé tháng ───────────────────────────────────────────
 @app.post("/dang-ky-ve-thang/", response_model=PhanHoiVeThang)
 async def dang_ky_ve_thang(
-    bien_so: str = Form(...),
+    bien_so: str = Form(""),   # Không bắt buộc nữa
     id_loai_xe: int = Form(...),
     ten_chu_xe: str = Form(...),
     sdt: Optional[str] = Form(None),
@@ -131,40 +131,59 @@ async def dang_ky_ve_thang(
 ):
     sdt   = sdt.strip()   if sdt   else None
     email = email.strip() if email else None
-    print(f"DEBUG DANG KY VE THANG: email = {repr(email)}")   # thêm dòng này
 
     if sdt and not re.match(r"^(0|\+84)[0-9]{8,10}$", sdt):
         raise HTTPException(status_code=422, detail="Số điện thoại không hợp lệ.")
     if email and not re.match(r"^[\w\.-]+@[\w\.-]+\.\w{2,}$", email):
         raise HTTPException(status_code=422, detail="Email không hợp lệ.")
     if not sdt and not email:
-        raise HTTPException(
-            status_code=422,
-            detail="Vui lòng cung cấp ít nhất số điện thoại hoặc email.",
-        )
+        raise HTTPException(status_code=422, detail="Vui lòng cung cấp ít nhất số điện thoại hoặc email.")
 
-    bien_so_chuan = bien_so.upper().strip()
-    bien_so_sach  = chuan_hoa_bien_so(bien_so_chuan)
-    if not is_valid_bien_so(bien_so_sach):
-        raise HTTPException(status_code=400, detail="Biển số không đúng định dạng")
     hom_nay       = date.today()
     ngay_het_han  = hom_nay + timedelta(days=30)
 
-    # Lưu ảnh trước transaction (I/O không cần lock DB)
+    # ─── Kiểm tra loại xe: có yêu cầu biển số không? ───
+    with KetNoi.cursor(dictionary=True) as cur:
+        cur.execute("SELECT ten, gia_luot, gia_ve_thang FROM loai_xe WHERE id = %s", (id_loai_xe,))
+        loai_xe_row = cur.fetchone()
+        if not loai_xe_row:
+            raise HTTPException(status_code=404, detail="Không tìm thấy loại xe.")
+
+        # Tạm thời: nếu tên loại chứa "đạp" → không yêu cầu biển số
+        yeu_cau_bien = not ("đạp" in loai_xe_row["ten"].lower() or "xe đạp" in loai_xe_row["ten"].lower())
+        so_tien = int(loai_xe_row["gia_ve_thang"] or loai_xe_row["gia_luot"])
+
+    # ─── Xử lý biển số dựa vào loại xe ───
+    if yeu_cau_bien:
+        # Xe thông thường: bắt buộc nhập biển số, validate
+        if not bien_so.strip():
+            raise HTTPException(status_code=422, detail="Biển số không được để trống.")
+        bien_so_chuan = bien_so.upper().strip()
+        bien_so_sach = chuan_hoa_bien_so(bien_so_chuan)
+        if not is_valid_bien_so(bien_so_sach):
+            raise HTTPException(status_code=400, detail="Biển số không đúng định dạng")
+    else:
+        # Xe đạp / loại không yêu cầu biển số: có thể để trống → tự sinh mã
+        if not bien_so.strip():
+            import uuid
+            bien_so_chuan = f"XD{uuid.uuid4().hex[:8].upper()}"
+        else:
+            bien_so_chuan = bien_so.upper().strip()
+        bien_so_sach = chuan_hoa_bien_so(bien_so_chuan)  # vẫn chuẩn hóa (xóa dấu)
+
+    # ─── Lưu ảnh ───
     duong_dan_bien_so    = await luu_anh(anh_bien_so,    "uploads/bien_so")    if anh_bien_so    else None
     duong_dan_nguoi_dung = await luu_anh(anh_nguoi_dung, "uploads/nguoi_dung") if anh_nguoi_dung else None
 
     try:
         with KetNoi.cursor(dictionary=True) as cur:
-            # ✅ SELECT FOR UPDATE: khóa để tránh race condition
-            # Hai request đồng thời → chỉ 1 request vào được, request còn lại chờ
+            # ─── Kiểm tra trùng vé tháng (với biển số sạch) ───
             cur.execute(
                 """
-                SELECT id, ngay_het_han FROM ve_thang
+                SELECT id FROM ve_thang
                  WHERE REPLACE(REPLACE(REPLACE(bien_so,'-',''),'.',''),' ','') = %s
                    AND ngay_het_han >= %s
-                 LIMIT 1
-                 FOR UPDATE
+                 LIMIT 1 FOR UPDATE
                 """,
                 (bien_so_sach, hom_nay),
             )
@@ -174,7 +193,7 @@ async def dang_ky_ve_thang(
                     detail=f"Biển số {bien_so_chuan} đã có vé tháng còn hạn.",
                 )
 
-            # ✅ Upsert khách hàng — không tạo bản ghi trùng nếu SĐT đã có
+            # ─── Upsert khách hàng ───
             id_khach_hang = None
             if sdt:
                 cur.execute("SELECT id FROM khach_hang WHERE sdt = %s", (sdt,))
@@ -233,18 +252,8 @@ async def dang_ky_ve_thang(
                 )
                 id_khach_hang = cur.lastrowid
 
-            # Lấy giá loại xe
-            cur.execute(
-                "SELECT gia_luot, gia_ve_thang FROM loai_xe WHERE id = %s",
-                (id_loai_xe,),
-            )
-            loai_xe_row = cur.fetchone()
-            if not loai_xe_row:
-                raise HTTPException(status_code=404, detail="Không tìm thấy loại xe.")
-
-            so_tien = int(loai_xe_row["gia_ve_thang"] or loai_xe_row["gia_luot"])
-
-            # Tạo vé tháng
+            # ─── Tạo vé tháng ───
+            duoi_bien_so = re.sub(r"[^0-9]", "", bien_so_chuan)[-5:]  # Lấy 5 số cuối (nếu có)
             cur.execute(
                 """
                 INSERT INTO ve_thang
@@ -254,8 +263,7 @@ async def dang_ky_ve_thang(
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 """,
                 (
-                    id_khach_hang, bien_so_chuan,
-                    re.sub(r"[^0-9]", "", bien_so_chuan)[-5:],
+                    id_khach_hang, bien_so_chuan, duoi_bien_so,
                     id_loai_xe, hom_nay, ngay_het_han, so_tien, ghi_chu,
                     duong_dan_bien_so, duong_dan_nguoi_dung,
                 ),
@@ -281,9 +289,9 @@ async def dang_ky_ve_thang(
                 (id_ve, hom_nay, ngay_het_han, so_tien, ghi_chu),
             )
 
-            KetNoi.commit()   # duy nhất 1 commit cho toàn bộ transaction
+            KetNoi.commit()
 
-        # Gửi thông báo (ngoài transaction)
+        # ─── Gửi thông báo ───
         if email:
             asyncio.create_task(
                 gui_email_qr(
@@ -306,7 +314,7 @@ async def dang_ky_ve_thang(
             "bien_so": bien_so_chuan, "id_loai_xe": id_loai_xe,
             "ngay_dang_ky": hom_nay, "ngay_het_han": ngay_het_han,
             "so_tien": so_tien, "ma_qr": ma_qr,
-            "qr_image_url": build_url(duong_dan_qr),   # ← thêm dòng này
+            "qr_image_url": build_url(duong_dan_qr),
             "ghi_chu": ghi_chu,
             "trang_thai": "con_han",
             "so_ngay_con": (ngay_het_han - date.today()).days,

@@ -272,7 +272,7 @@ async def xac_nhan_xe_vao_ve_thang(
 @router.post("/ve-thuong/xac-nhan/", response_model=PhanHoiXeVao)
 async def xac_nhan_xe_vao_ve_thuong(
     id_loai_xe: int = Form(...),
-    bien_so_xac_nhan: str = Form(...),
+    bien_so_xac_nhan: str = Form(""),   # không bắt buộc nữa
     ten_chu_xe: Optional[str] = Form(None),
     sdt: Optional[str] = Form(None),
     email: Optional[str] = Form(None),
@@ -284,55 +284,86 @@ async def xac_nhan_xe_vao_ve_thuong(
 ):
     sdt   = sdt.strip()   if sdt   else None
     email = email.strip() if email else None
-    print(f"DEBUG XE THUONG: email = {repr(email)}")
 
     if sdt and not re.match(r'^(0|\+84)[0-9]{8,10}$', sdt):
         raise HTTPException(status_code=422, detail="Số điện thoại không hợp lệ.")
     if email and not re.match(r'^[\w\.-]+@[\w\.-]+\.\w{2,}$', email):
         raise HTTPException(status_code=422, detail="Email không hợp lệ.")
 
-    bay_gio      = bay_gio_vn()
-    bien_so_goc  = bien_so_xac_nhan.upper().strip()          # Giữ nguyên để lưu DB
-    bien_so_sach = chuan_hoa_bien_so(bien_so_xac_nhan)       # Dùng để so sánh
-    duoi_bien_so = tach_bien_so(bien_so_sach)
-    ten_khach    = ten_chu_xe.strip() if ten_chu_xe else None
+    bay_gio = bay_gio_vn()
+    ten_khach = ten_chu_xe.strip() if ten_chu_xe else None
 
+    # 🔍 Kiểm tra loại xe: có yêu cầu biển số không?
+    with KetNoi.cursor(dictionary=True) as ConTro:
+        ConTro.execute("SELECT id, ten, yeu_cau_bien_so FROM loai_xe WHERE id=%s", (id_loai_xe,))
+        loai_xe_row = ConTro.fetchone()
+        if not loai_xe_row:
+            raise HTTPException(status_code=404, detail=f"Không tìm thấy loại xe id: {id_loai_xe}")
+
+        # Nếu DB chưa có cột yeu_cau_bien_so, dùng quy ước tạm thời:
+        # yeu_cau_bien = loai_xe_row.get("yeu_cau_bien_so", True)  # mặc định TRUE nếu chưa có cột
+        # Dùng cách tạm: kiểm tra tên loại xe
+        yeu_cau_bien = not ("đạp" in loai_xe_row["ten"].lower() or "xe đạp" in loai_xe_row["ten"].lower())  # nếu tên chứa "đạp" -> FALSE
+
+    if yeu_cau_bien:
+        # ── Xe thường, có biển số ──
+        if not bien_so_xac_nhan or not bien_so_xac_nhan.strip():
+            raise HTTPException(status_code=422, detail="Biển số không được để trống.")
+
+        bien_so_goc  = bien_so_xac_nhan.upper().strip()
+        bien_so_sach = chuan_hoa_bien_so(bien_so_xac_nhan)
+        duoi_bien_so = tach_bien_so(bien_so_sach)
+
+        # Validate biển số
+        if not is_valid_bien_so(bien_so_sach):
+            raise HTTPException(status_code=422, detail="Biển số không đúng định dạng.")
+
+        try:
+            with KetNoi.cursor(dictionary=True) as ConTro:
+                # Kiểm tra vé tháng
+                ConTro.execute(
+                    """SELECT id FROM ve_thang
+                    WHERE REPLACE(REPLACE(REPLACE(bien_so, '-', ''), '.', ''), ' ', '') = %s
+                        AND ngay_het_han >= %s""",
+                    (bien_so_sach, date.today())
+                )
+                if ConTro.fetchone():
+                    raise HTTPException(status_code=400,
+                        detail="Xe đang có vé tháng. Vui lòng cho xe vào bằng chức năng quét QR.")
+
+                # Kiểm tra xe đang trong bãi
+                ConTro.execute(
+                    """SELECT id FROM phien_gui_xe
+                    WHERE REPLACE(REPLACE(REPLACE(bien_so, '-', ''), '.', ''), ' ', '') = %s
+                        AND is_in_bai = 1""",
+                    (bien_so_sach,)
+                )
+                if ConTro.fetchone():
+                    raise HTTPException(status_code=400, detail="Xe này hiện đang trong bãi.")
+        except mysql.connector.Error as err:
+            raise HTTPException(status_code=500, detail=f"Lỗi CSDL: {err}")
+
+    else:
+        # ── Xe đạp hoặc loại không yêu cầu biển số ──
+        if not bien_so_xac_nhan or not bien_so_xac_nhan.strip():
+            # Tự sinh mã biển số tạm (không trùng)
+            import uuid
+            bien_so_goc = f"XD{uuid.uuid4().hex[:8].upper()}"
+        else:
+            bien_so_goc = bien_so_xac_nhan.upper().strip()
+        bien_so_sach = chuan_hoa_bien_so(bien_so_goc)  # vẫn chuẩn hóa để lưu
+        duoi_bien_so = bien_so_sach[-5:] if len(bien_so_sach) >= 5 else bien_so_sach  # hoặc để NULL nếu muốn
+        # Không kiểm tra vé tháng, không kiểm tra xe đang trong bãi
+
+    # ── Các bước còn lại: lưu ảnh, tạo khách hàng, tạo phiên ──
     try:
-        # ── 1. Validate loại xe và kiểm tra vé tháng (chuẩn hóa) ──
-        with KetNoi.cursor(dictionary=True) as ConTro:
-            ConTro.execute("SELECT id FROM loai_xe WHERE id=%s", (id_loai_xe,))
-            if not ConTro.fetchone():
-                raise HTTPException(status_code=404, detail=f"Không tìm thấy loại xe id: {id_loai_xe}")
-
-            ConTro.execute(
-                """SELECT id FROM ve_thang
-                WHERE REPLACE(REPLACE(REPLACE(bien_so, '-', ''), '.', ''), ' ', '') = %s
-                    AND ngay_het_han >= %s""",
-                (bien_so_sach, date.today())
-            )
-            if ConTro.fetchone():
-                raise HTTPException(status_code=400,
-                    detail="Xe đang có vé tháng. Vui lòng cho xe vào bằng chức năng quét QR.")
-
-        # ── 2. Kiểm tra xe đang trong bãi (chuẩn hóa) ──
-            ConTro.execute(
-                """SELECT id FROM phien_gui_xe
-                WHERE REPLACE(REPLACE(REPLACE(bien_so, '-', ''), '.', ''), ' ', '') = %s
-                    AND is_in_bai = 1""",
-                (bien_so_sach,)
-            )
-            if ConTro.fetchone():
-                raise HTTPException(status_code=400, detail="Xe này hiện đang trong bãi.")
-
-        # ── 3. Lưu ảnh ──
         duong_dan_bien_so   = await luu_anh(anh_bien_so,   "uploads/bien_so")
         duong_dan_nguoi_lai = await luu_anh(anh_nguoi_lai, "uploads/nguoi_lai") if anh_nguoi_lai else None
 
         with KetNoi.cursor(dictionary=True) as ConTro:
-            # ── 4. Tạo khách hàng nếu có thông tin ──
+            # Tạo khách hàng nếu có sdt/email
             id_khach_hang = None
-            if sdt or email:   # chỉ xử lý nếu có ít nhất SĐT hoặc email
-                # Dùng ON DUPLICATE KEY UPDATE để tự động cập nhật nếu SĐT đã tồn tại
+            if sdt or email:
                 ConTro.execute("""
                     INSERT INTO khach_hang (ten, sdt, email, cho_phep_lay_ho)
                     VALUES (%s, %s, %s, %s)
@@ -341,10 +372,6 @@ async def xac_nhan_xe_vao_ve_thuong(
                         email = VALUES(email),
                         cho_phep_lay_ho = VALUES(cho_phep_lay_ho)
                 """, (ten_khach or "Khách vãng lai", sdt, email, int(cho_phep_lay_ho)))
-
-                # Sau khi thực hiện, lấy id khách hàng:
-                # - Nếu INSERT thành công (bản ghi mới) → lastrowid > 0
-                # - Nếu UPDATE (trùng SĐT) → lastrowid có thể = 0, phải SELECT lại
                 if ConTro.lastrowid > 0:
                     id_khach_hang = ConTro.lastrowid
                 else:
@@ -356,7 +383,6 @@ async def xac_nhan_xe_vao_ve_thuong(
 
             ma_phien = f"GX{uuid.uuid4().hex[:8].upper()}"
 
-            # ── 5. Tạo QR phiên ──
             du_lieu_qr = {
                 "ma_phien": ma_phien, "bien_so": bien_so_goc,
                 "ten_chu_xe": ten_khach or "Khách vãng lai", "sdt": sdt or "",
@@ -366,26 +392,21 @@ async def xac_nhan_xe_vao_ve_thuong(
             }
             ma_qr, duong_dan_qr = tao_ma_qr(du_lieu_qr)
 
-            # ── 6. INSERT phiên ──
-            try:
-                ConTro.execute("""
-                    INSERT INTO phien_gui_xe
-                    (ma_phien, bien_so, duoi_bien_so, id_loai_xe, id_khach_hang,
-                     duong_dan_anh_bien_so, duong_dan_anh_nguoi_lai, gio_vao, ghi_chu,
-                     cho_phep_lay_ho, ma_qr, is_in_bai)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)
-                """, (
-                    ma_phien, bien_so_goc, duoi_bien_so, id_loai_xe, id_khach_hang,
-                    duong_dan_bien_so, duong_dan_nguoi_lai, bay_gio, ghi_chu,
-                    int(cho_phep_lay_ho), ma_qr
-                ))
-                id_moi = ConTro.lastrowid
-                KetNoi.commit()
-            except mysql.connector.IntegrityError:
-                KetNoi.rollback()
-                raise HTTPException(status_code=400, detail="Xe này hiện đang trong bãi (biển số trùng).")
+            ConTro.execute("""
+                INSERT INTO phien_gui_xe
+                (ma_phien, bien_so, duoi_bien_so, id_loai_xe, id_khach_hang,
+                 duong_dan_anh_bien_so, duong_dan_anh_nguoi_lai, gio_vao, ghi_chu,
+                 cho_phep_lay_ho, ma_qr, is_in_bai)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)
+            """, (
+                ma_phien, bien_so_goc, duoi_bien_so, id_loai_xe, id_khach_hang,
+                duong_dan_bien_so, duong_dan_nguoi_lai, bay_gio, ghi_chu,
+                int(cho_phep_lay_ho), ma_qr
+            ))
+            id_moi = ConTro.lastrowid
+            KetNoi.commit()
 
-        # ── 7. Gửi thông báo ──
+        # Gửi thông báo
         await gui_thong_bao(
             email, sdt, ten_khach or "Khách vãng lai", bien_so_goc, bay_gio,
             duong_dan_qr, ma_phien

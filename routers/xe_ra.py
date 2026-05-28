@@ -127,8 +127,11 @@ def kiem_tra_xe_ra_bien_so(
     KetNoi=Depends(lay_ket_noi_CSDL),
 ):
     bien_so_sach = chuan_hoa_bien_so(bien_so)
-    if not is_valid_bien_so(bien_so_sach):
-        raise HTTPException(status_code=400, detail="Biển số không đúng định dạng")
+
+    # 🚲 Bỏ validate is_valid_bien_so để hỗ trợ biển số tạm của xe đạp (XD...)
+    # Chỉ cần đảm bảo không rỗng
+    if not bien_so_sach:
+        raise HTTPException(status_code=400, detail="Vui lòng nhập biển số")
 
     try:
         with KetNoi.cursor(dictionary=True) as cur:
