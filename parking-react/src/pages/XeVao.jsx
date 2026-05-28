@@ -382,7 +382,10 @@ function SmartPanel() {
           <Field label="Biển số (sửa nếu cần)">
             <div style={{ display: 'flex', gap: 8 }}>
               <input value={bienSoText} onChange={e => setBienSoText(e.target.value)} placeholder="Nhập biển số" style={{ textTransform: 'uppercase', flex: 1 }} />
-              <button className="btn btn-accent btn-sm" onClick={kiemTraBienSo} disabled={loading || !bienSoText.trim()} style={{ whiteSpace: 'nowrap' }}>Xác nhận</button>
+              <button className="btn btn-accent btn-sm" onClick={kiemTraBienSo}
+                disabled={loading} style={{ whiteSpace: 'nowrap' }}>
+                Xác nhận
+              </button>
             </div>
           </Field>
         </div>
