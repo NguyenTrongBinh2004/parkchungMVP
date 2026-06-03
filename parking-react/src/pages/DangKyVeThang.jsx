@@ -2,8 +2,47 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageLayout, Spinner, Alert, Field, Modal } from '../components/UI'
 import { veThangApi, loaiXeApi } from '../services/api'
+import { chuanHoaBienSo, isValidBienSo } from '../utils'
 
 const API = import.meta.env.VITE_API_URL || ''
+
+// ─── Helper: kiểm tra loại xe đã có giá thực tế (dùng để lọc) ───
+function coGiaThucTe(lx) {
+  if (lx.kieu_tinh_gia === 'theo_luot') {
+    return Number(lx.gia_luot || 0) > 0
+  }
+  if (lx.kieu_tinh_gia === 'theo_gio') {
+    let cfg = lx.cau_hinh_theo_gio
+    if (typeof cfg === 'string') {
+      try { cfg = JSON.parse(cfg) } catch { return false }
+    }
+    if (Array.isArray(cfg) && cfg.length > 0) {
+      return cfg.some(b => (b.gia && b.gia > 0) || (b.moi_gio_tiep && b.moi_gio_tiep > 0))
+    }
+    return false
+  }
+  if (lx.kieu_tinh_gia === 'theo_ngay_dem') {
+    return (Number(lx.gia_ngay || 0) > 0) || (Number(lx.gia_dem || 0) > 0) || (Number(lx.gia_ngay_dem || 0) > 0)
+  }
+  return false
+}
+
+// ─── Nhóm loại xe theo nhóm (chỉ dùng cho danh sách đã lọc) ───
+function groupByNhom(loaiXeList) {
+  const map = {}
+  loaiXeList.forEach(lx => {
+    if (!map[lx.nhom_xe_id]) {
+      map[lx.nhom_xe_id] = {
+        nhom_id: lx.nhom_xe_id,
+        ten_nhom: lx.ten_nhom,
+        thu_tu: lx.thu_tu_nhom,
+        items: []
+      }
+    }
+    map[lx.nhom_xe_id].items.push(lx)
+  })
+  return Object.values(map).sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0))
+}
 
 function useObjectURL(file) {
   const [url, setUrl] = useState(null)
@@ -18,18 +57,19 @@ function useObjectURL(file) {
 
 function getQrUrl(ticket) {
   if (!ticket) return null
-  if (ticket.qr_image_url) return ticket.qr_image_url   // backend trả về sẵn
+  if (ticket.qr_image_url) return ticket.qr_image_url
   if (ticket.ma_qr) return `${API}/uploads/qr/${ticket.ma_qr}.png`
   return null
 }
 
 // ─── Component input ảnh: chụp camera + chọn thư viện ───
 function ImagePicker({ label, required, file, onFile }) {
-  const refCamera = useRef(null)
-  const refGallery = useRef(null)
+  const internalRef = useRef(null)
+  const refCam = internalRef   // không cần refInput ở đây
+  const refLib = useRef(null)
   const preview = useObjectURL(file)
 
-  function handleChange(e) {
+  function onChange(e) {
     if (e.target.files[0]) onFile(e.target.files[0])
   }
 
@@ -39,29 +79,27 @@ function ImagePicker({ label, required, file, onFile }) {
         {label}{required && <span style={{ color: 'var(--danger)' }}> *</span>}
       </label>
 
-      {/* Input camera (ẩn) */}
       <input
-        ref={refCamera}
+        ref={refCam}
         type="file"
         accept="image/*"
         capture="environment"
         style={{ display: 'none' }}
-        onChange={handleChange}
+        onChange={onChange}
       />
-      {/* Input thư viện (ẩn) */}
       <input
-        ref={refGallery}
+        ref={refLib}
         type="file"
         accept="image/*"
         style={{ display: 'none' }}
-        onChange={handleChange}
+        onChange={onChange}
       />
 
       <div style={{ display: 'flex', gap: 8 }}>
         <button
           type="button"
           className="btn btn-secondary btn-sm"
-          onClick={() => refCamera.current.click()}
+          onClick={() => refCam.current.click()}
           style={{ flex: 1 }}
         >
           📷 Chụp ảnh
@@ -69,7 +107,7 @@ function ImagePicker({ label, required, file, onFile }) {
         <button
           type="button"
           className="btn btn-outline btn-sm"
-          onClick={() => refGallery.current.click()}
+          onClick={() => refLib.current.click()}
           style={{ flex: 1 }}
         >
           🖼 Thư viện
@@ -109,7 +147,8 @@ function ImagePicker({ label, required, file, onFile }) {
 
 export default function DangKyVeThang() {
   const navigate = useNavigate()
-  const [loaiXeList, setLoaiXeList] = useState([])
+  const [allLoaiXe, setAllLoaiXe] = useState([])            // toàn bộ loại xe (để tìm xe đạp)
+  const [groupedLoaiXe, setGroupedLoaiXe] = useState([])   // nhóm loại xe đã cấu hình giá
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [ticket, setTicket] = useState(null)
@@ -128,29 +167,42 @@ export default function DangKyVeThang() {
     cho_phep_lay_ho: false,
   })
 
-useEffect(() => {
-  // Reset form về mặc định khi vào trang
-  setForm({
-    bien_so: '',
-    id_loai_xe: '',
-    ten_chu_xe: '',
-    sdt: '',
-    email: '',
-    dia_chi: '',
-    ghi_chu: '',
-    cho_phep_lay_ho: false,
-  })
-  // Lấy danh sách loại xe và set mặc định Ô tô
-  loaiXeApi.list().then(data => {
-    setLoaiXeList(data)
-    if (data.length) {
-      const oto = data.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('ôtô'))
-      const fallback = data.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('oto'))
-      const defaultId = oto ? oto.id : (fallback ? fallback.id : data[0].id)
-      setForm(f => ({ ...f, id_loai_xe: defaultId }))
-    }
-  }).catch(() => {})
-}, [])
+  // Ref để lưu loại xe mặc định (ưu tiên) – dùng khi cần reset form
+  const defaultLoaiXeRef = useRef('')
+
+  useEffect(() => {
+    // Reset form về mặc định khi vào trang
+    setForm({
+      bien_so: '',
+      id_loai_xe: '',
+      ten_chu_xe: '',
+      sdt: '',
+      email: '',
+      dia_chi: '',
+      ghi_chu: '',
+      cho_phep_lay_ho: false,
+    })
+
+    // Load toàn bộ loại xe (cho logic xe đạp) và loại đã cấu hình (cho dropdown)
+    Promise.all([
+      loaiXeApi.list(),                                                   // lấy toàn bộ loại xe (phục vụ logic xe đạp)
+      loaiXeApi.list({ da_cau_hinh: true, has_ve_thang: true })          // chỉ lấy loại đã cấu hình & có giá vé tháng
+    ]).then(([allData, configuredData]) => {
+      setAllLoaiXe(allData)
+      const grouped = groupByNhom(configuredData)
+      setGroupedLoaiXe(grouped)
+
+      if (configuredData.length > 0) {
+        const oto = configuredData.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('ôtô'))
+        const fallback = configuredData.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('oto'))
+        const defaultId = oto ? oto.id : (fallback ? fallback.id : configuredData[0].id)
+        setForm(f => ({ ...f, id_loai_xe: defaultId }))
+        defaultLoaiXeRef.current = defaultId
+      } else {
+        defaultLoaiXeRef.current = ''
+      }
+    }).catch(() => {})
+  }, [])
 
   function upd(field) {
     return e => {
@@ -161,7 +213,32 @@ useEffect(() => {
 
   async function submit(e) {
     e.preventDefault()
-    if (!form.bien_so.trim()) { setError('Vui lòng nhập biển số.'); return }
+
+    const loaiXeObj = allLoaiXe.find(lx => lx.id == form.id_loai_xe)
+    const isBicycle = loaiXeObj?.ten.toLowerCase().includes('đạp')
+
+    // Xử lý biển số
+    let bienSoGui
+    if (isBicycle) {
+      // Xe đạp: có thể trống hoặc tự sinh mã
+      if (!form.bien_so.trim()) {
+        bienSoGui = 'XD' + Date.now().toString().slice(-6)
+      } else {
+        bienSoGui = form.bien_so.trim().toUpperCase()
+      }
+    } else {
+      if (!form.bien_so.trim()) {
+        setError('Vui lòng nhập biển số.')
+        return
+      }
+      const cleaned = chuanHoaBienSo(form.bien_so)
+      if (!isValidBienSo(cleaned)) {
+        setError('Biển số không đúng định dạng (VD: 51F-123.45)')
+        return
+      }
+      bienSoGui = form.bien_so.trim().toUpperCase()
+    }
+
     if (!form.id_loai_xe) { setError('Vui lòng chọn loại xe.'); return }
     if (!form.ten_chu_xe.trim()) { setError('Vui lòng nhập tên chủ xe.'); return }
     if (!fileBienSo) { setError('Vui lòng chọn ảnh biển số.'); return }
@@ -169,10 +246,20 @@ useEffect(() => {
 
     setLoading(true)
     setError(null)
+
     const fd = new FormData()
-    Object.entries(form).forEach(([k, v]) => fd.append(k, v))
+    // Sử dụng biển số đã xử lý
+    fd.append('bien_so', bienSoGui)
+    fd.append('id_loai_xe', form.id_loai_xe)
+    fd.append('ten_chu_xe', form.ten_chu_xe.trim())
+    fd.append('sdt', form.sdt)
+    fd.append('email', form.email)
+    fd.append('dia_chi', form.dia_chi)
+    fd.append('ghi_chu', form.ghi_chu)
+    fd.append('cho_phep_lay_ho', form.cho_phep_lay_ho)
     fd.append('anh_bien_so', fileBienSo)
     fd.append('anh_nguoi_dung', fileNguoiDung)
+
     try {
       const data = await veThangApi.dangKy(fd)
       setTicket(data)
@@ -207,8 +294,12 @@ useEffect(() => {
           </Field>
           <Field label="Loại xe" required>
             <select value={form.id_loai_xe} onChange={upd('id_loai_xe')}>
-              {loaiXeList.map(lx => (
-                <option key={lx.id} value={lx.id}>{lx.ten}</option>
+              {groupedLoaiXe.map(group => (
+                <optgroup key={group.nhom_id} label={group.ten_nhom}>
+                  {group.items.map(lx => (
+                    <option key={lx.id} value={lx.id}>{lx.ten}</option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </Field>

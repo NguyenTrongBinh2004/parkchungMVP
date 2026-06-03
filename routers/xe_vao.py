@@ -347,7 +347,6 @@ async def xac_nhan_xe_vao_ve_thuong(
         # ── Xe đạp hoặc loại không yêu cầu biển số ──
         if not bien_so_xac_nhan or not bien_so_xac_nhan.strip():
             # Tự sinh mã biển số tạm (không trùng)
-            import uuid
             bien_so_goc = f"XD{uuid.uuid4().hex[:8].upper()}"
         else:
             bien_so_goc = bien_so_xac_nhan.upper().strip()

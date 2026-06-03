@@ -1,10 +1,9 @@
+// parking-react/src/XeVao.jsx
 import { useState, useEffect, useRef } from 'react'
 import { PageLayout, Spinner, Alert, Field, Modal, fmtDt } from '../components/UI'
 import { xeVaoApi, loaiXeApi } from '../services/api'
 import imageCompression from 'browser-image-compression'
 import { chuanHoaBienSo, isValidBienSo } from '../utils'
-
-const API = import.meta.env.VITE_API_URL || ''
 
 async function compressImage(file) {
   const options = { maxSizeMB: 0.3, maxWidthOrHeight: 1024, useWebWorker: true }
@@ -37,9 +36,10 @@ function useObjectURL(file) {
   return url
 }
 
-// Component chọn ảnh: camera + thư viện
+// Component chọn ảnh: camera + thư viện (đã sửa lỗi useRef có điều kiện)
 function ImagePicker({ label, required, file, onFile, refInput }) {
-  const refCam = refInput || useRef(null)
+  const internalRef = useRef(null)
+  const refCam = refInput || internalRef   // an toàn: luôn gọi useRef trước
   const refLib = useRef(null)
   const preview = useObjectURL(file)
 
@@ -116,9 +116,33 @@ function VeThangCard({ result, onXacNhan, loading }) {
   )
 }
 
+// ─── Hàm nhóm loại xe theo nhóm ─────────────────────────────────────
+function groupByNhom(loaiXeList) {
+  const map = {}
+  loaiXeList.forEach(lx => {
+    if (!map[lx.nhom_xe_id]) {
+      map[lx.nhom_xe_id] = {
+        nhom_id: lx.nhom_xe_id,
+        ten_nhom: lx.ten_nhom,
+        thu_tu: lx.thu_tu_nhom,
+        items: []
+      }
+    }
+    map[lx.nhom_xe_id].items.push(lx)
+  })
+  // Sắp xếp nhóm theo thứ tự
+  return Object.values(map).sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0))
+}
+
 // ─── Tab Chụp ảnh (SmartPanel) ─────────────────────────────────
 function SmartPanel() {
-  const [loaiXeList, setLoaiXeList] = useState([])
+  // allLoaiXe: toàn bộ loại xe (cần cho logic tìm xe đạp và validate)
+  const [allLoaiXe, setAllLoaiXe] = useState([])
+  // configuredLoaiXe: danh sách loại xe đã cấu hình giá (để tìm xe đạp an toàn)
+  const [configuredLoaiXe, setConfiguredLoaiXe] = useState([])
+  // groupedLoaiXe: nhóm loại xe đã cấu hình để hiển thị dropdown
+  const [groupedLoaiXe, setGroupedLoaiXe] = useState([])
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [ticket, setTicket] = useState(null)
@@ -134,15 +158,31 @@ function SmartPanel() {
     loaiXe: '', tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false,
   })
 
+  // Ref lưu id loại xe mặc định (ưu tiên) để dùng trong resetForm
+  const defaultLoaiXeRef = useRef('')
+
   const [autoModeFailed, setAutoModeFailed] = useState(false)
 
+  // Load toàn bộ loại xe và danh sách đã cấu hình
   useEffect(() => {
-    loaiXeApi.list().then(data => {
-      setLoaiXeList(data)
-      if (data.length) {
-        const oto = data.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('ôtô'))
-        const fallback = data.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('oto'))
-        setFormThuong(f => ({ ...f, loaiXe: oto ? oto.id : (fallback ? fallback.id : data[0].id) }))
+    Promise.all([
+      loaiXeApi.list(),                      // toàn bộ (không filter)
+      loaiXeApi.list({ da_cau_hinh: true }) // chỉ xe đã cấu hình giá
+    ]).then(([allData, configuredData]) => {
+      setAllLoaiXe(allData)
+      setConfiguredLoaiXe(configuredData)    // lưu danh sách đã cấu hình
+      const grouped = groupByNhom(configuredData)
+      setGroupedLoaiXe(grouped)
+
+      // Chọn loại xe ưu tiên
+      if (configuredData.length > 0) {
+        const oto = configuredData.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('ôtô'))
+        const fallback = configuredData.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('oto'))
+        const defaultId = oto ? oto.id : (fallback ? fallback.id : configuredData[0].id)
+        setFormThuong(f => ({ ...f, loaiXe: defaultId }))
+        defaultLoaiXeRef.current = defaultId
+      } else {
+        defaultLoaiXeRef.current = ''
       }
     }).catch(() => {})
   }, [])
@@ -190,56 +230,54 @@ function SmartPanel() {
   }
 
   async function kiemTraBienSo() {
-    const raw = bienSoText.trim();
-
-    // 🚲 Nếu để trống biển số → thử gán xe đạp
+    const raw = bienSoText.trim()
     if (!raw) {
-      const xeDap = loaiXeList.find(lx => lx.ten.toLowerCase().includes('đạp'));
+      // Tìm xe đạp trong danh sách đã cấu hình (configuredLoaiXe)
+      const xeDap = configuredLoaiXe.find(lx => lx.ten.toLowerCase().includes('đạp'))
       if (xeDap) {
-        // Tạo biển số tạm duy nhất
-        const tempPlate = 'XD' + Date.now().toString().slice(-6);
-        setBienSoText(tempPlate);
-        setResult({ loai: 'xe_thuong' });
-        setShowFormThuong(true);
-        setFormThuong(f => ({ ...f, loaiXe: xeDap.id }));
-        return;
+        const tempPlate = 'XD' + Date.now().toString().slice(-6)
+        setBienSoText(tempPlate)
+        setResult({ loai: 'xe_thuong' })
+        setShowFormThuong(true)
+        setFormThuong(f => ({ ...f, loaiXe: xeDap.id }))
+        return
       }
-      setError('Vui lòng nhập biển số hoặc thêm loại "Xe đạp" vào danh sách.');
-      return;
+      setError('Loại "Xe đạp" chưa được cấu hình giá. Vui lòng cấu hình trước khi cho xe vào.')
+      return
     }
 
-    // 📛 Chuẩn hóa & validate (bỏ qua nếu đang chọn xe đạp)
-    const cleaned = chuanHoaBienSo(raw);
-    const loaiXeObj = loaiXeList.find(lx => lx.id == formThuong.loaiXe);
-    const isBicycle = loaiXeObj?.ten.toLowerCase().includes('đạp');
+    const cleaned = chuanHoaBienSo(raw)
+    // Sử dụng configuredLoaiXe để kiểm tra xe đạp (nếu loại hiện tại là xe đạp)
+    const loaiXeObj = configuredLoaiXe.find(lx => lx.id == formThuong.loaiXe)
+    const isBicycle = loaiXeObj?.ten.toLowerCase().includes('đạp')
 
     if (!isBicycle && !isValidBienSo(cleaned)) {
-      setError('Biển số không đúng định dạng (VD: 51F-123.45)');
-      return;
+      setError('Biển số không đúng định dạng (VD: 51F-123.45)')
+      return
     }
 
-    setBienSoText(cleaned);
-    setLoading(true);
-    setError(null);
+    setBienSoText(cleaned)
+    setLoading(true)
+    setError(null)
 
-    const fd = new FormData();
-    fd.append('bien_so', cleaned);
+    const fd = new FormData()
+    fd.append('bien_so', cleaned)
 
     try {
-      const data = await xeVaoApi.kiemTraBienSo(fd);
+      const data = await xeVaoApi.kiemTraBienSo(fd)
       if (data.loai === 've_thang') {
-        setResult(data);
-        setShowFormThuong(false);
+        setResult(data)
+        setShowFormThuong(false)
       } else if (data.loai === 'xe_thuong') {
-        setResult(data);
-        setShowFormThuong(true);
+        setResult(data)
+        setShowFormThuong(true)
       } else {
-        setError('Không xác định được loại xe.');
+        setError('Không xác định được loại xe.')
       }
     } catch (err) {
-      setError(err.message);
+      setError(err.message)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
   }
 
@@ -290,35 +328,33 @@ function SmartPanel() {
     if (!fileNguoiLai) { setError('Vui lòng chụp ảnh người lái'); return }
     if (!formThuong.loaiXe) { setError('Vui lòng chọn loại xe'); return }
 
-    // 🚲 Cho phép biển số trống nếu là xe đạp
-    const loaiXeObj = loaiXeList.find(lx => lx.id == formThuong.loaiXe);
-    const isBicycle = loaiXeObj?.ten.toLowerCase().includes('đạp');
+    const loaiXeObj = configuredLoaiXe.find(lx => lx.id == formThuong.loaiXe)
+    const isBicycle = loaiXeObj?.ten.toLowerCase().includes('đạp')
     if (!isBicycle && !bienSoText.trim()) {
-      setError('Vui lòng nhập biển số');
-      return;
+      setError('Vui lòng nhập biển số')
+      return
     }
 
-    setLoading(true);
+    setLoading(true)
+    const compressedBS = await compressImage(fileBienSo)
+    const compressedNL = await compressImage(fileNguoiLai)
 
-    const compressedBS = await compressImage(fileBienSo);
-    const compressedNL = await compressImage(fileNguoiLai);
-
-    const fd = new FormData();
-    fd.append('id_loai_xe', formThuong.loaiXe);
-    fd.append('bien_so_xac_nhan', bienSoText.trim().toUpperCase());
-    fd.append('ten_chu_xe', formThuong.tenChuXe || '');
-    fd.append('sdt', formThuong.sdt || '');
-    fd.append('email', formThuong.email || '');
-    fd.append('ghi_chu', formThuong.ghiChu || '');
-    fd.append('cho_phep_lay_ho', formThuong.cho_phep_lay_ho);
-    fd.append('anh_bien_so', compressedBS);
-    fd.append('anh_nguoi_lai', compressedNL);
+    const fd = new FormData()
+    fd.append('id_loai_xe', formThuong.loaiXe)
+    fd.append('bien_so_xac_nhan', bienSoText.trim().toUpperCase())
+    fd.append('ten_chu_xe', formThuong.tenChuXe || '')
+    fd.append('sdt', formThuong.sdt || '')
+    fd.append('email', formThuong.email || '')
+    fd.append('ghi_chu', formThuong.ghiChu || '')
+    fd.append('cho_phep_lay_ho', formThuong.cho_phep_lay_ho)
+    fd.append('anh_bien_so', compressedBS)
+    fd.append('anh_nguoi_lai', compressedNL)
 
     try {
-      const data = await xeVaoApi.xacNhanThuong(fd);
-      setTicket(data);
-      setSuccess(true);
-      resetForm();
+      const data = await xeVaoApi.xacNhanThuong(fd)
+      setTicket(data)
+      setSuccess(true)
+      resetForm()
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }
@@ -331,7 +367,8 @@ function SmartPanel() {
     setShowFormThuong(false)
     setError(null)
     setAutoModeFailed(false)
-    setFormThuong({ loaiXe: loaiXeList[0]?.id || '', tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false })
+    // Khôi phục loại xe về giá trị mặc định (ưu tiên)
+    setFormThuong({ loaiXe: defaultLoaiXeRef.current, tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false })
   }
 
   const hasProfileImages = result && (result.anh_bien_so || result.anh_nguoi_dung) && !autoModeFailed
@@ -421,11 +458,23 @@ function SmartPanel() {
         <div className="card" style={{ marginBottom: '0.75rem' }}>
           <h5 style={{ marginBottom: '0.75rem' }}>🚗 Xe thường</h5>
           <Field label="Biển số"><input value={bienSoText} disabled style={{ textTransform: 'uppercase' }} /></Field>
+
+          {/* Dropdown Loại xe duy nhất, gộp nhóm, chỉ hiển thị loại đã có giá */}
           <Field label="Loại xe" required>
-            <select value={formThuong.loaiXe} onChange={e => setFormThuong(f => ({ ...f, loaiXe: e.target.value }))}>
-              {loaiXeList.map(lx => <option key={lx.id} value={lx.id}>{lx.ten}</option>)}
+            <select
+              value={formThuong.loaiXe}
+              onChange={e => setFormThuong(f => ({ ...f, loaiXe: e.target.value }))}
+            >
+              {groupedLoaiXe.map(group => (
+                <optgroup key={group.nhom_id} label={group.ten_nhom}>
+                  {group.items.map(lx => (
+                    <option key={lx.id} value={lx.id}>{lx.ten}</option>
+                  ))}
+                </optgroup>
+              ))}
             </select>
           </Field>
+
           <Field label="Tên chủ xe"><input value={formThuong.tenChuXe} onChange={e => setFormThuong(f => ({ ...f, tenChuXe: e.target.value }))} /></Field>
           <Field label="Số điện thoại"><input value={formThuong.sdt} onChange={e => setFormThuong(f => ({ ...f, sdt: e.target.value }))} inputMode="tel" /></Field>
           <Field label="Email"><input type="email" value={formThuong.email} onChange={e => setFormThuong(f => ({ ...f, email: e.target.value }))} /></Field>
@@ -468,16 +517,32 @@ function BienSoPanel() {
   const [fileNguoiLai, setFileNguoiLai] = useState(null)
 
   const [formThuong, setFormThuong] = useState({ loaiXe: '', tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false })
-  const [loaiXeList, setLoaiXeList] = useState([])
+  const [allLoaiXe, setAllLoaiXe] = useState([])            // toàn bộ loại xe
+  const [configuredLoaiXe, setConfiguredLoaiXe] = useState([]) // danh sách đã cấu hình
+  const [groupedLoaiXe, setGroupedLoaiXe] = useState([])   // danh sách đã lọc và nhóm
   const [autoModeFailed, setAutoModeFailed] = useState(false)
 
+  const defaultLoaiXeRef = useRef('')
+
+  // Load toàn bộ loại xe và danh sách đã cấu hình
   useEffect(() => {
-    loaiXeApi.list().then(data => {
-      setLoaiXeList(data)
-      if (data.length) {
-        const oto = data.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('ôtô'))
-        const fallback = data.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('oto'))
-        setFormThuong(f => ({ ...f, loaiXe: oto ? oto.id : (fallback ? fallback.id : data[0].id) }))
+    Promise.all([
+      loaiXeApi.list(),
+      loaiXeApi.list({ da_cau_hinh: true })
+    ]).then(([allData, configuredData]) => {
+      setAllLoaiXe(allData)
+      setConfiguredLoaiXe(configuredData)
+      const grouped = groupByNhom(configuredData)
+      setGroupedLoaiXe(grouped)
+
+      if (configuredData.length > 0) {
+        const oto = configuredData.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('ôtô'))
+        const fallback = configuredData.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('oto'))
+        const defaultId = oto ? oto.id : (fallback ? fallback.id : configuredData[0].id)
+        setFormThuong(f => ({ ...f, loaiXe: defaultId }))
+        defaultLoaiXeRef.current = defaultId
+      } else {
+        defaultLoaiXeRef.current = ''
       }
     }).catch(() => {})
   }, [])
@@ -487,56 +552,54 @@ function BienSoPanel() {
   }, [result])
 
   async function kiemTra() {
-    const raw = bienSo.trim();
-
-    // 🚲 Nếu để trống biển số → thử gán xe đạp
+    const raw = bienSo.trim()
     if (!raw) {
-      const xeDap = loaiXeList.find(lx => lx.ten.toLowerCase().includes('đạp'));
+      // Tìm xe đạp trong danh sách đã cấu hình
+      const xeDap = configuredLoaiXe.find(lx => lx.ten.toLowerCase().includes('đạp'))
       if (xeDap) {
-        const tempPlate = 'XD' + Date.now().toString().slice(-6);
-        setBienSo(tempPlate);
-        setResult({ loai: 'xe_thuong' });
-        setShowFormThuong(true);
-        setFormThuong(f => ({ ...f, loaiXe: xeDap.id }));
-        return;
+        const tempPlate = 'XD' + Date.now().toString().slice(-6)
+        setBienSo(tempPlate)
+        setResult({ loai: 'xe_thuong' })
+        setShowFormThuong(true)
+        setFormThuong(f => ({ ...f, loaiXe: xeDap.id }))
+        return
       }
-      setError('Vui lòng nhập biển số hoặc thêm loại "Xe đạp" vào danh sách.');
-      return;
+      setError('Loại "Xe đạp" chưa được cấu hình giá. Vui lòng cấu hình trước khi cho xe vào.')
+      return
     }
 
-    // 📛 Chuẩn hóa & validate (bỏ qua nếu đang chọn xe đạp)
-    const cleaned = chuanHoaBienSo(raw);
-    const loaiXeObj = loaiXeList.find(lx => lx.id == formThuong.loaiXe);
-    const isBicycle = loaiXeObj?.ten.toLowerCase().includes('đạp');
+    const cleaned = chuanHoaBienSo(raw)
+    const loaiXeObj = configuredLoaiXe.find(lx => lx.id == formThuong.loaiXe)
+    const isBicycle = loaiXeObj?.ten.toLowerCase().includes('đạp')
 
     if (!isBicycle && !isValidBienSo(cleaned)) {
-      setError('Biển số không đúng định dạng (VD: 51F-123.45)');
-      return;
+      setError('Biển số không đúng định dạng (VD: 51F-123.45)')
+      return
     }
 
-    setBienSo(cleaned);
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    setShowFormThuong(false);
+    setBienSo(cleaned)
+    setLoading(true)
+    setError(null)
+    setResult(null)
+    setShowFormThuong(false)
 
-    const fd = new FormData();
-    fd.append('bien_so', cleaned);
+    const fd = new FormData()
+    fd.append('bien_so', cleaned)
 
     try {
-      const data = await xeVaoApi.kiemTraBienSo(fd);
+      const data = await xeVaoApi.kiemTraBienSo(fd)
       if (data.loai === 've_thang') {
-        setResult(data);
+        setResult(data)
       } else if (data.loai === 'xe_thuong') {
-        setResult(data);
-        setShowFormThuong(true);
+        setResult(data)
+        setShowFormThuong(true)
       } else {
-        setError('Không tìm thấy xe.');
+        setError('Không tìm thấy xe.')
       }
     } catch (err) {
-      setError(err.message);
+      setError(err.message)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
   }
 
@@ -560,7 +623,6 @@ function BienSoPanel() {
       fd.append('anh_nguoi_lai', compressedNL)
       const data = await xeVaoApi.xacNhanVeThang(fd)
       setTicket(data)
-      // Reset form trong tab này cũng nên reset result?
       setResult(null)
       setShowFormThuong(false)
     } catch (err) { setError(err.message) }
@@ -587,34 +649,33 @@ function BienSoPanel() {
     if (!fileBienSo) { setError('Vui lòng chụp ảnh biển số'); return }
     if (!fileNguoiLai) { setError('Vui lòng chụp ảnh người lái'); return }
 
-    // 🚲 Cho phép biển số trống nếu là xe đạp
-    const loaiXeObj = loaiXeList.find(lx => lx.id == formThuong.loaiXe);
-    const isBicycle = loaiXeObj?.ten.toLowerCase().includes('đạp');
+    const loaiXeObj = configuredLoaiXe.find(lx => lx.id == formThuong.loaiXe)
+    const isBicycle = loaiXeObj?.ten.toLowerCase().includes('đạp')
     if (!isBicycle && !bienSo.trim()) {
-      setError('Vui lòng nhập biển số');
-      return;
+      setError('Vui lòng nhập biển số')
+      return
     }
 
-    setLoading(true);
-    const compressedBS = await compressImage(fileBienSo);
-    const compressedNL = await compressImage(fileNguoiLai);
+    setLoading(true)
+    const compressedBS = await compressImage(fileBienSo)
+    const compressedNL = await compressImage(fileNguoiLai)
 
-    const fd = new FormData();
-    fd.append('id_loai_xe', formThuong.loaiXe);
-    fd.append('bien_so_xac_nhan', bienSo.trim().toUpperCase());
-    fd.append('ten_chu_xe', formThuong.tenChuXe || '');
-    fd.append('sdt', formThuong.sdt || '');
-    fd.append('email', formThuong.email || '');
-    fd.append('ghi_chu', formThuong.ghiChu || '');
-    fd.append('cho_phep_lay_ho', formThuong.cho_phep_lay_ho);
-    fd.append('anh_bien_so', compressedBS);
-    fd.append('anh_nguoi_lai', compressedNL);
+    const fd = new FormData()
+    fd.append('id_loai_xe', formThuong.loaiXe)
+    fd.append('bien_so_xac_nhan', bienSo.trim().toUpperCase())
+    fd.append('ten_chu_xe', formThuong.tenChuXe || '')
+    fd.append('sdt', formThuong.sdt || '')
+    fd.append('email', formThuong.email || '')
+    fd.append('ghi_chu', formThuong.ghiChu || '')
+    fd.append('cho_phep_lay_ho', formThuong.cho_phep_lay_ho)
+    fd.append('anh_bien_so', compressedBS)
+    fd.append('anh_nguoi_lai', compressedNL)
 
     try {
-      const data = await xeVaoApi.xacNhanThuong(fd);
-      setTicket(data);
-      setResult(null);
-      setShowFormThuong(false);
+      const data = await xeVaoApi.xacNhanThuong(fd)
+      setTicket(data)
+      setResult(null)
+      setShowFormThuong(false)
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }
@@ -664,11 +725,22 @@ function BienSoPanel() {
 
       {showFormThuong && (
         <div style={{ marginTop: '0.75rem' }}>
+          {/* Dropdown Loại xe duy nhất, gộp nhóm, chỉ hiển thị loại đã có giá */}
           <Field label="Loại xe" required>
-            <select value={formThuong.loaiXe} onChange={e => setFormThuong(f => ({ ...f, loaiXe: e.target.value }))}>
-              {loaiXeList.map(lx => <option key={lx.id} value={lx.id}>{lx.ten}</option>)}
+            <select
+              value={formThuong.loaiXe}
+              onChange={e => setFormThuong(f => ({ ...f, loaiXe: e.target.value }))}
+            >
+              {groupedLoaiXe.map(group => (
+                <optgroup key={group.nhom_id} label={group.ten_nhom}>
+                  {group.items.map(lx => (
+                    <option key={lx.id} value={lx.id}>{lx.ten}</option>
+                  ))}
+                </optgroup>
+              ))}
             </select>
           </Field>
+
           <Field label="Tên chủ xe"><input value={formThuong.tenChuXe} onChange={e => setFormThuong(f => ({ ...f, tenChuXe: e.target.value }))} /></Field>
           <Field label="Số điện thoại"><input value={formThuong.sdt} onChange={e => setFormThuong(f => ({ ...f, sdt: e.target.value }))} inputMode="tel" /></Field>
           <Field label="Email"><input type="email" value={formThuong.email} onChange={e => setFormThuong(f => ({ ...f, email: e.target.value }))} /></Field>

@@ -1,21 +1,71 @@
 # routers/loai_xe.py
-from fastapi import APIRouter, Depends, HTTPException, Form, status
+from fastapi import APIRouter, Depends, HTTPException, Form
 from typing import Optional
 import mysql.connector
 import json
 from database import lay_ket_noi_CSDL
-
+import logging
+logger = logging.getLogger("uvicorn")
 router = APIRouter(prefix="/loai-xe", tags=["Quản lý Loại Xe"])
 
+
+# ── 1. Danh sách nhóm xe ─────────────────────────────────────────────────────
+@router.get("/nhom")
+def lay_danh_sach_nhom(KetNoi=Depends(lay_ket_noi_CSDL)):
+    with KetNoi.cursor(dictionary=True) as cur:
+        cur.execute("SELECT * FROM nhom_xe ORDER BY thu_tu")
+        return cur.fetchall()
+
+
+# ── 2. Danh sách loại xe (kèm thông tin nhóm) ───────────────────────────────
 @router.get("/")
-def lay_danh_sach_loai_xe(KetNoi=Depends(lay_ket_noi_CSDL)):
-    with KetNoi.cursor(dictionary=True) as ConTro:
-        # Lấy thêm các trường mới để hiển thị đủ thông tin cấu hình giá
-        ConTro.execute("SELECT * FROM loai_xe")
-        return ConTro.fetchall()
-@router.post("/", status_code=201)
+def lay_danh_sach_loai_xe(
+    is_default: Optional[int] = None,
+    nhom_xe_id: Optional[int] = None,
+    da_cau_hinh: Optional[bool] = None,
+    include_deleted: bool = False,
+    has_ve_thang: bool = False,   # <-- thêm tham số mới
+    KetNoi=Depends(lay_ket_noi_CSDL)
+):
+    with KetNoi.cursor(dictionary=True) as cur:
+        query = """
+            SELECT lx.*, n.ten AS ten_nhom, n.thu_tu AS thu_tu_nhom
+              FROM loai_xe lx
+              JOIN nhom_xe n ON lx.nhom_xe_id = n.id
+             WHERE 1=1
+        """
+        conditions = []
+        params = []
+
+        if not include_deleted:
+            conditions.append("lx.deleted_at IS NULL")
+        if is_default is not None:
+            conditions.append("lx.is_default = %s")
+            params.append(is_default)
+        if nhom_xe_id is not None:
+            conditions.append("lx.nhom_xe_id = %s")
+            params.append(nhom_xe_id)
+        if da_cau_hinh is True:
+            conditions.append(
+                "(lx.gia_luot > 0 OR lx.gia_ngay > 0 OR lx.gia_dem > 0 "
+                "OR lx.gia_ngay_dem > 0 OR lx.gia_ve_thang > 0 OR "
+                "(lx.cau_hinh_theo_gio IS NOT NULL AND JSON_LENGTH(lx.cau_hinh_theo_gio) > 0))"
+            )
+        if has_ve_thang is True:
+            # Chỉ lấy loại xe có giá vé tháng > 0
+            conditions.append("lx.gia_ve_thang > 0")
+
+        if conditions:
+            query += " AND " + " AND ".join(conditions)
+        query += " ORDER BY n.thu_tu, lx.is_default DESC, lx.ten"
+        cur.execute(query, params)
+        return cur.fetchall()
+
+# ── 3. Tạo loại xe tùy chỉnh (is_default = 0) ────────────────────────────────
+@router.post("/", status_code=200)
 def tao_loai_xe(
     ten: str = Form(...),
+    nhom_xe_id: int = Form(...),
     mau_sac: str = Form("#FFD700"),
     kieu_tinh_gia: str = Form("theo_luot"),
     gia_luot: Optional[float] = Form(None),
@@ -26,21 +76,18 @@ def tao_loai_xe(
     cau_hinh_theo_gio: Optional[str] = Form(None),
     KetNoi=Depends(lay_ket_noi_CSDL)
 ):
-    # Validate kiểu tính giá
+    # ---------- Validate dữ liệu ----------
     allowed = ["theo_luot", "theo_gio", "theo_ngay_dem"]
     if kieu_tinh_gia not in allowed:
         raise HTTPException(status_code=422, detail="Kiểu tính giá không hợp lệ.")
-
-    # Kiểm tra dữ liệu bắt buộc cho từng kiểu
     if kieu_tinh_gia == "theo_luot" and gia_luot is None:
         raise HTTPException(status_code=422, detail="Phải nhập giá theo lượt.")
-    if kieu_tinh_gia == "theo_ngay_dem":
-        if not all([gia_ngay, gia_dem, gia_ngay_dem]):
-            raise HTTPException(status_code=422, detail="Phải nhập đầy đủ giá ngày, đêm, ngày-đêm.")
+    if kieu_tinh_gia == "theo_ngay_dem" and not all([gia_ngay, gia_dem, gia_ngay_dem]):
+        raise HTTPException(status_code=422, detail="Phải nhập đầy đủ giá ngày, đêm, ngày-đêm.")
     if kieu_tinh_gia == "theo_gio" and not cau_hinh_theo_gio:
         raise HTTPException(status_code=422, detail="Phải nhập cấu hình giá theo giờ.")
 
-    # Parse cấu hình giờ nếu có
+    # Xử lý JSON cho cấu hình giờ
     json_gio = None
     if cau_hinh_theo_gio:
         try:
@@ -49,47 +96,119 @@ def tao_loai_xe(
             raise HTTPException(status_code=422, detail="Cấu hình giá theo giờ không đúng định dạng JSON.")
 
     try:
-        with KetNoi.cursor(dictionary=True) as ConTro:
-            ConTro.execute("""
-                INSERT INTO loai_xe (ten, mau_sac, kieu_tinh_gia, gia_luot,
-                                     gia_ngay, gia_dem, gia_ngay_dem,
-                                     gia_ve_thang, cau_hinh_theo_gio)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            """, (ten, mau_sac, kieu_tinh_gia, gia_luot,
-                  gia_ngay, gia_dem, gia_ngay_dem,
-                  gia_ve_thang, json.dumps(json_gio) if json_gio else None))
-            KetNoi.commit()
-            id_moi = ConTro.lastrowid
-        return {
-            "id": id_moi,
-            "ten": ten,
-            "mau_sac": mau_sac,
-            "kieu_tinh_gia": kieu_tinh_gia,
-            "gia_luot": gia_luot,
-            "gia_ve_thang": gia_ve_thang,
-            "ghi_chu": "Tạo loại xe thành công."
-        }
+        with KetNoi.cursor(dictionary=True) as cur:
+            # Kiểm tra nhóm tồn tại
+            cur.execute("SELECT id FROM nhom_xe WHERE id = %s", (nhom_xe_id,))
+            if not cur.fetchone():
+                raise HTTPException(status_code=404, detail="Không tìm thấy nhóm xe.")
+
+            # Kiểm tra loại xe đã tồn tại (chưa bị xóa)
+            cur.execute("""
+                (SELECT id, is_default FROM loai_xe WHERE ten = %s AND nhom_xe_id = %s AND deleted_at IS NULL LIMIT 1)
+                UNION ALL
+                (SELECT id, is_default FROM loai_xe WHERE ten = %s AND nhom_xe_id = %s AND deleted_at IS NOT NULL ORDER BY deleted_at ASC LIMIT 1)
+                LIMIT 1
+            """, (ten, nhom_xe_id, ten, nhom_xe_id))
+            existing = cur.fetchone()
+            if existing:
+                cur.execute("""
+                    UPDATE loai_xe
+                    SET mau_sac = %s,
+                        kieu_tinh_gia = %s,
+                        gia_luot = %s,
+                        gia_ngay = %s,
+                        gia_dem = %s,
+                        gia_ngay_dem = %s,
+                        gia_ve_thang = %s,
+                        cau_hinh_theo_gio = %s,
+                        deleted_at = NULL
+                    WHERE id = %s
+                """, (
+                    mau_sac, kieu_tinh_gia,
+                    gia_luot, gia_ngay, gia_dem, gia_ngay_dem,
+                    gia_ve_thang,
+                    json.dumps(json_gio) if json_gio else None,
+                    existing["id"]
+                ))
+                KetNoi.commit()
+                return {
+                    "id": existing["id"],
+                    "ten": ten,
+                    "nhom_xe_id": nhom_xe_id,
+                    "ghi_chu": "Cập nhật loại xe thành công."
+                }
+            else:
+                # Tạo mới loại xe (is_default = 0)
+                cur.execute("""
+                    INSERT INTO loai_xe
+                        (ten, nhom_xe_id, is_default, mau_sac, kieu_tinh_gia,
+                         gia_luot, gia_ngay, gia_dem, gia_ngay_dem,
+                         gia_ve_thang, cau_hinh_theo_gio)
+                    VALUES (%s, %s, 0, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    ten, nhom_xe_id, mau_sac, kieu_tinh_gia,
+                    gia_luot, gia_ngay, gia_dem, gia_ngay_dem,
+                    gia_ve_thang,
+                    json.dumps(json_gio) if json_gio else None
+                ))
+                KetNoi.commit()
+                return {
+                    "id": cur.lastrowid,
+                    "ten": ten,
+                    "nhom_xe_id": nhom_xe_id,
+                    "ghi_chu": "Tạo loại xe thành công."
+                }
     except mysql.connector.Error as err:
-        if KetNoi: KetNoi.rollback()
+        KetNoi.rollback()
+        logger.error(f"Lỗi MySQL: {err}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Lỗi CSDL: {err}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Lỗi không xác định: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Lỗi server: {e}")
     
+
+# ── 4. Xóa loại xe (chỉ loại tùy chỉnh, soft-delete) ────────────────────────
 @router.delete("/{loai_xe_id}")
 def xoa_loai_xe(loai_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
-    with KetNoi.cursor(dictionary=True) as ConTro:
-        # Kiểm tra tồn tại
-        ConTro.execute("SELECT id FROM loai_xe WHERE id = %s", (loai_xe_id,))
-        if not ConTro.fetchone():
+    with KetNoi.cursor(dictionary=True) as cur:
+        # Kiểm tra loại xe tồn tại và chưa bị xóa
+        cur.execute(
+            "SELECT id, is_default FROM loai_xe WHERE id = %s AND deleted_at IS NULL",
+            (loai_xe_id,)
+        )
+        row = cur.fetchone()
+        if not row:
             raise HTTPException(status_code=404, detail="Không tìm thấy loại xe.")
-        
-        # Kiểm tra ràng buộc: nếu có vé tháng hoặc xe đang dùng loại này thì không xóa
-        ConTro.execute("SELECT COUNT(*) as cnt FROM ve_thang WHERE loai_xe_id = %s", (loai_xe_id,))
-        if ConTro.fetchone()['cnt'] > 0:
-            raise HTTPException(status_code=400, detail="Không thể xóa vì đang có vé tháng sử dụng loại xe này.")
-        
-        # Nếu bạn có bảng xe riêng (xe khách vãng lai) cũng nên kiểm tra, tạm bỏ qua.
-        
-        # Thực hiện xóa
-        ConTro.execute("DELETE FROM loai_xe WHERE id = %s", (loai_xe_id,))
+
+        # Chỉ chặn khi có vé tháng còn hiệu lực (đã sửa)
+        cur.execute(
+            "SELECT COUNT(*) AS cnt FROM ve_thang WHERE id_loai_xe = %s AND ngay_het_han >= CURDATE()",
+            (loai_xe_id,)
+        )
+        if cur.fetchone()["cnt"] > 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Không thể ẩn vì đang có vé tháng còn hiệu lực sử dụng loại xe này."
+            )
+
+        # Kiểm tra xe đang trong bãi
+        cur.execute(
+            "SELECT COUNT(*) AS cnt FROM phien_gui_xe WHERE id_loai_xe = %s AND is_in_bai = 1",
+            (loai_xe_id,)
+        )
+        if cur.fetchone()["cnt"] > 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Không thể ẩn vì đang có xe trong bãi thuộc loại này."
+            )
+
+        # Soft-delete
+        cur.execute(
+            "UPDATE loai_xe SET deleted_at = NOW() WHERE id = %s",
+            (loai_xe_id,)
+        )
         KetNoi.commit()
-        
-    return {"message": f"Đã xóa loại xe ID {loai_xe_id} thành công."}
+
+    return {"message": f"Đã ẩn loại xe ID {loai_xe_id} thành công."}

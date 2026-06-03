@@ -11,7 +11,11 @@ async function request(url, options = {}) {
 
 // ─── Loại xe ───
 export const loaiXeApi = {
-  list: () => request('/loai-xe/'),
+  list: (params) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request('/loai-xe/' + qs);
+  },
+  listNhom: () => request('/loai-xe/nhom'),
   create: (formData) => request('/loai-xe/', { method: 'POST', body: formData }),
   delete: (id) => request(`/loai-xe/${id}`, { method: 'DELETE' }),
 }

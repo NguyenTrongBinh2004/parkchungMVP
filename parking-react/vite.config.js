@@ -16,5 +16,9 @@ export default defineConfig({
       '/khach-hang': 'http://localhost:8000',
       '/uploads': 'http://localhost:8000',
     }
+  },
+  build: {
+    outDir: '../frontend',
+    emptyOutDir: true,
   }
 })
