@@ -1,6 +1,6 @@
 // Tập trung tất cả các API call vào một nơi
 
-const BASE = import.meta.env.VITE_API_URL || '';
+const BASE =  'https://parking-mvp-backend.onrender.com';
 
 async function request(url, options = {}) {
   const fullUrl = BASE + url;
