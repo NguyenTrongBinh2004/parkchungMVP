@@ -3,11 +3,45 @@
 const BASE = import.meta.env.VITE_API_URL || '';
 
 async function request(url, options = {}) {
-  const res = await fetch(BASE + url, options)
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`)
-  return data
+  const fullUrl = BASE + url;
+  console.log('🌐 REQUEST:', fullUrl, options.method || 'GET');
+
+  let res;
+  try {
+    res = await fetch(fullUrl, options);
+  } catch (err) {
+    console.error('🚨 FETCH FAILED:', fullUrl, err);
+    throw err;
+  }
+
+  const contentType = res.headers.get('content-type');
+  console.log('📬 RESPONSE:', res.status, contentType);
+
+  // Đọc raw text (để an toàn, không parse ngay)
+  const text = await res.text();
+
+  if (!res.ok) {
+    console.error('❌ HTTP ERROR', res.status, text.substring(0, 500));
+    // Nếu có JSON trong response lỗi thì parse, nếu không thì quăng nguyên text
+    let detail = text;
+    if (contentType && contentType.includes('application/json')) {
+      try {
+        const errData = JSON.parse(text);
+        detail = errData.detail || text;
+      } catch {}
+    }
+    throw new Error(detail || `HTTP ${res.status}`);
+  }
+
+  // Nếu thành công nhưng không phải JSON -> log cảnh báo
+  if (!contentType || !contentType.includes('application/json')) {
+    console.error('⚠️ NOT JSON response:', text.substring(0, 500));
+    throw new Error('Server trả về HTML thay vì JSON');
+  }
+
+  return JSON.parse(text);
 }
+
 
 // ─── Loại xe ───
 export const loaiXeApi = {
