@@ -1,6 +1,7 @@
 // Tập trung tất cả các API call vào một nơi
 
-const BASE =  'https://parking-mvp-backend.onrender.com';
+// Lấy link API từ biến môi trường của Vercel/Vite, nếu không có thì dùng link Render (để chạy local)
+const BASE = import.meta.env.VITE_API_URL || 'https://parking-mvp-backend.onrender.com';
 
 async function request(url, options = {}) {
   const fullUrl = BASE + url;
