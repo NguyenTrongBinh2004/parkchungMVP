@@ -2,7 +2,8 @@
 
 // Lấy link API từ biến môi trường của Vercel/Vite, nếu không có thì dùng link Render (để chạy local)
 const BASE = import.meta.env.VITE_API_URL || 'https://parking-mvp-backend.onrender.com';
-
+console.log('BASE URL:', BASE);
+console.log('ENV:', import.meta.env.VITE_API_URL);
 async function request(url, options = {}) {
   const fullUrl = BASE + url;
   console.log('🌐 REQUEST:', fullUrl, options.method || 'GET');
