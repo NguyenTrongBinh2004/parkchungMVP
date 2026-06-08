@@ -58,6 +58,170 @@ function coGiaThucTe(lx) {
   return false
 }
 
+// ─── Modal đồng giá ──────────────────────────────────────────────────────────
+function DongGiaModal({ nhomList, allLoaiXe, onClose, onSuccess }) {
+  const [selectedNhomId, setSelectedNhomId] = useState(String(nhomList[0]?.id || ''))
+  const [selectedIds, setSelectedIds] = useState([])
+  const [kieu, setKieu] = useState('theo_luot')
+  const [form, setForm] = useState({
+    gia_luot: '', gia_ngay: '', gia_dem: '', gia_ngay_dem: '', gia_ve_thang: '',
+  })
+  const [bangGio, setBangGio] = useState([{ tuGio: 1, denGio: 2, gia: '' }])
+  const [giaMoiGioTiep, setGiaMoiGioTiep] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const upd = (f) => (e) => setForm(v => ({ ...v, [f]: e.target.value }))
+
+  // Lọc loại xe theo nhóm đang chọn (kể cả chưa có giá)
+  const loaiXeNhom = allLoaiXe.filter(lx => String(lx.nhom_xe_id) === String(selectedNhomId))
+
+  const toggleChon = (id) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    )
+  }
+
+  const chonTatCa = () => {
+    if (selectedIds.length === loaiXeNhom.length) {
+      setSelectedIds([])
+    } else {
+      setSelectedIds(loaiXeNhom.map(lx => lx.id))
+    }
+  }
+
+  const themDong = () => {
+    const last = bangGio[bangGio.length - 1]
+    setBangGio([...bangGio, { tuGio: last.denGio + 1, denGio: last.denGio + 2, gia: '' }])
+  }
+  const xoaDong = (idx) => { if (bangGio.length > 1) setBangGio(bangGio.filter((_, i) => i !== idx)) }
+  const updateDong = (idx, field, value) => {
+    const arr = [...bangGio]; arr[idx][field] = value; setBangGio(arr)
+  }
+  const buildJsonGio = () => {
+    const arr = bangGio.map(d => ({ tu_gio: Number(d.tuGio), den_gio: Number(d.denGio), gia: Number(d.gia) }))
+    if (giaMoiGioTiep) arr.push({ moi_gio_tiep: Number(giaMoiGioTiep) })
+    return JSON.stringify(arr)
+  }
+
+  async function submit(e) {
+    e.preventDefault()
+    if (selectedIds.length < 2) { setError('Cần chọn ít nhất 2 loại xe.'); return }
+    setLoading(true); setError(null)
+    const fd = new FormData()
+    fd.append('loai_xe_ids', JSON.stringify(selectedIds))
+    fd.append('kieu_tinh_gia', kieu)
+    if (kieu === 'theo_luot') fd.append('gia_luot', form.gia_luot || 0)
+    else if (kieu === 'theo_gio') fd.append('cau_hinh_theo_gio', buildJsonGio())
+    else if (kieu === 'theo_ngay_dem') {
+      fd.append('gia_ngay', form.gia_ngay || 0)
+      fd.append('gia_dem', form.gia_dem || 0)
+      fd.append('gia_ngay_dem', form.gia_ngay_dem || 0)
+    }
+    if (form.gia_ve_thang) fd.append('gia_ve_thang', form.gia_ve_thang)
+    try {
+      await loaiXeApi.dongGia(fd)
+      onSuccess()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Modal onClose={onClose} title="⚖️ Áp đồng giá cho nhiều loại xe">
+      <form onSubmit={submit}>
+        <Field label="Chọn nhóm xe">
+          <select value={selectedNhomId} onChange={e => { setSelectedNhomId(e.target.value); setSelectedIds([]) }}>
+            {nhomList.map(n => (
+              <option key={n.id} value={n.id}>{NHOM_ICON[n.id] || '🚘'} {n.ten}</option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label={`Chọn loại xe cần đồng giá (${selectedIds.length}/${loaiXeNhom.length})`}>
+          <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 6, padding: 8 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+              <input type="checkbox"
+                checked={selectedIds.length === loaiXeNhom.length && loaiXeNhom.length > 0}
+                onChange={chonTatCa}
+              />
+              Chọn tất cả
+            </label>
+            {loaiXeNhom.map(lx => (
+              <label key={lx.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, cursor: 'pointer' }}>
+                <input type="checkbox"
+                  checked={selectedIds.includes(lx.id)}
+                  onChange={() => toggleChon(lx.id)}
+                />
+                <span style={{ fontSize: '0.85rem' }}>{lx.ten}</span>
+                {lx.is_default
+                  ? <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>hệ thống</span>
+                  : <span style={{ fontSize: '0.62rem', color: 'var(--accent)' }}>tùy chỉnh</span>
+                }
+              </label>
+            ))}
+            {loaiXeNhom.length === 0 && (
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Nhóm này chưa có loại xe nào.</p>
+            )}
+          </div>
+        </Field>
+
+        <Field label="Kiểu tính giá">
+          <select value={kieu} onChange={e => setKieu(e.target.value)}>
+            <option value="theo_luot">Theo lượt</option>
+            <option value="theo_gio">Theo giờ</option>
+            <option value="theo_ngay_dem">Theo ngày / đêm</option>
+          </select>
+        </Field>
+
+        {kieu === 'theo_luot' && (
+          <Field label="Giá mỗi lượt (VNĐ)" required>
+            <input type="number" value={form.gia_luot} onChange={upd('gia_luot')} min="0" step="1000" placeholder="5000" required />
+          </Field>
+        )}
+        {kieu === 'theo_ngay_dem' && (<>
+          <Field label="Giá ban ngày (đ)" required><input type="number" value={form.gia_ngay} onChange={upd('gia_ngay')} min="0" step="1000" required /></Field>
+          <Field label="Giá ban đêm (đ)" required><input type="number" value={form.gia_dem} onChange={upd('gia_dem')} min="0" step="1000" required /></Field>
+          <Field label="Giá qua đêm (đ)" required><input type="number" value={form.gia_ngay_dem} onChange={upd('gia_ngay_dem')} min="0" step="1000" required /></Field>
+        </>)}
+        {kieu === 'theo_gio' && (
+          <Field label="Cấu hình giá theo giờ">
+            <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 6, padding: 10 }}>
+              {bangGio.map((dong, idx) => (
+                <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+                  <span style={{ fontSize: '0.8rem' }}>Từ giờ thứ</span>
+                  <input type="number" value={dong.tuGio} style={{ width: 50 }} min="1" onChange={e => updateDong(idx, 'tuGio', Number(e.target.value))} />
+                  <span style={{ fontSize: '0.8rem' }}>đến</span>
+                  <input type="number" value={dong.denGio} style={{ width: 50 }} min={dong.tuGio + 1} onChange={e => updateDong(idx, 'denGio', Number(e.target.value))} />
+                  <span style={{ fontSize: '0.8rem' }}>giá</span>
+                  <input type="number" value={dong.gia} style={{ width: 90 }} min="0" step="1000" placeholder="VNĐ" onChange={e => updateDong(idx, 'gia', e.target.value)} />
+                  {bangGio.length > 1 && <button type="button" onClick={() => xoaDong(idx)} style={{ background: 'none', border: '1px solid #f44', color: '#f44', borderRadius: 4, cursor: 'pointer' }}>Xóa</button>}
+                </div>
+              ))}
+              <button type="button" onClick={themDong} className="btn btn-sm btn-outline" style={{ marginTop: 4 }}>+ Thêm mốc giờ</button>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <label style={{ fontSize: '0.82rem' }}>Mỗi giờ tiếp theo (VNĐ)</label>
+              <input type="number" value={giaMoiGioTiep} onChange={e => setGiaMoiGioTiep(e.target.value)} min="0" step="1000" placeholder="Nếu có nhiều giờ hơn" style={{ width: '100%', marginTop: 4 }} />
+            </div>
+          </Field>
+        )}
+
+        <Field label="Giá vé tháng (đ) — để trống nếu không có">
+          <input type="number" value={form.gia_ve_thang} onChange={upd('gia_ve_thang')} min="0" step="10000" placeholder="Không bắt buộc" />
+        </Field>
+
+        {error && <Alert type="danger">{error}</Alert>}
+        <button type="submit" className="btn btn-accent" style={{ marginTop: '1rem' }} disabled={loading || selectedIds.length < 2}>
+          {loading ? 'Đang lưu...' : `⚖️ Áp đồng giá (${selectedIds.length} loại xe)`}
+        </button>
+      </form>
+    </Modal>
+  )
+}
+
 // ─── Modal thêm loại xe tùy chỉnh ──────────────────────────────────────────
 function ThemLoaiXeModal({ nhomList, onClose, onSuccess }) {
   const [kieu, setKieu] = useState('theo_luot')
@@ -469,6 +633,7 @@ export default function LoaiXe() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
+  const [showDongGiaModal, setShowDongGiaModal] = useState(false)
   const [openNhomId, setOpenNhomId] = useState(null)
 
   async function load() {
@@ -551,14 +716,25 @@ export default function LoaiXe() {
         </p>
       )}
 
-      <button
-        className="btn btn-accent"
-        style={{ marginTop: '0.75rem' }}
-        onClick={() => setShowModal(true)}
-        disabled={nhomList.length === 0 || loading}
-      >
-        + Thêm loại xe tùy chỉnh
-      </button>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button
+          className="btn btn-accent"
+          style={{ marginTop: '0.75rem' }}
+          onClick={() => setShowModal(true)}
+          disabled={nhomList.length === 0 || loading}
+        >
+          + Thêm loại xe tùy chỉnh
+        </button>
+
+        <button
+          className="btn btn-outline"
+          style={{ marginTop: '0.5rem' }}
+          onClick={() => setShowDongGiaModal(true)}
+          disabled={nhomList.length === 0 || loading}
+        >
+          ⚖️ Áp đồng giá
+        </button>
+      </div>
 
       <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.6rem', lineHeight: 1.5 }}>
         💡 Chỉ những loại xe đã được thiết lập giá mới hiển thị bên trên. Loại xe <em>hệ thống</em> chưa có giá sẽ được ẩn đi.
@@ -569,6 +745,15 @@ export default function LoaiXe() {
           nhomList={nhomList}
           onClose={() => setShowModal(false)}
           onSuccess={() => { setShowModal(false); load() }}
+        />
+      )}
+
+      {showDongGiaModal && nhomList.length > 0 && (
+        <DongGiaModal
+          nhomList={nhomList}
+          allLoaiXe={list}
+          onClose={() => setShowDongGiaModal(false)}
+          onSuccess={() => { setShowDongGiaModal(false); load() }}
         />
       )}
     </PageLayout>

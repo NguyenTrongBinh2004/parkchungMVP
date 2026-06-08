@@ -169,6 +169,75 @@ def tao_loai_xe(
         raise HTTPException(status_code=500, detail=f"Lỗi server: {e}")
     
 
+# ── 3b. Tạo đồng giá cho nhiều loại xe cùng lúc ─────────────────────────────
+@router.post("/dong-gia", status_code=200)
+def tao_dong_gia(
+    loai_xe_ids: str = Form(...),  # JSON array: "[1, 2, 3]"
+    kieu_tinh_gia: str = Form("theo_luot"),
+    gia_luot: Optional[float] = Form(None),
+    gia_ngay: Optional[float] = Form(None),
+    gia_dem: Optional[float] = Form(None),
+    gia_ngay_dem: Optional[float] = Form(None),
+    gia_ve_thang: Optional[float] = Form(None),
+    cau_hinh_theo_gio: Optional[str] = Form(None),
+    KetNoi=Depends(lay_ket_noi_CSDL)
+):
+    try:
+        ids = json.loads(loai_xe_ids)
+        if not isinstance(ids, list) or len(ids) < 2:
+            raise HTTPException(status_code=422, detail="Cần chọn ít nhất 2 loại xe.")
+    except (json.JSONDecodeError, ValueError):
+        raise HTTPException(status_code=422, detail="Danh sách loại xe không hợp lệ.")
+
+    allowed = ["theo_luot", "theo_gio", "theo_ngay_dem"]
+    if kieu_tinh_gia not in allowed:
+        raise HTTPException(status_code=422, detail="Kiểu tính giá không hợp lệ.")
+
+    json_gio = None
+    if cau_hinh_theo_gio:
+        try:
+            json_gio = json.loads(cau_hinh_theo_gio)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=422, detail="Cấu hình giá theo giờ không đúng định dạng JSON.")
+
+    try:
+        with KetNoi.cursor(dictionary=True) as cur:
+            updated = []
+            for loai_xe_id in ids:
+                cur.execute(
+                    "SELECT id FROM loai_xe WHERE id = %s AND deleted_at IS NULL",
+                    (loai_xe_id,)
+                )
+                if not cur.fetchone():
+                    continue
+                cur.execute("""
+                    UPDATE loai_xe SET
+                        kieu_tinh_gia = %s,
+                        gia_luot = %s,
+                        gia_ngay = %s,
+                        gia_dem = %s,
+                        gia_ngay_dem = %s,
+                        gia_ve_thang = %s,
+                        cau_hinh_theo_gio = %s
+                    WHERE id = %s
+                """, (
+                    kieu_tinh_gia,
+                    gia_luot, gia_ngay, gia_dem, gia_ngay_dem,
+                    gia_ve_thang,
+                    json.dumps(json_gio) if json_gio else None,
+                    loai_xe_id
+                ))
+                updated.append(loai_xe_id)
+            KetNoi.commit()
+            return {"updated": updated, "ghi_chu": f"Đã áp đồng giá cho {len(updated)} loại xe."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        KetNoi.rollback()
+        logger.error(f"Lỗi đồng giá: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Lỗi server: {e}")
+
+
 # ── 4. Xóa loại xe (chỉ loại tùy chỉnh, soft-delete) ────────────────────────
 @router.delete("/{loai_xe_id}")
 def xoa_loai_xe(loai_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
