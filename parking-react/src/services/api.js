@@ -54,6 +54,7 @@ export const loaiXeApi = {
   listNhom: () => request('/loai-xe/nhom'),
   create: (formData) => request('/loai-xe/', { method: 'POST', body: formData }),
   dongGia: (formData) => request('/loai-xe/dong-gia', { method: 'POST', body: formData }),
+  update: (id, formData) => request(`/loai-xe/${id}`, { method: 'PUT', body: formData }),
   delete: (id) => request(`/loai-xe/${id}`, { method: 'DELETE' }),
 }
 
