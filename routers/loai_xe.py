@@ -242,14 +242,18 @@ def xoa_dong_gia(nhom_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
 # ── 6. Lấy danh sách đồng giá (có tên nhóm, sắp xếp) ─────────────────────
 @router.get("/nhom-gia")
 def lay_nhom_xe_gia(KetNoi=Depends(lay_ket_noi_CSDL)):
-    with KetNoi.cursor(dictionary=True) as cur:
-        cur.execute("""
-            SELECT ng.*, n.ten AS ten_nhom
-            FROM nhom_xe_gia ng
-            JOIN nhom_xe n ON ng.nhom_xe_id = n.id
-            ORDER BY n.thu_tu
-        """)
-        return cur.fetchall()
+    try:
+        with KetNoi.cursor(dictionary=True) as cur:
+            cur.execute("""
+                SELECT ng.*, n.ten AS ten_nhom
+                FROM nhom_xe_gia ng
+                JOIN nhom_xe n ON ng.nhom_xe_id = n.id
+                ORDER BY n.thu_tu
+            """)
+            return cur.fetchall()
+    except Exception as e:
+        logger.error(f"Lỗi nhom-gia: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── 7. Xóa loại xe (soft-delete) ────────────────────────────────────────────
