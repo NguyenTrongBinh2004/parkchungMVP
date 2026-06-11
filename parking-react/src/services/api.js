@@ -46,19 +46,20 @@ async function request(url, options = {}) {
 
 
 // ─── Loại xe ───
+// services/api.js (phần liên quan đến loaiXeApi)
 export const loaiXeApi = {
   list: (params) => {
-    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-    return request('/loai-xe/' + qs);
+    const qs = params ? '?' + new URLSearchParams(params).toString() : ''
+    return request('/loai-xe/' + qs)
   },
   listNhom: () => request('/loai-xe/nhom'),
+  listNhomGia: () => request('/loai-xe/nhom-gia'),   // ← mới
   create: (formData) => request('/loai-xe/', { method: 'POST', body: formData }),
   dongGia: (formData) => request('/loai-xe/dong-gia', { method: 'POST', body: formData }),
+  xoaDongGia: (nhomId) => request(`/loai-xe/dong-gia/${nhomId}`, { method: 'DELETE' }),  // ← đổi sang DELETE
   update: (id, formData) => request(`/loai-xe/${id}`, { method: 'PUT', body: formData }),
   delete: (id) => request(`/loai-xe/${id}`, { method: 'DELETE' }),
-  xoaDongGia: (formData) => request('/loai-xe/xoa-dong-gia', { method: 'POST', body: formData }),
 }
-
 // ─── Xe vào ───
 export const xeVaoApi = {
   nhanDien: (formData) => request('/xe-vao/nhan-dien/', { method: 'POST', body: formData }),

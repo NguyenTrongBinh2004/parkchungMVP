@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Form, UploadFile, File
 
 from database import lay_ket_noi_CSDL
 from services.qr_service import doc_ma_qr
-from services.billing_service import BillingService
+from services.billing_service import BillingService, _co_gia_rieng
 from utils import bay_gio_vn, build_url, chuan_hoa_bien_so, is_valid_bien_so
 
 router = APIRouter(prefix="/xe-ra", tags=["Quản lý Xe Ra"])
@@ -31,11 +31,26 @@ def _tra_cuu_qr(ma_qr: str, KetNoi):
 
 
 def _so_tien_tam(phien: dict, KetNoi, bay_gio) -> int:
+    """Tính tiền tạm (hỗ trợ đồng giá nhóm)."""
     if phien.get("id_ve_thang"):
         return 0
     with KetNoi.cursor(dictionary=True) as cur:
         cur.execute("SELECT * FROM loai_xe WHERE id = %s", (phien["id_loai_xe"],))
-        return BillingService.tinh_tien_chi_tiet(cur.fetchone(), phien["gio_vao"], bay_gio)
+        loai_xe = cur.fetchone()
+        if not loai_xe:
+            return 0
+
+        nhom_gia = None
+        if not _co_gia_rieng(loai_xe):
+            cur.execute(
+                "SELECT * FROM nhom_xe_gia WHERE nhom_xe_id = %s",
+                (loai_xe["nhom_xe_id"],)
+            )
+            nhom_gia = cur.fetchone()
+
+        return BillingService.tinh_tien_chi_tiet(
+            loai_xe, phien["gio_vao"], bay_gio, nhom_gia=nhom_gia
+        )
 
 
 # ── 1. Nhận diện thông minh (QR ưu tiên → nhập tay) ──────────

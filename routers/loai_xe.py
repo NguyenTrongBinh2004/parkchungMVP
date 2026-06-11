@@ -76,7 +76,6 @@ def tao_loai_xe(
     cau_hinh_theo_gio: Optional[str] = Form(None),
     KetNoi=Depends(lay_ket_noi_CSDL)
 ):
-    # ---------- Validate dữ liệu ----------
     allowed = ["theo_luot", "theo_gio", "theo_ngay_dem"]
     if kieu_tinh_gia not in allowed:
         raise HTTPException(status_code=422, detail="Kiểu tính giá không hợp lệ.")
@@ -165,10 +164,10 @@ def tao_loai_xe(
         raise HTTPException(status_code=500, detail=f"Lỗi server: {e}")
 
 
-# ── 3b. Tạo đồng giá cho nhiều loại xe cùng lúc ─────────────────────────────
+# ── 4. Đồng giá cho cả nhóm (CHỈ LƯU nhom_xe_gia) ──────────────────────────
 @router.post("/dong-gia", status_code=200)
 def tao_dong_gia(
-    loai_xe_ids: str = Form(...),  # JSON array: "[1, 2, 3]"
+    nhom_xe_id: int = Form(...),
     kieu_tinh_gia: str = Form("theo_luot"),
     gia_luot: Optional[float] = Form(None),
     gia_ngay: Optional[float] = Form(None),
@@ -178,13 +177,6 @@ def tao_dong_gia(
     cau_hinh_theo_gio: Optional[str] = Form(None),
     KetNoi=Depends(lay_ket_noi_CSDL)
 ):
-    try:
-        ids = json.loads(loai_xe_ids)
-        if not isinstance(ids, list) or len(ids) < 1:
-            raise HTTPException(status_code=422, detail="Cần chọn ít nhất 2 loại xe.")
-    except (json.JSONDecodeError, ValueError):
-        raise HTTPException(status_code=422, detail="Danh sách loại xe không hợp lệ.")
-
     allowed = ["theo_luot", "theo_gio", "theo_ngay_dem"]
     if kieu_tinh_gia not in allowed:
         raise HTTPException(status_code=422, detail="Kiểu tính giá không hợp lệ.")
@@ -198,36 +190,34 @@ def tao_dong_gia(
 
     try:
         with KetNoi.cursor(dictionary=True) as cur:
-            updated = []
-            for loai_xe_id in ids:
-                cur.execute(
-                    "SELECT id FROM loai_xe WHERE id = %s AND deleted_at IS NULL",
-                    (loai_xe_id,)
-                )
-                if not cur.fetchone():
-                    continue
-                # ── THAY ĐỔI: thêm is_dong_gia = 1 ──
-                cur.execute("""
-                    UPDATE loai_xe SET
-                        kieu_tinh_gia = %s,
-                        gia_luot = %s,
-                        gia_ngay = %s,
-                        gia_dem = %s,
-                        gia_ngay_dem = %s,
-                        gia_ve_thang = %s,
-                        cau_hinh_theo_gio = %s,
-                        is_dong_gia = 1
-                    WHERE id = %s
-                """, (
-                    kieu_tinh_gia,
-                    gia_luot, gia_ngay, gia_dem, gia_ngay_dem,
-                    gia_ve_thang,
-                    json.dumps(json_gio) if json_gio else None,
-                    loai_xe_id
-                ))
-                updated.append(loai_xe_id)
+            cur.execute("SELECT id FROM nhom_xe WHERE id = %s", (nhom_xe_id,))
+            if not cur.fetchone():
+                raise HTTPException(status_code=404, detail="Không tìm thấy nhóm xe.")
+
+            # Chỉ upsert vào nhom_xe_gia, không ghi đè loai_xe
+            cur.execute("""
+                INSERT INTO nhom_xe_gia
+                    (nhom_xe_id, kieu_tinh_gia, gia_luot, gia_ngay, gia_dem,
+                     gia_ngay_dem, gia_ve_thang, cau_hinh_theo_gio)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    kieu_tinh_gia     = VALUES(kieu_tinh_gia),
+                    gia_luot          = VALUES(gia_luot),
+                    gia_ngay          = VALUES(gia_ngay),
+                    gia_dem           = VALUES(gia_dem),
+                    gia_ngay_dem      = VALUES(gia_ngay_dem),
+                    gia_ve_thang      = VALUES(gia_ve_thang),
+                    cau_hinh_theo_gio = VALUES(cau_hinh_theo_gio),
+                    updated_at        = NOW()
+            """, (
+                nhom_xe_id, kieu_tinh_gia,
+                gia_luot, gia_ngay, gia_dem, gia_ngay_dem,
+                gia_ve_thang,
+                json.dumps(json_gio) if json_gio else None
+            ))
+
             KetNoi.commit()
-            return {"updated": updated, "ghi_chu": f"Đã áp đồng giá cho {len(updated)} loại xe."}
+            return {"ghi_chu": f"Đã áp đồng giá cho nhóm {nhom_xe_id}."}
     except HTTPException:
         raise
     except Exception as e:
@@ -236,7 +226,33 @@ def tao_dong_gia(
         raise HTTPException(status_code=500, detail=f"Lỗi server: {e}")
 
 
-# ── 4. Xóa loại xe (chỉ loại tùy chỉnh, soft-delete) ────────────────────────
+# ── 5. Xóa đồng giá nhóm ───────────────────────────────────────────────────
+@router.delete("/dong-gia/{nhom_xe_id}", status_code=200)
+def xoa_dong_gia(nhom_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
+    try:
+        with KetNoi.cursor() as cur:
+            cur.execute("DELETE FROM nhom_xe_gia WHERE nhom_xe_id = %s", (nhom_xe_id,))
+            KetNoi.commit()
+            return {"ghi_chu": f"Đã xóa đồng giá cho nhóm {nhom_xe_id}."}
+    except Exception as e:
+        KetNoi.rollback()
+        raise HTTPException(status_code=500, detail=f"Lỗi server: {e}")
+
+
+# ── 6. Lấy danh sách đồng giá (có tên nhóm, sắp xếp) ─────────────────────
+@router.get("/nhom-gia")
+def lay_nhom_xe_gia(KetNoi=Depends(lay_ket_noi_CSDL)):
+    with KetNoi.cursor(dictionary=True) as cur:
+        cur.execute("""
+            SELECT ng.*, n.ten AS ten_nhom
+            FROM nhom_xe_gia ng
+            JOIN nhom_xe n ON ng.nhom_xe_id = n.id
+            ORDER BY n.thu_tu
+        """)
+        return cur.fetchall()
+
+
+# ── 7. Xóa loại xe (soft-delete) ────────────────────────────────────────────
 @router.delete("/{loai_xe_id}")
 def xoa_loai_xe(loai_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
     with KetNoi.cursor(dictionary=True) as cur:
@@ -277,7 +293,7 @@ def xoa_loai_xe(loai_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
     return {"message": f"Đã ẩn loại xe ID {loai_xe_id} thành công."}
 
 
-# ── 5. Cập nhật giá 1 loại xe → xóa đồng giá toàn nhóm ──────────────────────
+# ── 8. Cập nhật giá riêng cho 1 loại xe (KHÔNG phá đồng giá nhóm) ─────────
 @router.put("/{loai_xe_id}", status_code=200)
 def cap_nhat_loai_xe(
     loai_xe_id: int,
@@ -300,14 +316,12 @@ def cap_nhat_loai_xe(
     try:
         with KetNoi.cursor(dictionary=True) as cur:
             cur.execute(
-                "SELECT id, nhom_xe_id FROM loai_xe WHERE id = %s AND deleted_at IS NULL",
+                "SELECT id FROM loai_xe WHERE id = %s AND deleted_at IS NULL",
                 (loai_xe_id,)
             )
-            row = cur.fetchone()
-            if not row:
+            if not cur.fetchone():
                 raise HTTPException(status_code=404, detail="Không tìm thấy loại xe.")
 
-            # Cập nhật giá cho xe được chỉnh
             cur.execute("""
                 UPDATE loai_xe SET
                     kieu_tinh_gia = %s,
@@ -316,8 +330,7 @@ def cap_nhat_loai_xe(
                     gia_dem = %s,
                     gia_ngay_dem = %s,
                     gia_ve_thang = %s,
-                    cau_hinh_theo_gio = %s,
-                    is_dong_gia = 0
+                    cau_hinh_theo_gio = %s
                 WHERE id = %s
             """, (
                 kieu_tinh_gia, gia_luot, gia_ngay, gia_dem, gia_ngay_dem,
@@ -326,34 +339,10 @@ def cap_nhat_loai_xe(
                 loai_xe_id
             ))
 
-            # ── THÊM: reset is_dong_gia=0 cho toàn bộ nhóm ──
-            cur.execute(
-                "UPDATE loai_xe SET is_dong_gia = 0 WHERE nhom_xe_id = %s AND deleted_at IS NULL",
-                (row["nhom_xe_id"],)
-            )
-
             KetNoi.commit()
-            return {"id": loai_xe_id, "ghi_chu": "Đã cập nhật giá và xóa đồng giá cả nhóm."}
+            return {"id": loai_xe_id, "ghi_chu": "Đã cập nhật giá riêng cho loại xe."}
     except HTTPException:
         raise
-    except Exception as e:
-        KetNoi.rollback()
-        raise HTTPException(status_code=500, detail=f"Lỗi server: {e}")
-
-# ── 6. Xóa đồng giá cho cả nhóm ──────────────────────────────────────────────
-@router.post("/xoa-dong-gia", status_code=200)
-def xoa_dong_gia(
-    nhom_xe_id: int = Form(...),
-    KetNoi=Depends(lay_ket_noi_CSDL)
-):
-    try:
-        with KetNoi.cursor(dictionary=True) as cur:
-            cur.execute(
-                "UPDATE loai_xe SET is_dong_gia = 0 WHERE nhom_xe_id = %s AND deleted_at IS NULL",
-                (nhom_xe_id,)
-            )
-            KetNoi.commit()
-            return {"ghi_chu": f"Đã xóa đồng giá cho nhóm xe {nhom_xe_id}."}
     except Exception as e:
         KetNoi.rollback()
         raise HTTPException(status_code=500, detail=f"Lỗi server: {e}")

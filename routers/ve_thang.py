@@ -1,3 +1,4 @@
+# routers/ve_thang.py
 from fastapi import APIRouter, Depends, HTTPException, Form, UploadFile, File
 from typing import Optional
 import re, uuid, asyncio
@@ -15,6 +16,33 @@ from utils import (
 )
 
 router = APIRouter(prefix="", tags=["Vé tháng"])
+
+
+# ── Helper: lấy giá vé tháng (ưu tiên giá riêng của loại xe, nếu không có thì lấy từ nhom_xe_gia) ──
+def lay_gia_ve_thang(loai_xe: dict, cur) -> int:
+    """
+    `loai_xe` là dict chứa ít nhất các trường: id, nhom_xe_id, gia_ve_thang
+    `cur` là cursor còn mở để truy vấn nhom_xe_gia nếu cần.
+    Trả về số tiền (int) hoặc raise HTTPException nếu không có giá.
+    """
+    # 1. Ưu tiên giá riêng trên loại xe
+    if loai_xe.get("gia_ve_thang") and float(loai_xe["gia_ve_thang"]) > 0:
+        return int(loai_xe["gia_ve_thang"])
+
+    # 2. Nếu không có, kiểm tra đồng giá nhóm
+    cur.execute(
+        "SELECT gia_ve_thang FROM nhom_xe_gia WHERE nhom_xe_id = %s",
+        (loai_xe["nhom_xe_id"],)
+    )
+    nhom_gia = cur.fetchone()
+    if nhom_gia and nhom_gia.get("gia_ve_thang") and float(nhom_gia["gia_ve_thang"]) > 0:
+        return int(nhom_gia["gia_ve_thang"])
+
+    # 3. Không có cả hai → báo lỗi
+    raise HTTPException(
+        status_code=400,
+        detail="Loại xe này chưa được thiết lập giá vé tháng (cả riêng lẻ và đồng giá nhóm). Vui lòng chọn loại khác."
+    )
 
 
 # ── Đăng ký vé tháng ───────────────────────────────────────────
@@ -45,26 +73,20 @@ async def dang_ky_ve_thang(
     hom_nay       = date.today()
     ngay_het_han  = hom_nay + timedelta(days=30)
 
-    # ─── Kiểm tra loại xe: có yêu cầu biển số không? ───
     with KetNoi.cursor(dictionary=True) as cur:
-        cur.execute("SELECT ten, gia_luot, gia_ve_thang FROM loai_xe WHERE id = %s", (id_loai_xe,))
+        # ─── Lấy thông tin loại xe ───
+        cur.execute("SELECT * FROM loai_xe WHERE id = %s", (id_loai_xe,))
         loai_xe_row = cur.fetchone()
         if not loai_xe_row:
             raise HTTPException(status_code=404, detail="Không tìm thấy loại xe.")
 
-        # Kiểm tra loại xe có giá vé tháng hợp lệ không
-        if not loai_xe_row["gia_ve_thang"] or float(loai_xe_row["gia_ve_thang"]) <= 0:
-            raise HTTPException(
-                status_code=400,
-                detail="Loại xe này chưa được thiết lập giá vé tháng. Vui lòng chọn loại khác."
-            )
+        # Số tiền vé tháng (theo logic ưu tiên mới)
+        so_tien = lay_gia_ve_thang(loai_xe_row, cur)
 
-        so_tien = int(loai_xe_row["gia_ve_thang"])  # Lấy trực tiếp, không cần fallback
-
-        # Tạm thời: nếu tên loại chứa "đạp" → không yêu cầu biển số
+        # Kiểm tra yêu cầu biển số (tạm thời dựa vào tên loại)
         yeu_cau_bien = not ("đạp" in loai_xe_row["ten"].lower() or "xe đạp" in loai_xe_row["ten"].lower())
 
-    # ─── Xử lý biển số dựa vào loại xe ───
+    # ─── Xử lý biển số ───
     if yeu_cau_bien:
         if not bien_so.strip():
             raise HTTPException(status_code=422, detail="Biển số không được để trống.")
@@ -239,7 +261,7 @@ async def gia_han_ve_thang(
             cur.execute(
                 """
                 SELECT v.*, k.ten AS ten_chu_xe, k.email, k.sdt,
-                       l.gia_ve_thang, l.gia_luot
+                       l.*
                   FROM ve_thang v
                   JOIN khach_hang k ON v.id_khach_hang = k.id
                   JOIN loai_xe l    ON v.id_loai_xe    = l.id
@@ -255,16 +277,45 @@ async def gia_han_ve_thang(
         ngay_het_han_cu  = ve["ngay_het_han"]
         ngay_bat_dau     = ngay_het_han_cu if ngay_het_han_cu >= hom_nay else hom_nay
         ngay_het_han_moi = ngay_bat_dau + timedelta(days=30)
-        so_tien          = int(ve["gia_ve_thang"] or ve["gia_luot"])
 
-        du_lieu_qr = {
-            "loai": "ve_thang", "id": id_ve,
-            "bien_so": ve["bien_so"], "ten_chu_xe": ve["ten_chu_xe"],
-            "ngay_het_han": str(ngay_het_han_moi),
-        }
-        ma_qr_moi, duong_dan_qr_moi = tao_ma_qr(du_lieu_qr)
-
+        # Dùng helper để lấy giá vé tháng mới nhất (ưu tiên giá riêng, rồi đồng nhóm)
         with KetNoi.cursor(dictionary=True) as cur:
+            so_tien = lay_gia_ve_thang(ve, cur)  # ve chứa các cột của loai_xe (l.*)
+            # Cần commit sau khi lấy giá? không cần vì chỉ SELECT, nhưng phải đảm bảo cur tồn tại
+            # Để an toàn, ta dùng chính cursor của transaction chính, nhưng cần chú ý không đóng.
+            # Sẽ gọi helper ngay bên trong transaction chính.
+        # Lưu ý: đoạn trên đã dùng cur, ta sẽ chuyển vào trong with KetNoi... bên dưới để dùng chung cursor.
+
+        # Viết lại logic gia hạn với một cursor xuyên suốt
+        with KetNoi.cursor(dictionary=True) as cur:
+            # Lấy lại thông tin vé + loai_xe
+            cur.execute(
+                """
+                SELECT v.*, k.ten AS ten_chu_xe, k.email, k.sdt,
+                       l.*
+                  FROM ve_thang v
+                  JOIN khach_hang k ON v.id_khach_hang = k.id
+                  JOIN loai_xe l    ON v.id_loai_xe    = l.id
+                 WHERE v.id = %s
+                """,
+                (id_ve,),
+            )
+            ve = cur.fetchone()
+            if not ve:
+                raise HTTPException(status_code=404, detail="Không tìm thấy vé tháng.")
+
+            ngay_het_han_cu  = ve["ngay_het_han"]
+            ngay_bat_dau     = ngay_het_han_cu if ngay_het_han_cu >= hom_nay else hom_nay
+            ngay_het_han_moi = ngay_bat_dau + timedelta(days=30)
+            so_tien          = lay_gia_ve_thang(ve, cur)  # dùng chung cur của transaction
+
+            du_lieu_qr = {
+                "loai": "ve_thang", "id": id_ve,
+                "bien_so": ve["bien_so"], "ten_chu_xe": ve["ten_chu_xe"],
+                "ngay_het_han": str(ngay_het_han_moi),
+            }
+            ma_qr_moi, duong_dan_qr_moi = tao_ma_qr(du_lieu_qr)
+
             cur.execute(
                 "UPDATE ve_thang SET ngay_het_han = %s, ma_qr = %s WHERE id = %s",
                 (ngay_het_han_moi, ma_qr_moi, id_ve),

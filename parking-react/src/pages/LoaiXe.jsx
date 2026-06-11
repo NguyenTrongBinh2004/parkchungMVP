@@ -36,25 +36,6 @@ function coGiaThucTe(lx) {
 
 // ─── Modal đồng giá cho cả nhóm ─────────────────────────────────────────
 function DongGiaModal({ nhom, onClose, onSuccess }) {
-  const [loaiXeTrongNhom, setLoaiXeTrongNhom] = useState([])
-  const [fetchLoading, setFetchLoading] = useState(true)
-  const [fetchError, setFetchError] = useState(null)
-
-  useEffect(() => {
-    loaiXeApi.list({ nhom_xe_id: nhom.id, include_deleted: true })
-      .then(data => {
-        // Lấy tất cả xe mặc định (is_default = true) trong nhóm
-        const dsMac = data.filter(lx => lx.is_default)
-        setLoaiXeTrongNhom(dsMac)
-        if (dsMac.length === 0) setFetchError('Nhóm này chưa có loại xe mặc định nào.')
-      })
-      .catch(err => {
-        setFetchError(err.message)
-        setLoaiXeTrongNhom([])
-      })
-      .finally(() => setFetchLoading(false))
-  }, [nhom.id])
-
   const [kieu, setKieu] = useState('theo_luot')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -72,14 +53,9 @@ function DongGiaModal({ nhom, onClose, onSuccess }) {
 
   async function submit(e) {
     e.preventDefault()
-    if (loaiXeTrongNhom.length === 0) {
-      setError('Nhóm này chưa có loại xe mặc định nào trong hệ thống.')
-      return
-    }
     setLoading(true); setError(null)
-    const ids = loaiXeTrongNhom.map(lx => lx.id)
     const fd = new FormData()
-    fd.append('loai_xe_ids', JSON.stringify(ids))
+    fd.append('nhom_xe_id', nhom.id)               // ← gửi ID nhóm
     fd.append('kieu_tinh_gia', kieu)
     if (kieu === 'theo_luot') fd.append('gia_luot', form.gia_luot || 0)
     else if (kieu === 'theo_gio') fd.append('cau_hinh_theo_gio', buildJsonGio())
@@ -95,30 +71,10 @@ function DongGiaModal({ nhom, onClose, onSuccess }) {
     } catch (err) { setError(err.message) } finally { setLoading(false) }
   }
 
-  // Nếu đang fetch, hiển thị spinner nhỏ
-  if (fetchLoading) {
-    return (
-      <Modal onClose={onClose} title={`⚖️ Đồng giá nhóm "${nhom.ten}"`}>
-        <div style={{ textAlign: 'center', padding: '2rem' }}>
-          <Spinner />
-          <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem' }}>Đang tải danh sách xe...</p>
-        </div>
-      </Modal>
-    )
-  }
-
   return (
     <Modal onClose={onClose} title={`⚖️ Đồng giá nhóm "${nhom.ten}"`}>
-      {fetchError && <Alert type="danger">{fetchError}</Alert>}
       <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-        {fetchLoading
-          ? <span>Đang tải...</span>
-          : <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-              Áp cùng một mức giá cho tất cả{' '}
-              <strong>{loaiXeTrongNhom.length} loại xe mặc định</strong>{' '}
-              trong nhóm này (kể cả xe chưa cấu hình giá).
-            </p>
-        }
+        Áp một mức giá chung cho <strong>tất cả loại xe</strong> trong nhóm này.
       </p>
       <form onSubmit={submit}>
         <Field label="Kiểu tính giá">
@@ -159,14 +115,15 @@ function DongGiaModal({ nhom, onClose, onSuccess }) {
           <input type="number" value={form.gia_ve_thang} onChange={upd('gia_ve_thang')} min="0" step="10000" placeholder="Không bắt buộc" />
         </Field>
         {error && <Alert type="danger">{error}</Alert>}
-        <button type="submit" className="btn btn-accent" style={{ marginTop: '1rem' }} disabled={loading || loaiXeTrongNhom.length === 0}>
+        <button type="submit" className="btn btn-accent" style={{ marginTop: '1rem' }} disabled={loading}>
           {loading ? 'Đang lưu...' : '⚖️ Áp đồng giá'}
         </button>
       </form>
     </Modal>
   )
 }
-// ─── Modal thêm loại xe ─────────────────────────────────────────────────
+
+// ─── Modal thêm loại xe (giữ nguyên form, sửa nhẹ text) ──────────────────
 function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
   const [kieu, setKieu] = useState('theo_luot')
   const [loading, setLoading] = useState(false)
@@ -230,7 +187,6 @@ function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
           </select>
         </Field>
 
-        {/* Phần chọn nhanh loại xe mẫu (chỉ hiển thị nếu có) */}
         {dsMau.length > 0 && (
           <Field label="Chọn nhanh loại xe">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -242,7 +198,6 @@ function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
           </Field>
         )}
 
-        {/* Nút đồng giá luôn hiển thị, không phụ thuộc dsMau */}
         <div style={{ marginBottom: '1rem' }}>
           <button type="button" className="btn btn-sm btn-outline" onClick={handleDongGiaClick}>
             ⚖️ Đồng giá cả nhóm
@@ -309,7 +264,7 @@ function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
   )
 }
 
-// ─── Card loại xe (giữ nguyên) ──────────────────────────────────────────
+// ─── Card loại xe (không đổi) ────────────────────────────────────────────
 function LoaiXeCard({ lx, onXoa }) {
   const giaVeThang = lx.gia_ve_thang ? `· Vé tháng ${Number(lx.gia_ve_thang).toLocaleString('vi-VN')}đ` : ''
   return (
@@ -330,14 +285,12 @@ function LoaiXeCard({ lx, onXoa }) {
   )
 }
 
-// ─── Card nhóm xe (có gộp đồng giá) ────────────────────────────────────
-function NhomXeCard({ nhom, loaiXeList, onXoa, onXoaDongGia, isOpen, onToggle }) {
-  const loaiDaCauHinh = loaiXeList.filter(lx => lx.nhom_xe_id === nhom.id && coGiaThucTe(lx))
-  if (loaiDaCauHinh.length === 0) return null
+// ─── Card nhóm xe (dùng nhomGia thay vì is_dong_gia) ─────────────────────
+function NhomXeCard({ nhom, loaiXeList, nhomGia, onXoa, onXoaDongGia, isOpen, onToggle }) {
+  const loaiTrongNhom = loaiXeList.filter(lx => lx.nhom_xe_id === nhom.id && coGiaThucTe(lx))
 
-  const dongGiaXe = loaiDaCauHinh.filter(lx => lx.is_dong_gia)
-  const riengLeXe = loaiDaCauHinh.filter(lx => !lx.is_dong_gia)
-  const daiDienDongGia = dongGiaXe[0] || null
+  // Nếu không có đồng giá và không có xe riêng lẻ → ẩn cả nhóm
+  if (!nhomGia && loaiTrongNhom.length === 0) return null
 
   return (
     <div className="card" style={{ marginBottom: 10 }}>
@@ -345,44 +298,40 @@ function NhomXeCard({ nhom, loaiXeList, onXoa, onXoaDongGia, isOpen, onToggle })
         <span style={{ fontSize: '1.1rem' }}>{NHOM_ICON[nhom.id] || '🚘'}</span>
         <strong style={{ flex: 1 }}>{nhom.ten}</strong>
         <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-          {daiDienDongGia ? '⚖️ đồng giá' : ''}{daiDienDongGia && riengLeXe.length > 0 ? ' · ' : ''}{riengLeXe.length > 0 ? `${riengLeXe.length} riêng` : ''}
+          {nhomGia ? '⚖️ đồng giá' : ''}
+          {nhomGia && loaiTrongNhom.length > 0 ? ' · ' : ''}
+          {loaiTrongNhom.length > 0 ? `${loaiTrongNhom.length} riêng` : ''}
         </span>
         <span>{isOpen ? '▴' : '▾'}</span>
       </div>
+
       {isOpen && (
         <div style={{ marginTop: 6 }}>
-          {daiDienDongGia && (
-            <div style={{ display:'flex', alignItems:'center', gap:10, padding:'0.6rem 0', borderBottom:'1px solid var(--border)' }}>
+          {/* Dòng đồng giá từ nhom_xe_gia */}
+          {nhomGia && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.6rem 0', borderBottom: '1px solid var(--border)' }}>
               <span>⚖️</span>
-              <div style={{ flex:1 }}>
-                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                  <span style={{ fontWeight:600 }}>Toàn bộ {nhom.ten}</span>
-                  <span style={{ fontSize:'0.62rem', background:'var(--accent)', color:'#fff', padding:'0.1em 0.5em', borderRadius:4 }}>
-                    đồng giá · {dongGiaXe.length} loại
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>Toàn bộ {nhom.ten}</span>
+                  <span style={{ fontSize: '0.62rem', background: 'var(--accent)', color: '#fff', padding: '0.1em 0.5em', borderRadius: 4 }}>
+                    đồng giá
                   </span>
                 </div>
-                <div style={{ fontSize:'0.76rem', color:'var(--text-muted)' }}>{fmtGia(daiDienDongGia)}</div>
+                <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>{fmtGia(nhomGia)}</div>
               </div>
-              <span className="badge badge-gray">{KIEU_LABEL[daiDienDongGia.kieu_tinh_gia]}</span>
-              {/* ← THÊM NÚT NÀY */}
+              <span className="badge badge-gray">{KIEU_LABEL[nhomGia.kieu_tinh_gia]}</span>
               <button
                 onClick={() => onXoaDongGia(nhom.id, nhom.ten)}
-                title="Xóa đồng giá, hiện lại từng loại xe riêng"
-                style={{
-                  background: 'transparent',
-                  border: '1px solid var(--text-muted)',
-                  color: 'var(--text-muted)',
-                  padding: '2px 8px',
-                  borderRadius: 4,
-                  cursor: 'pointer',
-                  fontSize: '0.75rem',
-                }}
+                title="Bỏ đồng giá"
+                style={{ background: 'transparent', border: '1px solid var(--text-muted)', color: 'var(--text-muted)', padding: '2px 8px', borderRadius: 4, cursor: 'pointer', fontSize: '0.75rem' }}
               >
                 Bỏ ĐG
               </button>
             </div>
           )}
-          {riengLeXe.map(lx => <LoaiXeCard key={lx.id} lx={lx} onXoa={onXoa} />)}
+          {/* Các xe riêng lẻ (có giá riêng) */}
+          {loaiTrongNhom.map(lx => <LoaiXeCard key={lx.id} lx={lx} onXoa={onXoa} />)}
         </div>
       )}
     </div>
@@ -393,6 +342,7 @@ function NhomXeCard({ nhom, loaiXeList, onXoa, onXoaDongGia, isOpen, onToggle })
 export default function LoaiXe() {
   const [nhomList, setNhomList] = useState([])
   const [list, setList] = useState([])
+  const [nhomGiaMap, setNhomGiaMap] = useState({})   // { [nhom_xe_id]: object }
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
@@ -403,26 +353,39 @@ export default function LoaiXe() {
     setLoading(true)
     setError(null)
     try {
-      const [nhom, loai] = await Promise.all([loaiXeApi.listNhom(), loaiXeApi.list()])
+      const [nhom, loai, nhomGia] = await Promise.all([
+        loaiXeApi.listNhom(),
+        loaiXeApi.list(),
+        loaiXeApi.listNhomGia(),
+      ])
       setNhomList(nhom)
       setList(loai)
-    } catch (err) { setError(err.message) } finally { setLoading(false) }
+      const map = {}
+      nhomGia.forEach(ng => { map[ng.nhom_xe_id] = ng })
+      setNhomGiaMap(map)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { load() }, [])
 
   async function handleXoa(id, ten) {
     if (!window.confirm(`Ẩn loại xe "${ten}"?`)) return
-    try { await loaiXeApi.delete(id); setList(prev => prev.filter(lx => lx.id !== id)) } catch (err) { setError(err.message) }
+    try {
+      await loaiXeApi.delete(id)
+      setList(prev => prev.filter(lx => lx.id !== id))
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
-  // hàm handleXoaDongGia:
   async function handleXoaDongGia(nhomId, tenNhom) {
-    if (!window.confirm(`Bỏ đồng giá nhóm "${tenNhom}"?\nCác loại xe sẽ hiển thị riêng lẻ trở lại.`)) return
+    if (!window.confirm(`Bỏ đồng giá nhóm "${tenNhom}"?`)) return
     try {
-      const fd = new FormData()
-      fd.append('nhom_xe_id', nhomId)
-      await loaiXeApi.xoaDongGia(fd)
+      await loaiXeApi.xoaDongGia(nhomId)   // ← gọi DELETE
       load()
     } catch (err) {
       setError(err.message)
@@ -434,10 +397,10 @@ export default function LoaiXe() {
   const filteredList = useMemo(() => list.filter(coGiaThucTe), [list])
   const stats = useMemo(() => {
     const totalXe = filteredList.length
-    const totalNhomCoXe = nhomList.filter(n => filteredList.some(lx => lx.nhom_xe_id === n.id)).length
+    const totalNhomCoXe = nhomList.filter(n => filteredList.some(lx => lx.nhom_xe_id === n.id) || nhomGiaMap[n.id]).length
     const customCount = filteredList.filter(lx => !lx.is_default).length
     return { totalXe, totalNhomCoXe, customCount }
-  }, [filteredList, nhomList])
+  }, [filteredList, nhomList, nhomGiaMap])
 
   const handleDongGia = (nhom) => { setShowModal(false); setDongGiaNhom(nhom) }
 
@@ -457,13 +420,14 @@ export default function LoaiXe() {
           key={nhom.id}
           nhom={nhom}
           loaiXeList={list}
+          nhomGia={nhomGiaMap[nhom.id] || null}
           onXoa={handleXoa}
           onXoaDongGia={handleXoaDongGia}
           isOpen={openNhomId === nhom.id}
           onToggle={() => toggleNhom(nhom.id)}
         />
-      ))}      
-      {!loading && filteredList.length === 0 && (
+      ))}
+      {!loading && filteredList.length === 0 && Object.keys(nhomGiaMap).length === 0 && (
         <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem' }}>
           Chưa có loại xe nào được cấu hình giá...
         </p>
