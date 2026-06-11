@@ -36,8 +36,7 @@ function coGiaThucTe(lx) {
 
 // ─── Modal đồng giá cho cả nhóm ─────────────────────────────────────────
 function DongGiaModal({ nhom, allLoaiXe, onClose, onSuccess }) {
-  // Lấy tất cả loại xe không bị xóa trong nhóm (API đã lọc deleted_at IS NULL)
-  const loaiXeTrongNhom = allLoaiXe.filter(lx => lx.nhom_xe_id === nhom.id)
+  const loaiXeTrongNhom = allLoaiXe.filter(lx => String(lx.nhom_xe_id) === String(nhom.id))
   const [kieu, setKieu] = useState('theo_luot')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
