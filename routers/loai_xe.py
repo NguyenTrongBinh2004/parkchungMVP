@@ -336,3 +336,22 @@ def cap_nhat_loai_xe(
         KetNoi.rollback()
         logger.error(f"Lỗi cập nhật loại xe: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Lỗi server: {e}")
+    
+
+# ── 6. Xóa đồng giá cho cả nhóm ──────────────────────────────────────────────
+@router.post("/xoa-dong-gia", status_code=200)
+def xoa_dong_gia(
+    nhom_xe_id: int = Form(...),
+    KetNoi=Depends(lay_ket_noi_CSDL)
+):
+    try:
+        with KetNoi.cursor(dictionary=True) as cur:
+            cur.execute(
+                "UPDATE loai_xe SET is_dong_gia = 0 WHERE nhom_xe_id = %s AND deleted_at IS NULL",
+                (nhom_xe_id,)
+            )
+            KetNoi.commit()
+            return {"ghi_chu": f"Đã xóa đồng giá cho nhóm xe {nhom_xe_id}."}
+    except Exception as e:
+        KetNoi.rollback()
+        raise HTTPException(status_code=500, detail=f"Lỗi server: {e}")

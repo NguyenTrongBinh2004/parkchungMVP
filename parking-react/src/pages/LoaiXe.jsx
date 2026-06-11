@@ -130,6 +130,22 @@ function DongGiaModal({ nhom, allLoaiXe, onClose, onSuccess }) {
   )
 }
 
+
+// hàm handleXoaDongGia:
+async function handleXoaDongGia(nhomId, tenNhom) {
+  if (!window.confirm(`Bỏ đồng giá nhóm "${tenNhom}"?\nCác loại xe sẽ hiển thị riêng lẻ trở lại.`)) return
+  try {
+    const fd = new FormData()
+    fd.append('nhom_xe_id', nhomId)
+    await loaiXeApi.xoaDongGia(fd)
+    load()
+  } catch (err) {
+    setError(err.message)
+  }
+}
+
+
+
 // ─── Modal thêm loại xe ─────────────────────────────────────────────────
 function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
   const [kieu, setKieu] = useState('theo_luot')
@@ -295,7 +311,7 @@ function LoaiXeCard({ lx, onXoa }) {
 }
 
 // ─── Card nhóm xe (có gộp đồng giá) ────────────────────────────────────
-function NhomXeCard({ nhom, loaiXeList, onXoa, isOpen, onToggle }) {
+function NhomXeCard({ nhom, loaiXeList, onXoa, onXoaDongGia, isOpen, onToggle }) {
   const loaiDaCauHinh = loaiXeList.filter(lx => lx.nhom_xe_id === nhom.id && coGiaThucTe(lx))
   if (loaiDaCauHinh.length === 0) return null
 
@@ -316,16 +332,34 @@ function NhomXeCard({ nhom, loaiXeList, onXoa, isOpen, onToggle }) {
       {isOpen && (
         <div style={{ marginTop: 6 }}>
           {daiDienDongGia && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.6rem 0', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, padding:'0.6rem 0', borderBottom:'1px solid var(--border)' }}>
               <span>⚖️</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontWeight: 600 }}>Toàn bộ {nhom.ten}</span>
-                  <span style={{ fontSize: '0.62rem', background: 'var(--accent)', color: '#fff', padding: '0.1em 0.5em', borderRadius: 4 }}>đồng giá · {dongGiaXe.length} loại</span>
+              <div style={{ flex:1 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                  <span style={{ fontWeight:600 }}>Toàn bộ {nhom.ten}</span>
+                  <span style={{ fontSize:'0.62rem', background:'var(--accent)', color:'#fff', padding:'0.1em 0.5em', borderRadius:4 }}>
+                    đồng giá · {dongGiaXe.length} loại
+                  </span>
                 </div>
-                <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>{fmtGia(daiDienDongGia)}</div>
+                <div style={{ fontSize:'0.76rem', color:'var(--text-muted)' }}>{fmtGia(daiDienDongGia)}</div>
               </div>
               <span className="badge badge-gray">{KIEU_LABEL[daiDienDongGia.kieu_tinh_gia]}</span>
+              {/* ← THÊM NÚT NÀY */}
+              <button
+                onClick={() => onXoaDongGia(nhom.id, nhom.ten)}
+                title="Xóa đồng giá, hiện lại từng loại xe riêng"
+                style={{
+                  background: 'transparent',
+                  border: '1px solid var(--text-muted)',
+                  color: 'var(--text-muted)',
+                  padding: '2px 8px',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  fontSize: '0.75rem',
+                }}
+              >
+                Bỏ ĐG
+              </button>
             </div>
           )}
           {riengLeXe.map(lx => <LoaiXeCard key={lx.id} lx={lx} onXoa={onXoa} />)}
@@ -385,7 +419,17 @@ export default function LoaiXe() {
       )}
       {loading && <Spinner />}
       {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
-      {nhomList.map(nhom => <NhomXeCard key={nhom.id} nhom={nhom} loaiXeList={list} onXoa={handleXoa} isOpen={openNhomId === nhom.id} onToggle={() => toggleNhom(nhom.id)} />)}
+      {nhomList.map(nhom => (
+        <NhomXeCard
+          key={nhom.id}
+          nhom={nhom}
+          loaiXeList={list}
+          onXoa={handleXoa}
+          onXoaDongGia={handleXoaDongGia}
+          isOpen={openNhomId === nhom.id}
+          onToggle={() => toggleNhom(nhom.id)}
+        />
+      ))}      
       {!loading && filteredList.length === 0 && (
         <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem' }}>
           Chưa có loại xe nào được cấu hình giá...

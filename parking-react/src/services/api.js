@@ -56,6 +56,7 @@ export const loaiXeApi = {
   dongGia: (formData) => request('/loai-xe/dong-gia', { method: 'POST', body: formData }),
   update: (id, formData) => request(`/loai-xe/${id}`, { method: 'PUT', body: formData }),
   delete: (id) => request(`/loai-xe/${id}`, { method: 'DELETE' }),
+  xoaDongGia: (formData) => request('/loai-xe/xoa-dong-gia', { method: 'POST', body: formData }),
 }
 
 // ─── Xe vào ───
