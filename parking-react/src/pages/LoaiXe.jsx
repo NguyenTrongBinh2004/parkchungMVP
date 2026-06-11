@@ -35,8 +35,26 @@ function coGiaThucTe(lx) {
 }
 
 // ─── Modal đồng giá cho cả nhóm ─────────────────────────────────────────
-function DongGiaModal({ nhom, allLoaiXe, onClose, onSuccess }) {
-  const loaiXeTrongNhom = allLoaiXe.filter(lx => String(lx.nhom_xe_id) === String(nhom.id))
+function DongGiaModal({ nhom, onClose, onSuccess }) {
+  const [loaiXeTrongNhom, setLoaiXeTrongNhom] = useState([])
+  const [fetchLoading, setFetchLoading] = useState(true)
+  const [fetchError, setFetchError] = useState(null)
+
+  useEffect(() => {
+    loaiXeApi.list({ nhom_xe_id: nhom.id, include_deleted: true })
+      .then(data => {
+        // Lấy tất cả xe mặc định (is_default = true) trong nhóm
+        const dsMac = data.filter(lx => lx.is_default)
+        setLoaiXeTrongNhom(dsMac)
+        if (dsMac.length === 0) setFetchError('Nhóm này chưa có loại xe mặc định nào.')
+      })
+      .catch(err => {
+        setFetchError(err.message)
+        setLoaiXeTrongNhom([])
+      })
+      .finally(() => setFetchLoading(false))
+  }, [nhom.id])
+
   const [kieu, setKieu] = useState('theo_luot')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -55,7 +73,7 @@ function DongGiaModal({ nhom, allLoaiXe, onClose, onSuccess }) {
   async function submit(e) {
     e.preventDefault()
     if (loaiXeTrongNhom.length === 0) {
-      setError('Nhóm này chưa có loại xe nào.')
+      setError('Nhóm này chưa có loại xe mặc định nào trong hệ thống.')
       return
     }
     setLoading(true); setError(null)
@@ -77,10 +95,30 @@ function DongGiaModal({ nhom, allLoaiXe, onClose, onSuccess }) {
     } catch (err) { setError(err.message) } finally { setLoading(false) }
   }
 
+  // Nếu đang fetch, hiển thị spinner nhỏ
+  if (fetchLoading) {
+    return (
+      <Modal onClose={onClose} title={`⚖️ Đồng giá nhóm "${nhom.ten}"`}>
+        <div style={{ textAlign: 'center', padding: '2rem' }}>
+          <Spinner />
+          <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem' }}>Đang tải danh sách xe...</p>
+        </div>
+      </Modal>
+    )
+  }
+
   return (
     <Modal onClose={onClose} title={`⚖️ Đồng giá nhóm "${nhom.ten}"`}>
+      {fetchError && <Alert type="danger">{fetchError}</Alert>}
       <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-        Áp cùng một mức giá cho tất cả <strong>{loaiXeTrongNhom.length} loại xe</strong> trong nhóm này.
+        {fetchLoading
+          ? <span>Đang tải...</span>
+          : <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+              Áp cùng một mức giá cho tất cả{' '}
+              <strong>{loaiXeTrongNhom.length} loại xe mặc định</strong>{' '}
+              trong nhóm này (kể cả xe chưa cấu hình giá).
+            </p>
+        }
       </p>
       <form onSubmit={submit}>
         <Field label="Kiểu tính giá">
@@ -121,14 +159,13 @@ function DongGiaModal({ nhom, allLoaiXe, onClose, onSuccess }) {
           <input type="number" value={form.gia_ve_thang} onChange={upd('gia_ve_thang')} min="0" step="10000" placeholder="Không bắt buộc" />
         </Field>
         {error && <Alert type="danger">{error}</Alert>}
-        <button type="submit" className="btn btn-accent" style={{ marginTop: '1rem' }} disabled={loading}>
+        <button type="submit" className="btn btn-accent" style={{ marginTop: '1rem' }} disabled={loading || loaiXeTrongNhom.length === 0}>
           {loading ? 'Đang lưu...' : '⚖️ Áp đồng giá'}
         </button>
       </form>
     </Modal>
   )
 }
-
 // ─── Modal thêm loại xe ─────────────────────────────────────────────────
 function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
   const [kieu, setKieu] = useState('theo_luot')
@@ -448,7 +485,6 @@ export default function LoaiXe() {
       {dongGiaNhom && (
         <DongGiaModal
           nhom={dongGiaNhom}
-          allLoaiXe={list}
           onClose={() => setDongGiaNhom(null)}
           onSuccess={() => { setDongGiaNhom(null); load() }}
         />
