@@ -277,7 +277,7 @@ def xoa_loai_xe(loai_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
     return {"message": f"Đã ẩn loại xe ID {loai_xe_id} thành công."}
 
 
-# ── 5. Cập nhật giá 1 loại xe (phá vỡ đồng giá nếu có) ──────────────────────
+# ── 5. Cập nhật giá 1 loại xe → xóa đồng giá toàn nhóm ──────────────────────
 @router.put("/{loai_xe_id}", status_code=200)
 def cap_nhat_loai_xe(
     loai_xe_id: int,
@@ -290,10 +290,6 @@ def cap_nhat_loai_xe(
     cau_hinh_theo_gio: Optional[str] = Form(None),
     KetNoi=Depends(lay_ket_noi_CSDL)
 ):
-    allowed = ["theo_luot", "theo_gio", "theo_ngay_dem"]
-    if kieu_tinh_gia not in allowed:
-        raise HTTPException(status_code=422, detail="Kiểu tính giá không hợp lệ.")
-
     json_gio = None
     if cau_hinh_theo_gio:
         try:
@@ -304,12 +300,14 @@ def cap_nhat_loai_xe(
     try:
         with KetNoi.cursor(dictionary=True) as cur:
             cur.execute(
-                "SELECT id FROM loai_xe WHERE id = %s AND deleted_at IS NULL",
+                "SELECT id, nhom_xe_id FROM loai_xe WHERE id = %s AND deleted_at IS NULL",
                 (loai_xe_id,)
             )
-            if not cur.fetchone():
+            row = cur.fetchone()
+            if not row:
                 raise HTTPException(status_code=404, detail="Không tìm thấy loại xe.")
 
+            # Cập nhật giá cho xe được chỉnh
             cur.execute("""
                 UPDATE loai_xe SET
                     kieu_tinh_gia = %s,
@@ -322,21 +320,25 @@ def cap_nhat_loai_xe(
                     is_dong_gia = 0
                 WHERE id = %s
             """, (
-                kieu_tinh_gia,
-                gia_luot, gia_ngay, gia_dem, gia_ngay_dem,
+                kieu_tinh_gia, gia_luot, gia_ngay, gia_dem, gia_ngay_dem,
                 gia_ve_thang,
                 json.dumps(json_gio) if json_gio else None,
                 loai_xe_id
             ))
+
+            # ── THÊM: reset is_dong_gia=0 cho toàn bộ nhóm ──
+            cur.execute(
+                "UPDATE loai_xe SET is_dong_gia = 0 WHERE nhom_xe_id = %s AND deleted_at IS NULL",
+                (row["nhom_xe_id"],)
+            )
+
             KetNoi.commit()
-            return {"id": loai_xe_id, "ghi_chu": "Đã cập nhật giá loại xe."}
+            return {"id": loai_xe_id, "ghi_chu": "Đã cập nhật giá và xóa đồng giá cả nhóm."}
     except HTTPException:
         raise
     except Exception as e:
         KetNoi.rollback()
-        logger.error(f"Lỗi cập nhật loại xe: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Lỗi server: {e}")
-    
 
 # ── 6. Xóa đồng giá cho cả nhóm ──────────────────────────────────────────────
 @router.post("/xoa-dong-gia", status_code=200)

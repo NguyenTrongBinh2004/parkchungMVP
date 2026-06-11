@@ -130,22 +130,6 @@ function DongGiaModal({ nhom, allLoaiXe, onClose, onSuccess }) {
   )
 }
 
-
-// hàm handleXoaDongGia:
-async function handleXoaDongGia(nhomId, tenNhom) {
-  if (!window.confirm(`Bỏ đồng giá nhóm "${tenNhom}"?\nCác loại xe sẽ hiển thị riêng lẻ trở lại.`)) return
-  try {
-    const fd = new FormData()
-    fd.append('nhom_xe_id', nhomId)
-    await loaiXeApi.xoaDongGia(fd)
-    load()
-  } catch (err) {
-    setError(err.message)
-  }
-}
-
-
-
 // ─── Modal thêm loại xe ─────────────────────────────────────────────────
 function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
   const [kieu, setKieu] = useState('theo_luot')
@@ -394,6 +378,19 @@ export default function LoaiXe() {
   async function handleXoa(id, ten) {
     if (!window.confirm(`Ẩn loại xe "${ten}"?`)) return
     try { await loaiXeApi.delete(id); setList(prev => prev.filter(lx => lx.id !== id)) } catch (err) { setError(err.message) }
+  }
+
+  // hàm handleXoaDongGia:
+  async function handleXoaDongGia(nhomId, tenNhom) {
+    if (!window.confirm(`Bỏ đồng giá nhóm "${tenNhom}"?\nCác loại xe sẽ hiển thị riêng lẻ trở lại.`)) return
+    try {
+      const fd = new FormData()
+      fd.append('nhom_xe_id', nhomId)
+      await loaiXeApi.xoaDongGia(fd)
+      load()
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
   const toggleNhom = (id) => setOpenNhomId(prev => prev === id ? null : id)

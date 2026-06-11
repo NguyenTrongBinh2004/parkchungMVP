@@ -295,7 +295,7 @@ async def xac_nhan_xe_vao_ve_thuong(
 
     # 🔍 Kiểm tra loại xe: có yêu cầu biển số không?
     with KetNoi.cursor(dictionary=True) as ConTro:
-        ConTro.execute("SELECT id, ten, yeu_cau_bien_so FROM loai_xe WHERE id=%s", (id_loai_xe,))
+        ConTro.execute("SELECT id, ten FROM loai_xe WHERE id=%s", (id_loai_xe,))
         loai_xe_row = ConTro.fetchone()
         if not loai_xe_row:
             raise HTTPException(status_code=404, detail=f"Không tìm thấy loại xe id: {id_loai_xe}")
