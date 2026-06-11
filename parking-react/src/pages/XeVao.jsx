@@ -130,8 +130,30 @@ function groupByNhom(loaiXeList) {
     }
     map[lx.nhom_xe_id].items.push(lx)
   })
-  // Sắp xếp nhóm theo thứ tự
-  return Object.values(map).sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0))
+
+  return Object.values(map)
+    .sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0))
+    .map(group => {
+      const dongGia = group.items.filter(lx => lx.is_dong_gia)
+      const riengLe = group.items.filter(lx => !lx.is_dong_gia)
+
+      const finalItems = []
+
+      // Nếu có xe đồng giá → thêm 1 option đại diện cả nhóm
+      if (dongGia.length > 0) {
+        finalItems.push({
+          ...dongGia[0],               // dùng xe đầu tiên làm đại diện
+          ten: group.ten_nhom,         // tên hiển thị là tên nhóm
+          _la_dai_dien_dong_gia: true,
+          _ds_id_dong_gia: dongGia.map(lx => lx.id)
+        })
+      }
+
+      // Các xe riêng lẻ vẫn hiện bình thường
+      finalItems.push(...riengLe)
+
+      return { ...group, items: finalItems }
+    })
 }
 
 // ─── Tab Chụp ảnh (SmartPanel) ─────────────────────────────────
@@ -468,7 +490,9 @@ function SmartPanel() {
               {groupedLoaiXe.map(group => (
                 <optgroup key={group.nhom_id} label={group.ten_nhom}>
                   {group.items.map(lx => (
-                    <option key={lx.id} value={lx.id}>{lx.ten}</option>
+                    <option key={lx.id} value={lx.id}>
+                      {lx._la_dai_dien_dong_gia ? `⚖️ ${lx.ten} (đồng giá)` : lx.ten}
+                    </option>
                   ))}
                 </optgroup>
               ))}
@@ -734,7 +758,9 @@ function BienSoPanel() {
               {groupedLoaiXe.map(group => (
                 <optgroup key={group.nhom_id} label={group.ten_nhom}>
                   {group.items.map(lx => (
-                    <option key={lx.id} value={lx.id}>{lx.ten}</option>
+                    <option key={lx.id} value={lx.id}>
+                      {lx._la_dai_dien_dong_gia ? `⚖️ ${lx.ten} (đồng giá)` : lx.ten}
+                    </option>
                   ))}
                 </optgroup>
               ))}
