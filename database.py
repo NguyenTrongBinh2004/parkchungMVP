@@ -16,7 +16,7 @@ def _khoi_tao_pool() -> pooling.MySQLConnectionPool:
     if _pool is None:
         _pool = pooling.MySQLConnectionPool(
             pool_name="parking_pool",
-            pool_size=int(os.getenv("DB_POOL_SIZE", 5)),
+            pool_size=int(os.getenv("DB_POOL_SIZE", 10)),  # ← tăng lại 10
             pool_reset_session=True,
             host=os.getenv("DB_HOST"),
             port=int(os.getenv("DB_PORT", 3306)),
@@ -25,7 +25,7 @@ def _khoi_tao_pool() -> pooling.MySQLConnectionPool:
             database=os.getenv("DB_NAME"),
             ssl_ca=os.getenv("DB_SSL_CA", "ca.pem"),
             autocommit=False,
-            connection_timeout=10,
+            connection_timeout=30,  
             connect_timeout=10,
             consume_results=True,
             raise_on_warnings=False,

@@ -353,11 +353,10 @@ export default function LoaiXe() {
     setLoading(true)
     setError(null)
     try {
-      const [nhom, loai, nhomGia] = await Promise.all([
-        loaiXeApi.listNhom(),
-        loaiXeApi.list(),
-        loaiXeApi.listNhomGia(),
-      ])
+      const nhom    = await loaiXeApi.listNhom()
+      const loai    = await loaiXeApi.list()
+      const nhomGia = await loaiXeApi.listNhomGia().catch(() => [])
+
       setNhomList(nhom)
       setList(loai)
       const map = {}
