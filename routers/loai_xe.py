@@ -33,7 +33,15 @@ def lay_danh_sach_loai_xe(
                 lx.*,
                 n.ten AS ten_nhom,
                 n.thu_tu AS thu_tu_nhom,
-                CASE WHEN ng.nhom_xe_id IS NOT NULL THEN 1 ELSE 0 END AS co_dong_gia_nhom
+                CASE WHEN ng.nhom_xe_id IS NOT NULL THEN 1 ELSE 0 END AS co_dong_gia_nhom,
+                CASE 
+                    WHEN (lx.gia_luot > 0 OR lx.gia_ngay > 0 OR lx.gia_dem > 0 
+                          OR lx.gia_ngay_dem > 0 OR lx.gia_ve_thang > 0 
+                          OR (lx.cau_hinh_theo_gio IS NOT NULL AND JSON_LENGTH(lx.cau_hinh_theo_gio) > 0))
+                          OR ng.nhom_xe_id IS NOT NULL
+                    THEN 1 
+                    ELSE 0 
+                END AS co_gia
             FROM loai_xe lx
             JOIN nhom_xe n ON lx.nhom_xe_id = n.id
             LEFT JOIN nhom_xe_gia ng ON lx.nhom_xe_id = ng.nhom_xe_id
@@ -50,20 +58,15 @@ def lay_danh_sach_loai_xe(
         if nhom_xe_id is not None:
             conditions.append("lx.nhom_xe_id = %s")
             params.append(nhom_xe_id)
-        if da_cau_hinh is True:
-            conditions.append("""
-                (
-                    lx.gia_luot > 0 OR lx.gia_ngay > 0 OR lx.gia_dem > 0
-                    OR lx.gia_ngay_dem > 0 OR lx.gia_ve_thang > 0
-                    OR (lx.cau_hinh_theo_gio IS NOT NULL AND JSON_LENGTH(lx.cau_hinh_theo_gio) > 0)
-                    OR ng.nhom_xe_id IS NOT NULL
-                )
-            """)
         if has_ve_thang is True:
             conditions.append("lx.gia_ve_thang > 0")
 
         if conditions:
             query += " AND " + " AND ".join(conditions)
+
+        if da_cau_hinh is True:
+            query += " HAVING co_gia = 1"
+
         query += " ORDER BY n.thu_tu, lx.is_default DESC, lx.ten"
         cur.execute(query, params)
         return cur.fetchall()

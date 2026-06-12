@@ -287,7 +287,7 @@ function LoaiXeCard({ lx, onXoa }) {
 
 // ─── Card nhóm xe ─────────────────────────────────────────────────────────
 function NhomXeCard({ nhom, loaiXeList, nhomGia, onXoa, onXoaDongGia, isOpen, onToggle }) {
-  const loaiTrongNhom = loaiXeList.filter(lx => lx.nhom_xe_id === nhom.id && coGiaThucTe(lx))
+  const loaiTrongNhom = loaiXeList.filter(lx => lx.nhom_xe_id === nhom.id && lx.co_gia)
 
   if (!nhomGia && loaiTrongNhom.length === 0) return null
 
@@ -388,11 +388,11 @@ export default function LoaiXe() {
     } catch (err) {
       setError(err.message)
     }
-  }  // ← dấu } này bị thiếu trong file cũ
+  }
 
   const toggleNhom = (id) => setOpenNhomId(prev => prev === id ? null : id)
 
-  const filteredList = useMemo(() => list.filter(coGiaThucTe), [list])
+  const filteredList = useMemo(() => list.filter(lx => lx.co_gia), [list])
   const stats = useMemo(() => {
     const totalXe = filteredList.length
     const totalNhomCoXe = nhomList.filter(n => filteredList.some(lx => lx.nhom_xe_id === n.id) || nhomGiaMap[n.id]).length
