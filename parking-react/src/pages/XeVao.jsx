@@ -36,10 +36,10 @@ function useObjectURL(file) {
   return url
 }
 
-// Component chọn ảnh: camera + thư viện (đã sửa lỗi useRef có điều kiện)
+// Component chọn ảnh
 function ImagePicker({ label, required, file, onFile, refInput }) {
   const internalRef = useRef(null)
-  const refCam = refInput || internalRef   // an toàn: luôn gọi useRef trước
+  const refCam = refInput || internalRef
   const refLib = useRef(null)
   const preview = useObjectURL(file)
 
@@ -69,7 +69,7 @@ function ImagePicker({ label, required, file, onFile, refInput }) {
   )
 }
 
-// Card vé tháng khi cần chụp ảnh thực tế (fallback)
+// Card vé tháng fallback
 function VeThangCard({ result, onXacNhan, loading }) {
   const [fileBienSo, setFileBienSo] = useState(null)
   const [fileNguoiLai, setFileNguoiLai] = useState(null)
@@ -116,10 +116,19 @@ function VeThangCard({ result, onXacNhan, loading }) {
   )
 }
 
-// ─── Hàm nhóm loại xe theo nhóm ─────────────────────────────────────
-function groupByNhom(loaiXeList) {
+// ─── Hàm nhóm loại xe THEO KIẾN TRÚC MỚI ─────────────────────────
+function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
+  // configuredData: danh sách loại xe có giá riêng (đã lọc da_cau_hinh)
+  // nhomGiaList: kết quả từ /loai-xe/nhom-gia
+  // allLoaiXe: toàn bộ loại xe (để lấy id đại diện)
+
+  // Map nhanh nhom_xe_id -> thông tin đồng giá
+  const nhomGiaMap = {}
+  nhomGiaList.forEach(ng => { nhomGiaMap[ng.nhom_xe_id] = ng })
+
+  // Gom nhóm từ configuredData
   const map = {}
-  loaiXeList.forEach(lx => {
+  configuredData.forEach(lx => {
     if (!map[lx.nhom_xe_id]) {
       map[lx.nhom_xe_id] = {
         nhom_id: lx.nhom_xe_id,
@@ -131,38 +140,57 @@ function groupByNhom(loaiXeList) {
     map[lx.nhom_xe_id].items.push(lx)
   })
 
+  // Thêm nhóm có đồng giá nhưng chưa có xe nào trong configuredData
+  nhomGiaList.forEach(ng => {
+    if (!map[ng.nhom_xe_id]) {
+      // Tìm ten_nhom và thu_tu từ allLoaiXe (hoặc từ nhomGia nếu JOIN đã trả ten_nhom)
+      const tenNhom = ng.ten_nhom || ''
+      map[ng.nhom_xe_id] = {
+        nhom_id: ng.nhom_xe_id,
+        ten_nhom: tenNhom,
+        thu_tu: 0,
+        items: []
+      }
+    }
+  })
+
   return Object.values(map)
     .sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0))
     .map(group => {
-      // ← đổi is_dong_gia → co_dong_gia_nhom
-      const coNhomGia = group.items.some(lx => lx.co_dong_gia_nhom)
-      const riengLe   = group.items.filter(lx => !lx.co_dong_gia_nhom)
-
       const finalItems = []
+      const nhomGia = nhomGiaMap[group.nhom_id]
 
-      if (coNhomGia) {
-        // Dùng xe is_default làm đại diện, nếu không có thì lấy item đầu tiên
-        const dai_dien = group.items.find(lx => lx.is_default) || group.items[0]
-        finalItems.push({
-          ...dai_dien,
-          ten: group.ten_nhom,
-          _la_dai_dien_dong_gia: true,
-        })
+      if (nhomGia) {
+        // Tìm id đại diện từ allLoaiXe (ưu tiên is_default)
+        const xeDaiDien = allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default)
+                          || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id)
+        if (xeDaiDien) {
+          finalItems.push({
+            ...xeDaiDien,
+            ...nhomGia,                  // ghi đè giá bằng đồng giá
+            id: xeDaiDien.id,            // giữ id của xe đại diện
+            ten: group.ten_nhom,         // hiển thị tên nhóm
+            _la_dai_dien_dong_gia: true,
+          })
+        }
+        // KHÔNG thêm các xe riêng lẻ của nhóm này (vì chúng đã được đại diện)
+        // Trừ khi có xe riêng lẻ THỰC SỰ có giá khác đồng giá – nhưng ta tạm bỏ qua
+      } else {
+        // Nhóm không có đồng giá: hiển thị tất cả xe có giá riêng
+        finalItems.push(...group.items)
       }
 
-      finalItems.push(...riengLe)
       return { ...group, items: finalItems }
     })
+    .filter(g => g.items.length > 0)
 }
 
 // ─── Tab Chụp ảnh (SmartPanel) ─────────────────────────────────
 function SmartPanel() {
-  // allLoaiXe: toàn bộ loại xe (cần cho logic tìm xe đạp và validate)
   const [allLoaiXe, setAllLoaiXe] = useState([])
-  // configuredLoaiXe: danh sách loại xe đã cấu hình giá (để tìm xe đạp an toàn)
   const [configuredLoaiXe, setConfiguredLoaiXe] = useState([])
-  // groupedLoaiXe: nhóm loại xe đã cấu hình để hiển thị dropdown
   const [groupedLoaiXe, setGroupedLoaiXe] = useState([])
+  const [nhomGiaList, setNhomGiaList] = useState([]) // ← thêm
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -179,27 +207,29 @@ function SmartPanel() {
     loaiXe: '', tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false,
   })
 
-  // Ref lưu id loại xe mặc định (ưu tiên) để dùng trong resetForm
   const defaultLoaiXeRef = useRef('')
-
   const [autoModeFailed, setAutoModeFailed] = useState(false)
 
-  // Load toàn bộ loại xe và danh sách đã cấu hình
+  // Load dữ liệu
   useEffect(() => {
     Promise.all([
-      loaiXeApi.list(),                      // toàn bộ (không filter)
-      loaiXeApi.list({ da_cau_hinh: true }) // chỉ xe đã cấu hình giá
-    ]).then(([allData, configuredData]) => {
+      loaiXeApi.list(),                      // toàn bộ
+      loaiXeApi.list({ da_cau_hinh: true }), // đã cấu hình
+      loaiXeApi.listNhomGia().catch(() => []) // đồng giá ← thêm
+    ]).then(([allData, configuredData, nhomGia]) => {
       setAllLoaiXe(allData)
-      setConfiguredLoaiXe(configuredData)    // lưu danh sách đã cấu hình
-      const grouped = groupByNhom(configuredData)
+      setConfiguredLoaiXe(configuredData)
+      setNhomGiaList(nhomGia)
+
+      const grouped = groupByNhomWithGia(configuredData, nhomGia, allData)
       setGroupedLoaiXe(grouped)
 
-      // Chọn loại xe ưu tiên
-      if (configuredData.length > 0) {
-        const oto = configuredData.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('ôtô'))
-        const fallback = configuredData.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('oto'))
-        const defaultId = oto ? oto.id : (fallback ? fallback.id : configuredData[0].id)
+      // Chọn loại xe mặc định (ưu tiên ô tô)
+      const flatItems = grouped.flatMap(g => g.items)
+      if (flatItems.length > 0) {
+        const oto = flatItems.find(lx => lx.ten?.toLowerCase().replace(/\s+/g, '').includes('ôtô'))
+        const fallback = flatItems.find(lx => lx.ten?.toLowerCase().replace(/\s+/g, '').includes('oto'))
+        const defaultId = oto ? oto.id : (fallback ? fallback.id : flatItems[0].id)
         setFormThuong(f => ({ ...f, loaiXe: defaultId }))
         defaultLoaiXeRef.current = defaultId
       } else {
@@ -208,11 +238,11 @@ function SmartPanel() {
     }).catch(() => {})
   }, [])
 
-  // Reset autoModeFailed khi result thay đổi
   useEffect(() => {
     setAutoModeFailed(false)
   }, [result])
 
+  // ... phần còn lại giữ nguyên từ đây ...
   async function handleBienSoFile(file) {
     if (!file) {
       setFileBienSo(null)
@@ -253,7 +283,6 @@ function SmartPanel() {
   async function kiemTraBienSo() {
     const raw = bienSoText.trim()
     if (!raw) {
-      // Tìm xe đạp trong danh sách đã cấu hình (configuredLoaiXe)
       const xeDap = configuredLoaiXe.find(lx => lx.ten.toLowerCase().includes('đạp'))
       if (xeDap) {
         const tempPlate = 'XD' + Date.now().toString().slice(-6)
@@ -268,7 +297,6 @@ function SmartPanel() {
     }
 
     const cleaned = chuanHoaBienSo(raw)
-    // Sử dụng configuredLoaiXe để kiểm tra xe đạp (nếu loại hiện tại là xe đạp)
     const loaiXeObj = configuredLoaiXe.find(lx => lx.id == formThuong.loaiXe)
     const isBicycle = loaiXeObj?.ten.toLowerCase().includes('đạp')
 
@@ -388,7 +416,6 @@ function SmartPanel() {
     setShowFormThuong(false)
     setError(null)
     setAutoModeFailed(false)
-    // Khôi phục loại xe về giá trị mặc định (ưu tiên)
     setFormThuong({ loaiXe: defaultLoaiXeRef.current, tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false })
   }
 
@@ -409,7 +436,6 @@ function SmartPanel() {
       {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
       {success && <Alert type="success">✅ Xe vào thành công!</Alert>}
 
-      {/* QR vé tháng nhận diện được */}
       {isVeThangQR && (
         hasProfileImages ? (
           <div className="card" style={{ borderColor: 'var(--info)', marginBottom: '0.75rem' }} key={result.ma_qr || 'auto'}>
@@ -434,7 +460,6 @@ function SmartPanel() {
         )
       )}
 
-      {/* Nhận diện biển số */}
       {result?.loai === 'bien_so' && (
         <div className="card" style={{ marginBottom: '0.75rem' }}>
           <Field label="Biển số (sửa nếu cần)">
@@ -449,7 +474,6 @@ function SmartPanel() {
         </div>
       )}
 
-      {/* Kết quả kiểm tra là vé tháng */}
       {isVeThang && (
         hasProfileImages ? (
           <div className="card" style={{ borderColor: 'var(--info)', marginBottom: '0.75rem' }} key={result.ma_qr || 'auto'}>
@@ -474,13 +498,11 @@ function SmartPanel() {
         )
       )}
 
-      {/* Form xe thường */}
       {showFormThuong && (
         <div className="card" style={{ marginBottom: '0.75rem' }}>
           <h5 style={{ marginBottom: '0.75rem' }}>🚗 Xe thường</h5>
           <Field label="Biển số"><input value={bienSoText} disabled style={{ textTransform: 'uppercase' }} /></Field>
 
-          {/* Dropdown Loại xe duy nhất, gộp nhóm, chỉ hiển thị loại đã có giá */}
           <Field label="Loại xe" required>
             <select
               value={formThuong.loaiXe}
@@ -540,28 +562,32 @@ function BienSoPanel() {
   const [fileNguoiLai, setFileNguoiLai] = useState(null)
 
   const [formThuong, setFormThuong] = useState({ loaiXe: '', tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false })
-  const [allLoaiXe, setAllLoaiXe] = useState([])            // toàn bộ loại xe
-  const [configuredLoaiXe, setConfiguredLoaiXe] = useState([]) // danh sách đã cấu hình
-  const [groupedLoaiXe, setGroupedLoaiXe] = useState([])   // danh sách đã lọc và nhóm
+  const [allLoaiXe, setAllLoaiXe] = useState([])
+  const [configuredLoaiXe, setConfiguredLoaiXe] = useState([])
+  const [groupedLoaiXe, setGroupedLoaiXe] = useState([])
+  const [nhomGiaList, setNhomGiaList] = useState([]) // ← thêm
   const [autoModeFailed, setAutoModeFailed] = useState(false)
 
   const defaultLoaiXeRef = useRef('')
 
-  // Load toàn bộ loại xe và danh sách đã cấu hình
   useEffect(() => {
     Promise.all([
       loaiXeApi.list(),
-      loaiXeApi.list({ da_cau_hinh: true })
-    ]).then(([allData, configuredData]) => {
+      loaiXeApi.list({ da_cau_hinh: true }),
+      loaiXeApi.listNhomGia().catch(() => []) // ← thêm
+    ]).then(([allData, configuredData, nhomGia]) => {
       setAllLoaiXe(allData)
       setConfiguredLoaiXe(configuredData)
-      const grouped = groupByNhom(configuredData)
+      setNhomGiaList(nhomGia)
+
+      const grouped = groupByNhomWithGia(configuredData, nhomGia, allData)
       setGroupedLoaiXe(grouped)
 
-      if (configuredData.length > 0) {
-        const oto = configuredData.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('ôtô'))
-        const fallback = configuredData.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('oto'))
-        const defaultId = oto ? oto.id : (fallback ? fallback.id : configuredData[0].id)
+      const flatItems = grouped.flatMap(g => g.items)
+      if (flatItems.length > 0) {
+        const oto = flatItems.find(lx => lx.ten?.toLowerCase().replace(/\s+/g, '').includes('ôtô'))
+        const fallback = flatItems.find(lx => lx.ten?.toLowerCase().replace(/\s+/g, '').includes('oto'))
+        const defaultId = oto ? oto.id : (fallback ? fallback.id : flatItems[0].id)
         setFormThuong(f => ({ ...f, loaiXe: defaultId }))
         defaultLoaiXeRef.current = defaultId
       } else {
@@ -574,10 +600,10 @@ function BienSoPanel() {
     setAutoModeFailed(false)
   }, [result])
 
+  // ... giữ nguyên các hàm xử lý ...
   async function kiemTra() {
     const raw = bienSo.trim()
     if (!raw) {
-      // Tìm xe đạp trong danh sách đã cấu hình
       const xeDap = configuredLoaiXe.find(lx => lx.ten.toLowerCase().includes('đạp'))
       if (xeDap) {
         const tempPlate = 'XD' + Date.now().toString().slice(-6)
@@ -748,7 +774,6 @@ function BienSoPanel() {
 
       {showFormThuong && (
         <div style={{ marginTop: '0.75rem' }}>
-          {/* Dropdown Loại xe duy nhất, gộp nhóm, chỉ hiển thị loại đã có giá */}
           <Field label="Loại xe" required>
             <select
               value={formThuong.loaiXe}
@@ -794,7 +819,7 @@ function BienSoPanel() {
   )
 }
 
-// ─── Trang chính XeVao ─────────────────────────────────────────
+// ─── Trang chính ───────────────────────────────────────────────
 export default function XeVao() {
   const [tab, setTab] = useState('smart')
   const tabs = [
