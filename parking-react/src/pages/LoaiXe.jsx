@@ -349,25 +349,26 @@ export default function LoaiXe() {
   const [openNhomId, setOpenNhomId] = useState(null)
   const [dongGiaNhom, setDongGiaNhom] = useState(null)
 
-  async function load() {
-    setLoading(true)
-    setError(null)
-    try {
-      const nhom    = await loaiXeApi.listNhom()
-      const loai    = await loaiXeApi.list()
-      const nhomGia = await loaiXeApi.listNhomGia().catch(() => [])
-
-      setNhomList(nhom)
-      setList(loai)
-      const map = {}
-      nhomGia.forEach(ng => { map[ng.nhom_xe_id] = ng })
-      setNhomGiaMap(map)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
+async function load() {
+  setLoading(true)
+  setError(null)
+  try {
+    const [nhom, loai, nhomGia] = await Promise.all([
+      loaiXeApi.listNhom(),
+      loaiXeApi.list(),
+      loaiXeApi.listNhomGia().catch(() => []),
+    ])
+    setNhomList(nhom)
+    setList(loai)
+    const map = {}
+    nhomGia.forEach(ng => { map[ng.nhom_xe_id] = ng })
+    setNhomGiaMap(map)
+  } catch (err) {
+    setError(err.message)
+  } finally {
+    setLoading(false)
   }
+}
 
   useEffect(() => { load() }, [])
 
@@ -381,15 +382,13 @@ export default function LoaiXe() {
     }
   }
 
-  async function handleXoaDongGia(nhomId, tenNhom) {
-    if (!window.confirm(`Bỏ đồng giá nhóm "${tenNhom}"?`)) return
-    try {
-      await loaiXeApi.xoaDongGia(nhomId)   // ← gọi DELETE
-      load()
-    } catch (err) {
-      setError(err.message)
-    }
-  }
+async function handleXoaDongGia(nhomId, tenNhom) {
+  if (!window.confirm(`Bỏ đồng giá nhóm "${tenNhom}"?`)) return
+  try {
+    await loaiXeApi.xoaDongGia(nhomId)
+    await new Promise(r => setTimeout(r, 300)) // chờ connection write trả về pool
+    load()  // load() dùng Promise.all vẫn được
+  } catch (err) { setError(err.message) }
 
   const toggleNhom = (id) => setOpenNhomId(prev => prev === id ? null : id)
 

@@ -29,10 +29,15 @@ def lay_danh_sach_loai_xe(
 ):
     with KetNoi.cursor(dictionary=True) as cur:
         query = """
-            SELECT lx.*, n.ten AS ten_nhom, n.thu_tu AS thu_tu_nhom
-              FROM loai_xe lx
-              JOIN nhom_xe n ON lx.nhom_xe_id = n.id
-             WHERE 1=1
+            SELECT 
+                lx.*,
+                n.ten AS ten_nhom,
+                n.thu_tu AS thu_tu_nhom,
+                CASE WHEN ng.nhom_xe_id IS NOT NULL THEN 1 ELSE 0 END AS co_dong_gia_nhom
+            FROM loai_xe lx
+            JOIN nhom_xe n ON lx.nhom_xe_id = n.id
+            LEFT JOIN nhom_xe_gia ng ON lx.nhom_xe_id = ng.nhom_xe_id
+            WHERE 1=1
         """
         conditions = []
         params = []
@@ -46,11 +51,14 @@ def lay_danh_sach_loai_xe(
             conditions.append("lx.nhom_xe_id = %s")
             params.append(nhom_xe_id)
         if da_cau_hinh is True:
-            conditions.append(
-                "(lx.gia_luot > 0 OR lx.gia_ngay > 0 OR lx.gia_dem > 0 "
-                "OR lx.gia_ngay_dem > 0 OR lx.gia_ve_thang > 0 OR "
-                "(lx.cau_hinh_theo_gio IS NOT NULL AND JSON_LENGTH(lx.cau_hinh_theo_gio) > 0))"
-            )
+            conditions.append("""
+                (
+                    lx.gia_luot > 0 OR lx.gia_ngay > 0 OR lx.gia_dem > 0
+                    OR lx.gia_ngay_dem > 0 OR lx.gia_ve_thang > 0
+                    OR (lx.cau_hinh_theo_gio IS NOT NULL AND JSON_LENGTH(lx.cau_hinh_theo_gio) > 0)
+                    OR ng.nhom_xe_id IS NOT NULL
+                )
+            """)
         if has_ve_thang is True:
             conditions.append("lx.gia_ve_thang > 0")
 

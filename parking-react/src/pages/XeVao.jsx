@@ -134,24 +134,23 @@ function groupByNhom(loaiXeList) {
   return Object.values(map)
     .sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0))
     .map(group => {
-      const dongGia = group.items.filter(lx => lx.is_dong_gia)
-      const riengLe = group.items.filter(lx => !lx.is_dong_gia)
+      // ← đổi is_dong_gia → co_dong_gia_nhom
+      const coNhomGia = group.items.some(lx => lx.co_dong_gia_nhom)
+      const riengLe   = group.items.filter(lx => !lx.co_dong_gia_nhom)
 
       const finalItems = []
 
-      // Nếu có xe đồng giá → thêm 1 option đại diện cả nhóm
-      if (dongGia.length > 0) {
+      if (coNhomGia) {
+        // Dùng xe is_default làm đại diện, nếu không có thì lấy item đầu tiên
+        const dai_dien = group.items.find(lx => lx.is_default) || group.items[0]
         finalItems.push({
-          ...dongGia[0],               // dùng xe đầu tiên làm đại diện
-          ten: group.ten_nhom,         // tên hiển thị là tên nhóm
+          ...dai_dien,
+          ten: group.ten_nhom,
           _la_dai_dien_dong_gia: true,
-          _ds_id_dong_gia: dongGia.map(lx => lx.id)
         })
       }
 
-      // Các xe riêng lẻ vẫn hiện bình thường
       finalItems.push(...riengLe)
-
       return { ...group, items: finalItems }
     })
 }
