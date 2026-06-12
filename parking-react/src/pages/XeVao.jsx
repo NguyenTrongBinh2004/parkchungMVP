@@ -118,15 +118,23 @@ function VeThangCard({ result, onXacNhan, loading }) {
 
 // ─── Hàm nhóm loại xe THEO KIẾN TRÚC MỚI ─────────────────────────
 function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
-  // configuredData: danh sách loại xe có giá riêng (đã lọc da_cau_hinh)
-  // nhomGiaList: kết quả từ /loai-xe/nhom-gia
-  // allLoaiXe: toàn bộ loại xe (để lấy id đại diện)
-
-  // Map nhanh nhom_xe_id -> thông tin đồng giá
   const nhomGiaMap = {}
   nhomGiaList.forEach(ng => { nhomGiaMap[ng.nhom_xe_id] = ng })
 
-  // Gom nhóm từ configuredData
+  // Hàm kiểm tra xe có giá riêng hay không (dùng lại logic coGiaThucTe nếu có, nhưng để độc lập)
+  const coGiaRieng = (lx) => {
+    if (lx.kieu_tinh_gia === 'theo_luot') return Number(lx.gia_luot || 0) > 0
+    if (lx.kieu_tinh_gia === 'theo_gio') {
+      let cfg = lx.cau_hinh_theo_gio
+      if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg) } catch { return false } }
+      if (Array.isArray(cfg) && cfg.length) return cfg.some(b => (b.gia && b.gia > 0) || (b.moi_gio_tiep && b.moi_gio_tiep > 0))
+      return false
+    }
+    if (lx.kieu_tinh_gia === 'theo_ngay_dem') return (Number(lx.gia_ngay || 0) > 0) || (Number(lx.gia_dem || 0) > 0) || (Number(lx.gia_ngay_dem || 0) > 0)
+    return false
+  }
+
+  // Gom nhóm từ configuredData (xe đã cấu hình giá)
   const map = {}
   configuredData.forEach(lx => {
     if (!map[lx.nhom_xe_id]) {
@@ -143,7 +151,6 @@ function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
   // Thêm nhóm có đồng giá nhưng chưa có xe nào trong configuredData
   nhomGiaList.forEach(ng => {
     if (!map[ng.nhom_xe_id]) {
-      // Tìm ten_nhom và thu_tu từ allLoaiXe (hoặc từ nhomGia nếu JOIN đã trả ten_nhom)
       const tenNhom = ng.ten_nhom || ''
       map[ng.nhom_xe_id] = {
         nhom_id: ng.nhom_xe_id,
@@ -157,33 +164,34 @@ function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
   return Object.values(map)
     .sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0))
     .map(group => {
-      const finalItems = []
-      const nhomGia = nhomGiaMap[group.nhom_id]
+      const finalItems = [...group.items]  // giữ lại tất cả xe riêng lẻ có giá
 
+      const nhomGia = nhomGiaMap[group.nhom_id]
       if (nhomGia) {
-        // Tìm id đại diện từ allLoaiXe (ưu tiên is_default)
-        const xeDaiDien = allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default)
-                          || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id)
+        // Tìm xe đại diện không có giá riêng để đảm bảo khi chọn đồng giá, backend fallback về nhom_gia
+        let xeDaiDien = allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default && !coGiaRieng(lx))
+                     || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && !coGiaRieng(lx))
+                     || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default)
+                     || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id)
+
         if (xeDaiDien) {
-          finalItems.push({
+          // Thêm dòng đại diện vào đầu danh sách (dùng unshift để hiển thị trước)
+          finalItems.unshift({
             ...xeDaiDien,
-            ...nhomGia,                  // ghi đè giá bằng đồng giá
-            id: xeDaiDien.id,            // giữ id của xe đại diện
-            ten: group.ten_nhom,         // hiển thị tên nhóm
+            ...nhomGia,                    // ghi đè giá bằng đồng giá để hiển thị
+            id: xeDaiDien.id,              // giữ id của xe đại diện
+            ten: group.ten_nhom,           // hiển thị tên nhóm
             _la_dai_dien_dong_gia: true,
           })
         }
-        // KHÔNG thêm các xe riêng lẻ của nhóm này (vì chúng đã được đại diện)
-        // Trừ khi có xe riêng lẻ THỰC SỰ có giá khác đồng giá – nhưng ta tạm bỏ qua
-      } else {
-        // Nhóm không có đồng giá: hiển thị tất cả xe có giá riêng
-        finalItems.push(...group.items)
+        // Các xe riêng lẻ vẫn nằm trong finalItems, người dùng có thể chọn xe cụ thể
       }
 
       return { ...group, items: finalItems }
     })
     .filter(g => g.items.length > 0)
 }
+
 
 // ─── Tab Chụp ảnh (SmartPanel) ─────────────────────────────────
 function SmartPanel() {
