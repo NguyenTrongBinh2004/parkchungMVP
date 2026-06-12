@@ -5,49 +5,56 @@ import mysql.connector
 import json
 import time
 import threading
+import copy
 from database import lay_ket_noi_CSDL
 import logging
 
 logger = logging.getLogger("uvicorn")
 router = APIRouter(prefix="/loai-xe", tags=["Quản lý Loại Xe"])
 
-# ── Cache đơn giản cho endpoint tổng hợp ─────────────────────────
+# ── Cache đơn giản ─────────────────────────────────────────────
 _cache_lock = threading.Lock()
 _cache_data = None
 _cache_expire = 0
 CACHE_TTL = 5  # giây
 
 
-def _get_cached_data():
-    """Trả về dữ liệu cache nếu còn hạn, nếu không trả về None."""
+def _clear_cache():
+    """Xóa cache toàn cục."""
     global _cache_data, _cache_expire
     with _cache_lock:
-        if _cache_data and time.monotonic() < _cache_expire:
-            return _cache_data
-    return None
+        _cache_data = None
+        _cache_expire = 0
 
 
 def _set_cache_data(data):
+    """Lưu dữ liệu vào cache (bản sao độc lập)."""
     global _cache_data, _cache_expire
     with _cache_lock:
-        _cache_data = data
+        _cache_data = copy.deepcopy(data)
         _cache_expire = time.monotonic() + CACHE_TTL
 
 
-# ── 1. Endpoint tổng hợp – trả về tất cả dữ liệu cần cho trang Loại xe ──
+def _get_cached_data():
+    """Trả về dữ liệu cache nếu còn hạn."""
+    global _cache_data, _cache_expire
+    with _cache_lock:
+        if _cache_data and time.monotonic() < _cache_expire:
+            return copy.deepcopy(_cache_data)  # trả về bản sao, tránh bị sửa đổi
+    return None
+
+
+# ── 1. Endpoint tổng hợp ────────────────────────────────────────
 @router.get("/toan-bo")
 def lay_toan_bo_du_lieu(KetNoi=Depends(lay_ket_noi_CSDL)):
-    # Thử lấy từ cache
     cached = _get_cached_data()
     if cached:
         return cached
 
     with KetNoi.cursor(dictionary=True) as cur:
-        # Nhóm xe
         cur.execute("SELECT * FROM nhom_xe ORDER BY thu_tu")
         nhom = cur.fetchall()
 
-        # Loại xe (chỉ xe chưa bị xoá, kèm computed co_gia)
         cur.execute("""
             SELECT 
                 lx.*,
@@ -69,7 +76,6 @@ def lay_toan_bo_du_lieu(KetNoi=Depends(lay_ket_noi_CSDL)):
         """)
         loai_xe = cur.fetchall()
 
-        # Đồng giá nhóm
         cur.execute("""
             SELECT ng.*, n.ten AS ten_nhom
             FROM nhom_xe_gia ng
@@ -83,12 +89,11 @@ def lay_toan_bo_du_lieu(KetNoi=Depends(lay_ket_noi_CSDL)):
         "loai_xe": loai_xe,
         "nhom_gia": nhom_gia
     }
-
     _set_cache_data(data)
-    return data
+    return _get_cached_data()  # trả về bản sao an toàn
 
 
-# ── 2. Danh sách nhóm xe (giữ lại cho các trang khác nếu cần) ─────────────
+# ── 2. Danh sách nhóm xe ────────────────────────────────────────
 @router.get("/nhom")
 def lay_danh_sach_nhom(KetNoi=Depends(lay_ket_noi_CSDL)):
     with KetNoi.cursor(dictionary=True) as cur:
@@ -96,7 +101,7 @@ def lay_danh_sach_nhom(KetNoi=Depends(lay_ket_noi_CSDL)):
         return cur.fetchall()
 
 
-# ── 3. Danh sách loại xe (có bộ lọc, dùng chung truy vấn có computed) ────
+# ── 3. Danh sách loại xe (có bộ lọc) ────────────────────────────
 @router.get("/")
 def lay_danh_sach_loai_xe(
     is_default: Optional[int] = None,
@@ -150,7 +155,7 @@ def lay_danh_sach_loai_xe(
         return cur.fetchall()
 
 
-# ── 4. Tạo loại xe tùy chỉnh (is_default=0, tự động khôi phục nếu đã ẩn) ──
+# ── 4. Tạo loại xe tùy chỉnh ────────────────────────────────────
 @router.post("/", status_code=200)
 def tao_loai_xe(
     ten: str = Form(...),
@@ -188,7 +193,6 @@ def tao_loai_xe(
             if not cur.fetchone():
                 raise HTTPException(status_code=404, detail="Không tìm thấy nhóm xe.")
 
-            # Tìm xe cùng tên trong nhóm (có thể đã ẩn)
             cur.execute("""
                 (SELECT id, is_default FROM loai_xe WHERE ten = %s AND nhom_xe_id = %s AND deleted_at IS NULL LIMIT 1)
                 UNION ALL
@@ -200,54 +204,27 @@ def tao_loai_xe(
             if existing:
                 cur.execute("""
                     UPDATE loai_xe
-                    SET mau_sac = %s,
-                        kieu_tinh_gia = %s,
-                        gia_luot = %s,
-                        gia_ngay = %s,
-                        gia_dem = %s,
-                        gia_ngay_dem = %s,
-                        gia_ve_thang = %s,
-                        cau_hinh_theo_gio = %s,
-                        deleted_at = NULL
+                    SET mau_sac = %s, kieu_tinh_gia = %s, gia_luot = %s,
+                        gia_ngay = %s, gia_dem = %s, gia_ngay_dem = %s,
+                        gia_ve_thang = %s, cau_hinh_theo_gio = %s, deleted_at = NULL
                     WHERE id = %s
-                """, (
-                    mau_sac, kieu_tinh_gia,
-                    gia_luot, gia_ngay, gia_dem, gia_ngay_dem,
-                    gia_ve_thang,
-                    json.dumps(json_gio) if json_gio else None,
-                    existing["id"]
-                ))
+                """, (mau_sac, kieu_tinh_gia, gia_luot, gia_ngay, gia_dem, gia_ngay_dem,
+                      gia_ve_thang, json.dumps(json_gio) if json_gio else None, existing["id"]))
                 KetNoi.commit()
-                # Xóa cache để frontend nhận dữ liệu mới
-                _cache_data = None
-                return {
-                    "id": existing["id"],
-                    "ten": ten,
-                    "nhom_xe_id": nhom_xe_id,
-                    "ghi_chu": "Cập nhật loại xe thành công (đã khôi phục nếu trước đó bị ẩn)."
-                }
+                _clear_cache()
+                return {"id": existing["id"], "ten": ten, "nhom_xe_id": nhom_xe_id,
+                        "ghi_chu": "Cập nhật loại xe thành công."}
             else:
                 cur.execute("""
-                    INSERT INTO loai_xe
-                        (ten, nhom_xe_id, is_default, mau_sac, kieu_tinh_gia,
-                         gia_luot, gia_ngay, gia_dem, gia_ngay_dem,
-                         gia_ve_thang, cau_hinh_theo_gio)
-                    VALUES (%s, %s, 0, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    ten, nhom_xe_id, mau_sac, kieu_tinh_gia,
-                    gia_luot, gia_ngay, gia_dem, gia_ngay_dem,
-                    gia_ve_thang,
-                    json.dumps(json_gio) if json_gio else None
-                ))
+                    INSERT INTO loai_xe (ten, nhom_xe_id, is_default, mau_sac, kieu_tinh_gia,
+                     gia_luot, gia_ngay, gia_dem, gia_ngay_dem, gia_ve_thang, cau_hinh_theo_gio)
+                    VALUES (%s,%s,0,%s,%s,%s,%s,%s,%s,%s,%s)
+                """, (ten, nhom_xe_id, mau_sac, kieu_tinh_gia, gia_luot, gia_ngay, gia_dem,
+                      gia_ngay_dem, gia_ve_thang, json.dumps(json_gio) if json_gio else None))
                 KetNoi.commit()
-                # Xóa cache
-                _cache_data = None
-                return {
-                    "id": cur.lastrowid,
-                    "ten": ten,
-                    "nhom_xe_id": nhom_xe_id,
-                    "ghi_chu": "Tạo loại xe thành công."
-                }
+                _clear_cache()
+                return {"id": cur.lastrowid, "ten": ten, "nhom_xe_id": nhom_xe_id,
+                        "ghi_chu": "Tạo loại xe thành công."}
     except mysql.connector.Error as err:
         KetNoi.rollback()
         logger.error(f"Lỗi MySQL: {err}", exc_info=True)
@@ -259,7 +236,7 @@ def tao_loai_xe(
         raise HTTPException(status_code=500, detail=f"Lỗi server: {e}")
 
 
-# ── 5. Đồng giá nhóm (chỉ upsert nhom_xe_gia) ─────────────────────────────
+# ── 5. Đồng giá nhóm ────────────────────────────────────────────
 @router.post("/dong-gia", status_code=200)
 def tao_dong_gia(
     nhom_xe_id: int = Form(...),
@@ -290,29 +267,18 @@ def tao_dong_gia(
                 raise HTTPException(status_code=404, detail="Không tìm thấy nhóm xe.")
 
             cur.execute("""
-                INSERT INTO nhom_xe_gia
-                    (nhom_xe_id, kieu_tinh_gia, gia_luot, gia_ngay, gia_dem,
-                     gia_ngay_dem, gia_ve_thang, cau_hinh_theo_gio)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO nhom_xe_gia (nhom_xe_id, kieu_tinh_gia, gia_luot, gia_ngay, gia_dem,
+                 gia_ngay_dem, gia_ve_thang, cau_hinh_theo_gio)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
                 ON DUPLICATE KEY UPDATE
-                    kieu_tinh_gia     = VALUES(kieu_tinh_gia),
-                    gia_luot          = VALUES(gia_luot),
-                    gia_ngay          = VALUES(gia_ngay),
-                    gia_dem           = VALUES(gia_dem),
-                    gia_ngay_dem      = VALUES(gia_ngay_dem),
-                    gia_ve_thang      = VALUES(gia_ve_thang),
-                    cau_hinh_theo_gio = VALUES(cau_hinh_theo_gio),
-                    updated_at        = NOW()
-            """, (
-                nhom_xe_id, kieu_tinh_gia,
-                gia_luot, gia_ngay, gia_dem, gia_ngay_dem,
-                gia_ve_thang,
-                json.dumps(json_gio) if json_gio else None
-            ))
-
+                    kieu_tinh_gia=VALUES(kieu_tinh_gia), gia_luot=VALUES(gia_luot),
+                    gia_ngay=VALUES(gia_ngay), gia_dem=VALUES(gia_dem),
+                    gia_ngay_dem=VALUES(gia_ngay_dem), gia_ve_thang=VALUES(gia_ve_thang),
+                    cau_hinh_theo_gio=VALUES(cau_hinh_theo_gio), updated_at=NOW()
+            """, (nhom_xe_id, kieu_tinh_gia, gia_luot, gia_ngay, gia_dem,
+                  gia_ngay_dem, gia_ve_thang, json.dumps(json_gio) if json_gio else None))
             KetNoi.commit()
-            # Xóa cache
-            _cache_data = None
+            _clear_cache()
             return {"ghi_chu": f"Đã áp đồng giá cho nhóm {nhom_xe_id}."}
     except HTTPException:
         raise
@@ -322,30 +288,28 @@ def tao_dong_gia(
         raise HTTPException(status_code=500, detail=f"Lỗi server: {e}")
 
 
-# ── 6. Xóa đồng giá nhóm ──────────────────────────────────────────────────
+# ── 6. Xóa đồng giá nhóm ────────────────────────────────────────
 @router.delete("/dong-gia/{nhom_xe_id}", status_code=200)
 def xoa_dong_gia(nhom_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
     try:
         with KetNoi.cursor() as cur:
             cur.execute("DELETE FROM nhom_xe_gia WHERE nhom_xe_id = %s", (nhom_xe_id,))
             KetNoi.commit()
-            # Xóa cache
-            _cache_data = None
+            _clear_cache()
             return {"ghi_chu": f"Đã xóa đồng giá cho nhóm {nhom_xe_id}."}
     except Exception as e:
         KetNoi.rollback()
         raise HTTPException(status_code=500, detail=f"Lỗi server: {e}")
 
 
-# ── 7. Lấy danh sách đồng giá (có tên nhóm, sắp xếp) ──────────────────────
+# ── 7. Lấy danh sách đồng giá ───────────────────────────────────
 @router.get("/nhom-gia")
 def lay_nhom_xe_gia(KetNoi=Depends(lay_ket_noi_CSDL)):
     try:
         with KetNoi.cursor(dictionary=True) as cur:
             cur.execute("""
                 SELECT ng.*, n.ten AS ten_nhom
-                FROM nhom_xe_gia ng
-                JOIN nhom_xe n ON ng.nhom_xe_id = n.id
+                FROM nhom_xe_gia ng JOIN nhom_xe n ON ng.nhom_xe_id = n.id
                 ORDER BY n.thu_tu
             """)
             return cur.fetchall()
@@ -354,50 +318,27 @@ def lay_nhom_xe_gia(KetNoi=Depends(lay_ket_noi_CSDL)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ── 8. Xóa loại xe (soft-delete) ───────────────────────────────────────────
+# ── 8. Xóa loại xe (soft-delete) ─────────────────────────────────
 @router.delete("/{loai_xe_id}")
 def xoa_loai_xe(loai_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
     with KetNoi.cursor(dictionary=True) as cur:
-        cur.execute(
-            "SELECT id, is_default FROM loai_xe WHERE id = %s AND deleted_at IS NULL",
-            (loai_xe_id,)
-        )
+        cur.execute("SELECT id, is_default FROM loai_xe WHERE id=%s AND deleted_at IS NULL", (loai_xe_id,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Không tìm thấy loại xe.")
-
-        cur.execute(
-            "SELECT COUNT(*) AS cnt FROM ve_thang WHERE id_loai_xe = %s AND ngay_het_han >= CURDATE()",
-            (loai_xe_id,)
-        )
+        cur.execute("SELECT COUNT(*) AS cnt FROM ve_thang WHERE id_loai_xe=%s AND ngay_het_han >= CURDATE()", (loai_xe_id,))
         if cur.fetchone()["cnt"] > 0:
-            raise HTTPException(
-                status_code=400,
-                detail="Không thể ẩn vì đang có vé tháng còn hiệu lực sử dụng loại xe này."
-            )
-
-        cur.execute(
-            "SELECT COUNT(*) AS cnt FROM phien_gui_xe WHERE id_loai_xe = %s AND is_in_bai = 1",
-            (loai_xe_id,)
-        )
+            raise HTTPException(status_code=400, detail="Không thể ẩn vì đang có vé tháng.")
+        cur.execute("SELECT COUNT(*) AS cnt FROM phien_gui_xe WHERE id_loai_xe=%s AND is_in_bai=1", (loai_xe_id,))
         if cur.fetchone()["cnt"] > 0:
-            raise HTTPException(
-                status_code=400,
-                detail="Không thể ẩn vì đang có xe trong bãi thuộc loại này."
-            )
-
-        cur.execute(
-            "UPDATE loai_xe SET deleted_at = NOW() WHERE id = %s",
-            (loai_xe_id,)
-        )
+            raise HTTPException(status_code=400, detail="Không thể ẩn vì đang có xe trong bãi.")
+        cur.execute("UPDATE loai_xe SET deleted_at=NOW() WHERE id=%s", (loai_xe_id,))
         KetNoi.commit()
-        # Xóa cache
-        _cache_data = None
-
-    return {"message": f"Đã ẩn loại xe ID {loai_xe_id} thành công."}
+        _clear_cache()
+    return {"message": f"Đã ẩn loại xe ID {loai_xe_id}."}
 
 
-# ── 9. Cập nhật giá riêng cho 1 loại xe (không ảnh hưởng đồng giá) ────────
+# ── 9. Cập nhật giá riêng cho 1 loại xe ─────────────────────────
 @router.put("/{loai_xe_id}", status_code=200)
 def cap_nhat_loai_xe(
     loai_xe_id: int,
@@ -415,38 +356,22 @@ def cap_nhat_loai_xe(
         try:
             json_gio = json.loads(cau_hinh_theo_gio)
         except json.JSONDecodeError:
-            raise HTTPException(status_code=422, detail="Cấu hình giá theo giờ không đúng định dạng JSON.")
+            raise HTTPException(status_code=422, detail="JSON không hợp lệ.")
 
     try:
         with KetNoi.cursor(dictionary=True) as cur:
-            cur.execute(
-                "SELECT id FROM loai_xe WHERE id = %s AND deleted_at IS NULL",
-                (loai_xe_id,)
-            )
+            cur.execute("SELECT id FROM loai_xe WHERE id=%s AND deleted_at IS NULL", (loai_xe_id,))
             if not cur.fetchone():
                 raise HTTPException(status_code=404, detail="Không tìm thấy loại xe.")
-
             cur.execute("""
-                UPDATE loai_xe SET
-                    kieu_tinh_gia = %s,
-                    gia_luot = %s,
-                    gia_ngay = %s,
-                    gia_dem = %s,
-                    gia_ngay_dem = %s,
-                    gia_ve_thang = %s,
-                    cau_hinh_theo_gio = %s
-                WHERE id = %s
-            """, (
-                kieu_tinh_gia, gia_luot, gia_ngay, gia_dem, gia_ngay_dem,
-                gia_ve_thang,
-                json.dumps(json_gio) if json_gio else None,
-                loai_xe_id
-            ))
-
+                UPDATE loai_xe SET kieu_tinh_gia=%s, gia_luot=%s, gia_ngay=%s, gia_dem=%s,
+                gia_ngay_dem=%s, gia_ve_thang=%s, cau_hinh_theo_gio=%s
+                WHERE id=%s
+            """, (kieu_tinh_gia, gia_luot, gia_ngay, gia_dem, gia_ngay_dem, gia_ve_thang,
+                  json.dumps(json_gio) if json_gio else None, loai_xe_id))
             KetNoi.commit()
-            # Xóa cache
-            _cache_data = None
-            return {"id": loai_xe_id, "ghi_chu": "Đã cập nhật giá riêng cho loại xe."}
+            _clear_cache()
+            return {"id": loai_xe_id, "ghi_chu": "Đã cập nhật giá riêng."}
     except HTTPException:
         raise
     except Exception as e:

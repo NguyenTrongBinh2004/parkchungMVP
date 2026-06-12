@@ -139,14 +139,8 @@ function ThemLoaiXeModal({ nhomList, allLoaiXeList, onClose, onSuccess, onDongGi
       setDsMau([])
       return
     }
-
     const danhSach = Array.isArray(allLoaiXeList) ? allLoaiXeList : []
-    const nhomId = form.nhom_xe_id // đã là number, không cần ép
-
-    // Lấy tất cả xe thuộc nhóm này (cả mặc định và tùy chỉnh, có giá hoặc chưa)
-    const ds = danhSach.filter(lx => lx.nhom_xe_id === nhomId)
-
-    // Ưu tiên xe mặc định lên trước, sau đó sắp xếp theo tên
+    const ds = danhSach.filter(lx => lx.nhom_xe_id === form.nhom_xe_id && lx.co_gia)
     ds.sort((a, b) => (b.is_default ? 1 : 0) - (a.is_default ? 1 : 0) || a.ten.localeCompare(b.ten))
     setDsMau(ds)
   }, [form.nhom_xe_id, allLoaiXeList])
