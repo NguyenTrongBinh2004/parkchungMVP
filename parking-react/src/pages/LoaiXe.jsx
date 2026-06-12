@@ -55,7 +55,7 @@ function DongGiaModal({ nhom, onClose, onSuccess }) {
     e.preventDefault()
     setLoading(true); setError(null)
     const fd = new FormData()
-    fd.append('nhom_xe_id', nhom.id)               // ← gửi ID nhóm
+    fd.append('nhom_xe_id', nhom.id)
     fd.append('kieu_tinh_gia', kieu)
     if (kieu === 'theo_luot') fd.append('gia_luot', form.gia_luot || 0)
     else if (kieu === 'theo_gio') fd.append('cau_hinh_theo_gio', buildJsonGio())
@@ -123,7 +123,7 @@ function DongGiaModal({ nhom, onClose, onSuccess }) {
   )
 }
 
-// ─── Modal thêm loại xe (giữ nguyên form, sửa nhẹ text) ──────────────────
+// ─── Modal thêm loại xe ──────────────────────────────────────────────────
 function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
   const [kieu, setKieu] = useState('theo_luot')
   const [loading, setLoading] = useState(false)
@@ -264,7 +264,7 @@ function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
   )
 }
 
-// ─── Card loại xe (không đổi) ────────────────────────────────────────────
+// ─── Card loại xe ────────────────────────────────────────────────────────
 function LoaiXeCard({ lx, onXoa }) {
   const giaVeThang = lx.gia_ve_thang ? `· Vé tháng ${Number(lx.gia_ve_thang).toLocaleString('vi-VN')}đ` : ''
   return (
@@ -285,11 +285,10 @@ function LoaiXeCard({ lx, onXoa }) {
   )
 }
 
-// ─── Card nhóm xe (dùng nhomGia thay vì is_dong_gia) ─────────────────────
+// ─── Card nhóm xe ─────────────────────────────────────────────────────────
 function NhomXeCard({ nhom, loaiXeList, nhomGia, onXoa, onXoaDongGia, isOpen, onToggle }) {
   const loaiTrongNhom = loaiXeList.filter(lx => lx.nhom_xe_id === nhom.id && coGiaThucTe(lx))
 
-  // Nếu không có đồng giá và không có xe riêng lẻ → ẩn cả nhóm
   if (!nhomGia && loaiTrongNhom.length === 0) return null
 
   return (
@@ -307,7 +306,6 @@ function NhomXeCard({ nhom, loaiXeList, nhomGia, onXoa, onXoaDongGia, isOpen, on
 
       {isOpen && (
         <div style={{ marginTop: 6 }}>
-          {/* Dòng đồng giá từ nhom_xe_gia */}
           {nhomGia && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.6rem 0', borderBottom: '1px solid var(--border)' }}>
               <span>⚖️</span>
@@ -330,7 +328,6 @@ function NhomXeCard({ nhom, loaiXeList, nhomGia, onXoa, onXoaDongGia, isOpen, on
               </button>
             </div>
           )}
-          {/* Các xe riêng lẻ (có giá riêng) */}
           {loaiTrongNhom.map(lx => <LoaiXeCard key={lx.id} lx={lx} onXoa={onXoa} />)}
         </div>
       )}
@@ -338,37 +335,37 @@ function NhomXeCard({ nhom, loaiXeList, nhomGia, onXoa, onXoaDongGia, isOpen, on
   )
 }
 
-// ─── Component chính ──────────────────────────────────────────────────
+// ─── Component chính ──────────────────────────────────────────────────────
 export default function LoaiXe() {
   const [nhomList, setNhomList] = useState([])
   const [list, setList] = useState([])
-  const [nhomGiaMap, setNhomGiaMap] = useState({})   // { [nhom_xe_id]: object }
+  const [nhomGiaMap, setNhomGiaMap] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [openNhomId, setOpenNhomId] = useState(null)
   const [dongGiaNhom, setDongGiaNhom] = useState(null)
 
-async function load() {
-  setLoading(true)
-  setError(null)
-  try {
-    const [nhom, loai, nhomGia] = await Promise.all([
-      loaiXeApi.listNhom(),
-      loaiXeApi.list(),
-      loaiXeApi.listNhomGia().catch(() => []),
-    ])
-    setNhomList(nhom)
-    setList(loai)
-    const map = {}
-    nhomGia.forEach(ng => { map[ng.nhom_xe_id] = ng })
-    setNhomGiaMap(map)
-  } catch (err) {
-    setError(err.message)
-  } finally {
-    setLoading(false)
+  async function load() {
+    setLoading(true)
+    setError(null)
+    try {
+      const [nhom, loai, nhomGia] = await Promise.all([
+        loaiXeApi.listNhom(),
+        loaiXeApi.list(),
+        loaiXeApi.listNhomGia().catch(() => []),
+      ])
+      setNhomList(nhom)
+      setList(loai)
+      const map = {}
+      nhomGia.forEach(ng => { map[ng.nhom_xe_id] = ng })
+      setNhomGiaMap(map)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
-}
 
   useEffect(() => { load() }, [])
 
@@ -382,13 +379,16 @@ async function load() {
     }
   }
 
-async function handleXoaDongGia(nhomId, tenNhom) {
-  if (!window.confirm(`Bỏ đồng giá nhóm "${tenNhom}"?`)) return
-  try {
-    await loaiXeApi.xoaDongGia(nhomId)
-    await new Promise(r => setTimeout(r, 300)) // chờ connection write trả về pool
-    load()  // load() dùng Promise.all vẫn được
-  } catch (err) { setError(err.message) }
+  async function handleXoaDongGia(nhomId, tenNhom) {
+    if (!window.confirm(`Bỏ đồng giá nhóm "${tenNhom}"?`)) return
+    try {
+      await loaiXeApi.xoaDongGia(nhomId)
+      await new Promise(r => setTimeout(r, 300))
+      load()
+    } catch (err) {
+      setError(err.message)
+    }
+  }  // ← dấu } này bị thiếu trong file cũ
 
   const toggleNhom = (id) => setOpenNhomId(prev => prev === id ? null : id)
 
@@ -453,4 +453,4 @@ async function handleXoaDongGia(nhomId, tenNhom) {
       )}
     </PageLayout>
   )
-}}
+}
