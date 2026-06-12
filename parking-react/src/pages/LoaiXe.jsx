@@ -139,10 +139,17 @@ function ThemLoaiXeModal({ nhomList, allLoaiXeList, onClose, onSuccess, onDongGi
   const upd = (f) => (e) => setForm(v => ({ ...v, [f]: e.target.value }))
 
   useEffect(() => {
-    if (!form.nhom_xe_id) return
-    setDsMau(
-      allLoaiXeList.filter(lx => lx.is_default && String(lx.nhom_xe_id) === String(form.nhom_xe_id))
+    if (!form.nhom_xe_id) {
+      setDsMau([])
+      return
+    }
+    // Lọc tất cả loại xe thuộc nhóm đã chọn (bao gồm cả mặc định và tùy chỉnh)
+    const ds = allLoaiXeList.filter(
+      lx => String(lx.nhom_xe_id) === String(form.nhom_xe_id)
     )
+    // Sắp xếp: xe mặc định lên trước, sau đó theo tên
+    ds.sort((a, b) => (b.is_default ? 1 : 0) - (a.is_default ? 1 : 0) || a.ten.localeCompare(b.ten))
+    setDsMau(ds)
   }, [form.nhom_xe_id, allLoaiXeList])
 
   const chonMau = (loai) => setForm(v => ({ ...v, ten: loai.ten }))
