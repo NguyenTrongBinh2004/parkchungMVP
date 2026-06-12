@@ -140,17 +140,28 @@ function ThemLoaiXeModal({ nhomList, allLoaiXeList, onClose, onSuccess, onDongGi
 
   useEffect(() => {
     if (!form.nhom_xe_id) {
-      setDsMau([])
-      return
+      setDsMau([]);
+      return;
     }
-    // Lọc tất cả loại xe thuộc nhóm đã chọn (bao gồm cả mặc định và tùy chỉnh)
-    const ds = allLoaiXeList.filter(
-      lx => String(lx.nhom_xe_id) === String(form.nhom_xe_id)
-    )
-    // Sắp xếp: xe mặc định lên trước, sau đó theo tên
-    ds.sort((a, b) => (b.is_default ? 1 : 0) - (a.is_default ? 1 : 0) || a.ten.localeCompare(b.ten))
-    setDsMau(ds)
-  }, [form.nhom_xe_id, allLoaiXeList])
+
+    // Đảm bảo allLoaiXeList là mảng (nếu prop chưa kịp truyền)
+    const danhSach = Array.isArray(allLoaiXeList) ? allLoaiXeList : [];
+
+    const nhomId = Number(form.nhom_xe_id); // ép về number
+
+    console.log('=== DEBUG ThemLoaiXeModal ===');
+    console.log('nhomId:', nhomId);
+    console.log('allLoaiXeList length:', danhSach.length);
+    console.log('allLoaiXeList sample:', danhSach.slice(0, 2));
+
+    const ds = danhSach.filter(lx => Number(lx.nhom_xe_id) === nhomId);
+
+    // Sắp xếp: xe mặc định trước, rồi theo tên
+    ds.sort((a, b) => (b.is_default ? 1 : 0) - (a.is_default ? 1 : 0) || a.ten.localeCompare(b.ten));
+
+    console.log('dsMau result:', ds);
+    setDsMau(ds);
+  }, [form.nhom_xe_id, allLoaiXeList]);
 
   const chonMau = (loai) => setForm(v => ({ ...v, ten: loai.ten }))
   const themDong = () => { const last = bangGio[bangGio.length - 1]; setBangGio([...bangGio, { tuGio: last.denGio + 1, denGio: last.denGio + 2, gia: '' }]) }
