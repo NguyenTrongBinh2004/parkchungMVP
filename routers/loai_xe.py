@@ -3,34 +3,56 @@ from fastapi import APIRouter, Depends, HTTPException, Form
 from typing import Optional
 import mysql.connector
 import json
+import time
+import threading
 from database import lay_ket_noi_CSDL
 import logging
 
 logger = logging.getLogger("uvicorn")
 router = APIRouter(prefix="/loai-xe", tags=["Quản lý Loại Xe"])
 
+# ── Cache đơn giản cho endpoint tổng hợp ─────────────────────────
+_cache_lock = threading.Lock()
+_cache_data = None
+_cache_expire = 0
+CACHE_TTL = 5  # giây
+
+
+def _get_cached_data():
+    """Trả về dữ liệu cache nếu còn hạn, nếu không trả về None."""
+    global _cache_data, _cache_expire
+    with _cache_lock:
+        if _cache_data and time.monotonic() < _cache_expire:
+            return _cache_data
+    return None
+
+
+def _set_cache_data(data):
+    global _cache_data, _cache_expire
+    with _cache_lock:
+        _cache_data = data
+        _cache_expire = time.monotonic() + CACHE_TTL
+
 
 # ── 1. Endpoint tổng hợp – trả về tất cả dữ liệu cần cho trang Loại xe ──
 @router.get("/toan-bo")
 def lay_toan_bo_du_lieu(KetNoi=Depends(lay_ket_noi_CSDL)):
-    """
-    Trả về một lần:
-      - Danh sách nhóm xe
-      - Danh sách loại xe (đang hoạt động) kèm cờ co_gia, co_dong_gia_nhom
-      - Danh sách đồng giá nhóm (nhom_xe_gia)
-    """
+    # Thử lấy từ cache
+    cached = _get_cached_data()
+    if cached:
+        return cached
+
     with KetNoi.cursor(dictionary=True) as cur:
         # Nhóm xe
         cur.execute("SELECT * FROM nhom_xe ORDER BY thu_tu")
         nhom = cur.fetchall()
 
-        # Loại xe (chỉ xe chưa bị xoá, có kèm computed co_gia)
+        # Loại xe (chỉ xe chưa bị xoá, kèm computed co_gia)
         cur.execute("""
             SELECT 
                 lx.*,
                 n.ten AS ten_nhom,
                 n.thu_tu AS thu_tu_nhom,
-                CASE WHEN ng.nhom_xe_id IS NOT NULL THEN 1 ELSE 0 END AS co_dong_gia_nhom,
                 CASE 
                     WHEN (lx.gia_luot > 0 OR lx.gia_ngay > 0 OR lx.gia_dem > 0 
                           OR lx.gia_ngay_dem > 0 OR lx.gia_ve_thang > 0 
@@ -56,11 +78,14 @@ def lay_toan_bo_du_lieu(KetNoi=Depends(lay_ket_noi_CSDL)):
         """)
         nhom_gia = cur.fetchall()
 
-    return {
+    data = {
         "nhom": nhom,
         "loai_xe": loai_xe,
         "nhom_gia": nhom_gia
     }
+
+    _set_cache_data(data)
+    return data
 
 
 # ── 2. Danh sách nhóm xe (giữ lại cho các trang khác nếu cần) ─────────────
@@ -87,7 +112,6 @@ def lay_danh_sach_loai_xe(
                 lx.*,
                 n.ten AS ten_nhom,
                 n.thu_tu AS thu_tu_nhom,
-                CASE WHEN ng.nhom_xe_id IS NOT NULL THEN 1 ELSE 0 END AS co_dong_gia_nhom,
                 CASE 
                     WHEN (lx.gia_luot > 0 OR lx.gia_ngay > 0 OR lx.gia_dem > 0 
                           OR lx.gia_ngay_dem > 0 OR lx.gia_ve_thang > 0 
@@ -194,6 +218,8 @@ def tao_loai_xe(
                     existing["id"]
                 ))
                 KetNoi.commit()
+                # Xóa cache để frontend nhận dữ liệu mới
+                _cache_data = None
                 return {
                     "id": existing["id"],
                     "ten": ten,
@@ -214,6 +240,8 @@ def tao_loai_xe(
                     json.dumps(json_gio) if json_gio else None
                 ))
                 KetNoi.commit()
+                # Xóa cache
+                _cache_data = None
                 return {
                     "id": cur.lastrowid,
                     "ten": ten,
@@ -283,6 +311,8 @@ def tao_dong_gia(
             ))
 
             KetNoi.commit()
+            # Xóa cache
+            _cache_data = None
             return {"ghi_chu": f"Đã áp đồng giá cho nhóm {nhom_xe_id}."}
     except HTTPException:
         raise
@@ -299,6 +329,8 @@ def xoa_dong_gia(nhom_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
         with KetNoi.cursor() as cur:
             cur.execute("DELETE FROM nhom_xe_gia WHERE nhom_xe_id = %s", (nhom_xe_id,))
             KetNoi.commit()
+            # Xóa cache
+            _cache_data = None
             return {"ghi_chu": f"Đã xóa đồng giá cho nhóm {nhom_xe_id}."}
     except Exception as e:
         KetNoi.rollback()
@@ -334,7 +366,6 @@ def xoa_loai_xe(loai_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
         if not row:
             raise HTTPException(status_code=404, detail="Không tìm thấy loại xe.")
 
-        # Kiểm tra vé tháng còn hiệu lực
         cur.execute(
             "SELECT COUNT(*) AS cnt FROM ve_thang WHERE id_loai_xe = %s AND ngay_het_han >= CURDATE()",
             (loai_xe_id,)
@@ -345,7 +376,6 @@ def xoa_loai_xe(loai_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
                 detail="Không thể ẩn vì đang có vé tháng còn hiệu lực sử dụng loại xe này."
             )
 
-        # Kiểm tra xe đang trong bãi
         cur.execute(
             "SELECT COUNT(*) AS cnt FROM phien_gui_xe WHERE id_loai_xe = %s AND is_in_bai = 1",
             (loai_xe_id,)
@@ -361,6 +391,8 @@ def xoa_loai_xe(loai_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
             (loai_xe_id,)
         )
         KetNoi.commit()
+        # Xóa cache
+        _cache_data = None
 
     return {"message": f"Đã ẩn loại xe ID {loai_xe_id} thành công."}
 
@@ -412,6 +444,8 @@ def cap_nhat_loai_xe(
             ))
 
             KetNoi.commit()
+            # Xóa cache
+            _cache_data = None
             return {"id": loai_xe_id, "ghi_chu": "Đã cập nhật giá riêng cho loại xe."}
     except HTTPException:
         raise

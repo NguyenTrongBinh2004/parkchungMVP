@@ -22,20 +22,9 @@ function fmtGia(lx) {
 
 const KIEU_LABEL = { theo_luot: 'Lượt', theo_gio: 'Giờ', theo_ngay_dem: 'Ngày/đêm' }
 
-function coGiaThucTe(lx) {
-  if (lx.kieu_tinh_gia === 'theo_luot') return Number(lx.gia_luot || 0) > 0
-  if (lx.kieu_tinh_gia === 'theo_gio') {
-    let cfg = lx.cau_hinh_theo_gio
-    if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg) } catch { return false } }
-    if (Array.isArray(cfg) && cfg.length) return cfg.some(b => (b.gia && b.gia > 0) || (b.moi_gio_tiep && b.moi_gio_tiep > 0))
-    return false
-  }
-  if (lx.kieu_tinh_gia === 'theo_ngay_dem') return (Number(lx.gia_ngay || 0) > 0) || (Number(lx.gia_dem || 0) > 0) || (Number(lx.gia_ngay_dem || 0) > 0)
-  return false
-}
-
 // ─── Modal đồng giá cho cả nhóm ─────────────────────────────────────────
 function DongGiaModal({ nhom, onClose, onSuccess }) {
+  // ... giữ nguyên, không thay đổi ...
   const [kieu, setKieu] = useState('theo_luot')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -123,45 +112,44 @@ function DongGiaModal({ nhom, onClose, onSuccess }) {
   )
 }
 
-// ─── Modal thêm loại xe ──────────────────────────────────────────────────
+// ─── Modal thêm loại xe (ĐÃ SỬA) ─────────────────────────────────────────
 function ThemLoaiXeModal({ nhomList, allLoaiXeList, onClose, onSuccess, onDongGia }) {
   const [kieu, setKieu] = useState('theo_luot')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [dsMau, setDsMau] = useState([])
+
+  // QUAN TRỌNG: nhom_xe_id phải là number ngay từ đầu
   const [form, setForm] = useState({
-    ten: '', nhom_xe_id: String(nhomList[0]?.id || ''), mau_sac: '#FFD700',
+    ten: '',
+    nhom_xe_id: nhomList[0]?.id || 0,   // <-- bỏ String(), dùng number
+    mau_sac: '#FFD700',
     gia_luot: '', cau_hinh_theo_gio: '', gia_ngay: '', gia_dem: '', gia_ngay_dem: '', gia_ve_thang: '',
   })
+
   const [bangGio, setBangGio] = useState([{ tuGio: 1, denGio: 2, gia: '' }])
   const [giaMoiGioTiep, setGiaMoiGioTiep] = useState('')
 
+  // Helper update form (giữ nguyên cho các trường text/number khác)
   const upd = (f) => (e) => setForm(v => ({ ...v, [f]: e.target.value }))
 
+  // Lọc danh sách mẫu khi thay đổi nhóm
   useEffect(() => {
     if (!form.nhom_xe_id) {
-      setDsMau([]);
-      return;
+      setDsMau([])
+      return
     }
 
-    // Đảm bảo allLoaiXeList là mảng (nếu prop chưa kịp truyền)
-    const danhSach = Array.isArray(allLoaiXeList) ? allLoaiXeList : [];
+    const danhSach = Array.isArray(allLoaiXeList) ? allLoaiXeList : []
+    const nhomId = form.nhom_xe_id // đã là number, không cần ép
 
-    const nhomId = Number(form.nhom_xe_id); // ép về number
+    // Lấy tất cả xe thuộc nhóm này (cả mặc định và tùy chỉnh, có giá hoặc chưa)
+    const ds = danhSach.filter(lx => lx.nhom_xe_id === nhomId)
 
-    console.log('=== DEBUG ThemLoaiXeModal ===');
-    console.log('nhomId:', nhomId);
-    console.log('allLoaiXeList length:', danhSach.length);
-    console.log('allLoaiXeList sample:', danhSach.slice(0, 2));
-
-    const ds = danhSach.filter(lx => Number(lx.nhom_xe_id) === nhomId);
-
-    // Sắp xếp: xe mặc định trước, rồi theo tên
-    ds.sort((a, b) => (b.is_default ? 1 : 0) - (a.is_default ? 1 : 0) || a.ten.localeCompare(b.ten));
-
-    console.log('dsMau result:', ds);
-    setDsMau(ds);
-  }, [form.nhom_xe_id, allLoaiXeList]);
+    // Ưu tiên xe mặc định lên trước, sau đó sắp xếp theo tên
+    ds.sort((a, b) => (b.is_default ? 1 : 0) - (a.is_default ? 1 : 0) || a.ten.localeCompare(b.ten))
+    setDsMau(ds)
+  }, [form.nhom_xe_id, allLoaiXeList])
 
   const chonMau = (loai) => setForm(v => ({ ...v, ten: loai.ten }))
   const themDong = () => { const last = bangGio[bangGio.length - 1]; setBangGio([...bangGio, { tuGio: last.denGio + 1, denGio: last.denGio + 2, gia: '' }]) }
@@ -192,7 +180,7 @@ function ThemLoaiXeModal({ nhomList, allLoaiXeList, onClose, onSuccess, onDongGi
   }
 
   const handleDongGiaClick = () => {
-    const nhom = nhomList.find(n => String(n.id) === String(form.nhom_xe_id))
+    const nhom = nhomList.find(n => n.id === form.nhom_xe_id) // so sánh number trực tiếp
     if (nhom) onDongGia(nhom)
   }
 
@@ -200,7 +188,11 @@ function ThemLoaiXeModal({ nhomList, allLoaiXeList, onClose, onSuccess, onDongGi
     <Modal onClose={onClose} title="➕ Thêm loại xe tùy chỉnh">
       <form onSubmit={submit}>
         <Field label="Thuộc nhóm xe" required>
-          <select value={form.nhom_xe_id} onChange={upd('nhom_xe_id')} required>
+          <select
+            value={form.nhom_xe_id}
+            onChange={e => setForm(v => ({ ...v, nhom_xe_id: Number(e.target.value) }))}
+            required
+          >
             {nhomList.map(n => <option key={n.id} value={n.id}>{NHOM_ICON[n.id] || '🚘'} {n.ten}</option>)}
           </select>
         </Field>
@@ -282,7 +274,7 @@ function ThemLoaiXeModal({ nhomList, allLoaiXeList, onClose, onSuccess, onDongGi
   )
 }
 
-// ─── Card loại xe ────────────────────────────────────────────────────────
+// ─── Card loại xe (giữ nguyên) ──────────────────────────────────────
 function LoaiXeCard({ lx, onXoa }) {
   const giaVeThang = lx.gia_ve_thang ? `· Vé tháng ${Number(lx.gia_ve_thang).toLocaleString('vi-VN')}đ` : ''
   return (
@@ -303,7 +295,7 @@ function LoaiXeCard({ lx, onXoa }) {
   )
 }
 
-// ─── Card nhóm xe ─────────────────────────────────────────────────────────
+// ─── Card nhóm xe (giữ nguyên) ───────────────────────────────────
 function NhomXeCard({ nhom, loaiXeList, nhomGia, onXoa, onXoaDongGia, isOpen, onToggle }) {
   const loaiTrongNhom = loaiXeList.filter(lx => lx.nhom_xe_id === nhom.id && lx.co_gia)
 
@@ -353,7 +345,7 @@ function NhomXeCard({ nhom, loaiXeList, nhomGia, onXoa, onXoaDongGia, isOpen, on
   )
 }
 
-// ─── Component chính ──────────────────────────────────────────────────────
+// ─── Component chính ────────────────────────────────────────────────
 export default function LoaiXe() {
   const [nhomList, setNhomList] = useState([])
   const [list, setList] = useState([])
