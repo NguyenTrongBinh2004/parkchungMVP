@@ -53,10 +53,11 @@ export const loaiXeApi = {
     return request('/loai-xe/' + qs)
   },
   listNhom: () => request('/loai-xe/nhom'),
-  listNhomGia: () => request('/loai-xe/nhom-gia'),   // ← mới
+  getToanBo: () => request('/loai-xe/toan-bo'),
+  listNhomGia: () => request('/loai-xe/nhom-gia'),
   create: (formData) => request('/loai-xe/', { method: 'POST', body: formData }),
   dongGia: (formData) => request('/loai-xe/dong-gia', { method: 'POST', body: formData }),
-  xoaDongGia: (nhomId) => request(`/loai-xe/dong-gia/${nhomId}`, { method: 'DELETE' }),  // ← đổi sang DELETE
+  xoaDongGia: (nhomId) => request(`/loai-xe/dong-gia/${nhomId}`, { method: 'DELETE' }),
   update: (id, formData) => request(`/loai-xe/${id}`, { method: 'PUT', body: formData }),
   delete: (id) => request(`/loai-xe/${id}`, { method: 'DELETE' }),
 }

@@ -124,7 +124,7 @@ function DongGiaModal({ nhom, onClose, onSuccess }) {
 }
 
 // ─── Modal thêm loại xe ──────────────────────────────────────────────────
-function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
+function ThemLoaiXeModal({ nhomList, allLoaiXeList, onClose, onSuccess, onDongGia }) {
   const [kieu, setKieu] = useState('theo_luot')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -140,10 +140,10 @@ function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
 
   useEffect(() => {
     if (!form.nhom_xe_id) return
-    loaiXeApi.list({ include_deleted: true })
-      .then(data => setDsMau(data.filter(lx => lx.is_default && String(lx.nhom_xe_id) === String(form.nhom_xe_id))))
-      .catch(() => setDsMau([]))
-  }, [form.nhom_xe_id])
+    setDsMau(
+      allLoaiXeList.filter(lx => lx.is_default && String(lx.nhom_xe_id) === String(form.nhom_xe_id))
+    )
+  }, [form.nhom_xe_id, allLoaiXeList])
 
   const chonMau = (loai) => setForm(v => ({ ...v, ten: loai.ten }))
   const themDong = () => { const last = bangGio[bangGio.length - 1]; setBangGio([...bangGio, { tuGio: last.denGio + 1, denGio: last.denGio + 2, gia: '' }]) }
@@ -350,15 +350,11 @@ export default function LoaiXe() {
     setLoading(true)
     setError(null)
     try {
-      const [nhom, loai, nhomGia] = await Promise.all([
-        loaiXeApi.listNhom(),
-        loaiXeApi.list(),
-        loaiXeApi.listNhomGia().catch(() => []),
-      ])
-      setNhomList(nhom)
-      setList(loai)
+      const data = await loaiXeApi.getToanBo()
+      setNhomList(data.nhom)
+      setList(data.loai_xe)
       const map = {}
-      nhomGia.forEach(ng => { map[ng.nhom_xe_id] = ng })
+      data.nhom_gia.forEach(ng => { map[ng.nhom_xe_id] = ng })
       setNhomGiaMap(map)
     } catch (err) {
       setError(err.message)
@@ -439,11 +435,13 @@ export default function LoaiXe() {
       {showModal && nhomList.length > 0 && (
         <ThemLoaiXeModal
           nhomList={nhomList}
+          allLoaiXeList={list}
           onClose={() => setShowModal(false)}
           onSuccess={() => { setShowModal(false); load() }}
           onDongGia={handleDongGia}
         />
       )}
+
       {dongGiaNhom && (
         <DongGiaModal
           nhom={dongGiaNhom}

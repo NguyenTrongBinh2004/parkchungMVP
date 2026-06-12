@@ -5,11 +5,65 @@ import mysql.connector
 import json
 from database import lay_ket_noi_CSDL
 import logging
+
 logger = logging.getLogger("uvicorn")
 router = APIRouter(prefix="/loai-xe", tags=["Quản lý Loại Xe"])
 
 
-# ── 1. Danh sách nhóm xe ─────────────────────────────────────────────────────
+# ── 1. Endpoint tổng hợp – trả về tất cả dữ liệu cần cho trang Loại xe ──
+@router.get("/toan-bo")
+def lay_toan_bo_du_lieu(KetNoi=Depends(lay_ket_noi_CSDL)):
+    """
+    Trả về một lần:
+      - Danh sách nhóm xe
+      - Danh sách loại xe (đang hoạt động) kèm cờ co_gia, co_dong_gia_nhom
+      - Danh sách đồng giá nhóm (nhom_xe_gia)
+    """
+    with KetNoi.cursor(dictionary=True) as cur:
+        # Nhóm xe
+        cur.execute("SELECT * FROM nhom_xe ORDER BY thu_tu")
+        nhom = cur.fetchall()
+
+        # Loại xe (chỉ xe chưa bị xoá, có kèm computed co_gia)
+        cur.execute("""
+            SELECT 
+                lx.*,
+                n.ten AS ten_nhom,
+                n.thu_tu AS thu_tu_nhom,
+                CASE WHEN ng.nhom_xe_id IS NOT NULL THEN 1 ELSE 0 END AS co_dong_gia_nhom,
+                CASE 
+                    WHEN (lx.gia_luot > 0 OR lx.gia_ngay > 0 OR lx.gia_dem > 0 
+                          OR lx.gia_ngay_dem > 0 OR lx.gia_ve_thang > 0 
+                          OR (lx.cau_hinh_theo_gio IS NOT NULL AND JSON_LENGTH(lx.cau_hinh_theo_gio) > 0))
+                          OR ng.nhom_xe_id IS NOT NULL
+                    THEN 1 
+                    ELSE 0 
+                END AS co_gia
+            FROM loai_xe lx
+            JOIN nhom_xe n ON lx.nhom_xe_id = n.id
+            LEFT JOIN nhom_xe_gia ng ON lx.nhom_xe_id = ng.nhom_xe_id
+            WHERE lx.deleted_at IS NULL
+            ORDER BY n.thu_tu, lx.is_default DESC, lx.ten
+        """)
+        loai_xe = cur.fetchall()
+
+        # Đồng giá nhóm
+        cur.execute("""
+            SELECT ng.*, n.ten AS ten_nhom
+            FROM nhom_xe_gia ng
+            JOIN nhom_xe n ON ng.nhom_xe_id = n.id
+            ORDER BY n.thu_tu
+        """)
+        nhom_gia = cur.fetchall()
+
+    return {
+        "nhom": nhom,
+        "loai_xe": loai_xe,
+        "nhom_gia": nhom_gia
+    }
+
+
+# ── 2. Danh sách nhóm xe (giữ lại cho các trang khác nếu cần) ─────────────
 @router.get("/nhom")
 def lay_danh_sach_nhom(KetNoi=Depends(lay_ket_noi_CSDL)):
     with KetNoi.cursor(dictionary=True) as cur:
@@ -17,7 +71,7 @@ def lay_danh_sach_nhom(KetNoi=Depends(lay_ket_noi_CSDL)):
         return cur.fetchall()
 
 
-# ── 2. Danh sách loại xe (kèm thông tin nhóm) ───────────────────────────────
+# ── 3. Danh sách loại xe (có bộ lọc, dùng chung truy vấn có computed) ────
 @router.get("/")
 def lay_danh_sach_loai_xe(
     is_default: Optional[int] = None,
@@ -72,7 +126,7 @@ def lay_danh_sach_loai_xe(
         return cur.fetchall()
 
 
-# ── 3. Tạo loại xe tùy chỉnh (is_default = 0) ────────────────────────────────
+# ── 4. Tạo loại xe tùy chỉnh (is_default=0, tự động khôi phục nếu đã ẩn) ──
 @router.post("/", status_code=200)
 def tao_loai_xe(
     ten: str = Form(...),
@@ -110,6 +164,7 @@ def tao_loai_xe(
             if not cur.fetchone():
                 raise HTTPException(status_code=404, detail="Không tìm thấy nhóm xe.")
 
+            # Tìm xe cùng tên trong nhóm (có thể đã ẩn)
             cur.execute("""
                 (SELECT id, is_default FROM loai_xe WHERE ten = %s AND nhom_xe_id = %s AND deleted_at IS NULL LIMIT 1)
                 UNION ALL
@@ -117,6 +172,7 @@ def tao_loai_xe(
                 LIMIT 1
             """, (ten, nhom_xe_id, ten, nhom_xe_id))
             existing = cur.fetchone()
+
             if existing:
                 cur.execute("""
                     UPDATE loai_xe
@@ -142,7 +198,7 @@ def tao_loai_xe(
                     "id": existing["id"],
                     "ten": ten,
                     "nhom_xe_id": nhom_xe_id,
-                    "ghi_chu": "Cập nhật loại xe thành công."
+                    "ghi_chu": "Cập nhật loại xe thành công (đã khôi phục nếu trước đó bị ẩn)."
                 }
             else:
                 cur.execute("""
@@ -175,7 +231,7 @@ def tao_loai_xe(
         raise HTTPException(status_code=500, detail=f"Lỗi server: {e}")
 
 
-# ── 4. Đồng giá cho cả nhóm (CHỈ LƯU nhom_xe_gia) ──────────────────────────
+# ── 5. Đồng giá nhóm (chỉ upsert nhom_xe_gia) ─────────────────────────────
 @router.post("/dong-gia", status_code=200)
 def tao_dong_gia(
     nhom_xe_id: int = Form(...),
@@ -205,7 +261,6 @@ def tao_dong_gia(
             if not cur.fetchone():
                 raise HTTPException(status_code=404, detail="Không tìm thấy nhóm xe.")
 
-            # Chỉ upsert vào nhom_xe_gia, không ghi đè loai_xe
             cur.execute("""
                 INSERT INTO nhom_xe_gia
                     (nhom_xe_id, kieu_tinh_gia, gia_luot, gia_ngay, gia_dem,
@@ -237,7 +292,7 @@ def tao_dong_gia(
         raise HTTPException(status_code=500, detail=f"Lỗi server: {e}")
 
 
-# ── 5. Xóa đồng giá nhóm ───────────────────────────────────────────────────
+# ── 6. Xóa đồng giá nhóm ──────────────────────────────────────────────────
 @router.delete("/dong-gia/{nhom_xe_id}", status_code=200)
 def xoa_dong_gia(nhom_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
     try:
@@ -250,7 +305,7 @@ def xoa_dong_gia(nhom_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
         raise HTTPException(status_code=500, detail=f"Lỗi server: {e}")
 
 
-# ── 6. Lấy danh sách đồng giá (có tên nhóm, sắp xếp) ─────────────────────
+# ── 7. Lấy danh sách đồng giá (có tên nhóm, sắp xếp) ──────────────────────
 @router.get("/nhom-gia")
 def lay_nhom_xe_gia(KetNoi=Depends(lay_ket_noi_CSDL)):
     try:
@@ -267,7 +322,7 @@ def lay_nhom_xe_gia(KetNoi=Depends(lay_ket_noi_CSDL)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ── 7. Xóa loại xe (soft-delete) ────────────────────────────────────────────
+# ── 8. Xóa loại xe (soft-delete) ───────────────────────────────────────────
 @router.delete("/{loai_xe_id}")
 def xoa_loai_xe(loai_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
     with KetNoi.cursor(dictionary=True) as cur:
@@ -279,6 +334,7 @@ def xoa_loai_xe(loai_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
         if not row:
             raise HTTPException(status_code=404, detail="Không tìm thấy loại xe.")
 
+        # Kiểm tra vé tháng còn hiệu lực
         cur.execute(
             "SELECT COUNT(*) AS cnt FROM ve_thang WHERE id_loai_xe = %s AND ngay_het_han >= CURDATE()",
             (loai_xe_id,)
@@ -289,6 +345,7 @@ def xoa_loai_xe(loai_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
                 detail="Không thể ẩn vì đang có vé tháng còn hiệu lực sử dụng loại xe này."
             )
 
+        # Kiểm tra xe đang trong bãi
         cur.execute(
             "SELECT COUNT(*) AS cnt FROM phien_gui_xe WHERE id_loai_xe = %s AND is_in_bai = 1",
             (loai_xe_id,)
@@ -308,7 +365,7 @@ def xoa_loai_xe(loai_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
     return {"message": f"Đã ẩn loại xe ID {loai_xe_id} thành công."}
 
 
-# ── 8. Cập nhật giá riêng cho 1 loại xe (KHÔNG phá đồng giá nhóm) ─────────
+# ── 9. Cập nhật giá riêng cho 1 loại xe (không ảnh hưởng đồng giá) ────────
 @router.put("/{loai_xe_id}", status_code=200)
 def cap_nhat_loai_xe(
     loai_xe_id: int,
