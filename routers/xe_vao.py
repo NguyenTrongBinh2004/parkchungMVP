@@ -200,7 +200,7 @@ async def xac_nhan_xe_vao_ve_thang(
         duong_dan_nguoi_lai = await luu_anh(anh_nguoi_lai, "uploads/nguoi_lai") if anh_nguoi_lai else None
 
         bien_so      = ve_thang["bien_so"]
-        duoi_bien_so = tach_bien_so(bien_so_sach)
+        _, duoi_bien_so = tach_bien_so(bien_so_sach)
         ma_phien     = f"GX{uuid.uuid4().hex[:8].upper()}"
 
         # ── 4. Tạo QR riêng cho phiên (trước khi INSERT) ──
@@ -312,7 +312,7 @@ async def xac_nhan_xe_vao_ve_thuong(
 
         bien_so_goc  = bien_so_xac_nhan.upper().strip()
         bien_so_sach = chuan_hoa_bien_so(bien_so_xac_nhan)
-        duoi_bien_so = tach_bien_so(bien_so_sach)
+        _, duoi_bien_so = tach_bien_so(bien_so_sach)
 
         # Validate biển số
         if not is_valid_bien_so(bien_so_sach):
