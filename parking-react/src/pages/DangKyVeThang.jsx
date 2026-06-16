@@ -6,27 +6,6 @@ import { chuanHoaBienSo, isValidBienSo } from '../utils'
 
 const API = import.meta.env.VITE_API_URL || ''
 
-// ─── Helper: kiểm tra loại xe đã có giá thực tế (dùng để lọc) ───
-function coGiaThucTe(lx) {
-  if (lx.kieu_tinh_gia === 'theo_luot') {
-    return Number(lx.gia_luot || 0) > 0
-  }
-  if (lx.kieu_tinh_gia === 'theo_gio') {
-    let cfg = lx.cau_hinh_theo_gio
-    if (typeof cfg === 'string') {
-      try { cfg = JSON.parse(cfg) } catch { return false }
-    }
-    if (Array.isArray(cfg) && cfg.length > 0) {
-      return cfg.some(b => (b.gia && b.gia > 0) || (b.moi_gio_tiep && b.moi_gio_tiep > 0))
-    }
-    return false
-  }
-  if (lx.kieu_tinh_gia === 'theo_ngay_dem') {
-    return (Number(lx.gia_ngay || 0) > 0) || (Number(lx.gia_dem || 0) > 0) || (Number(lx.gia_ngay_dem || 0) > 0)
-  }
-  return false
-}
-
 // ─── Nhóm loại xe theo nhóm (chỉ dùng cho danh sách đã lọc) ───
 function groupByNhom(loaiXeList) {
   const map = {}
@@ -62,10 +41,10 @@ function getQrUrl(ticket) {
   return null
 }
 
-// ─── Component input ảnh: chụp camera + chọn thư viện ───
+// ─── Component input ảnh ───
 function ImagePicker({ label, required, file, onFile }) {
   const internalRef = useRef(null)
-  const refCam = internalRef   // không cần refInput ở đây
+  const refCam = internalRef
   const refLib = useRef(null)
   const preview = useObjectURL(file)
 
@@ -148,7 +127,7 @@ function ImagePicker({ label, required, file, onFile }) {
 export default function DangKyVeThang() {
   const navigate = useNavigate()
   const [allLoaiXe, setAllLoaiXe] = useState([])            // toàn bộ loại xe (để tìm xe đạp)
-  const [groupedLoaiXe, setGroupedLoaiXe] = useState([])   // nhóm loại xe đã cấu hình giá
+  const [groupedLoaiXe, setGroupedLoaiXe] = useState([])   // nhóm loại xe có thể đăng ký vé tháng
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [ticket, setTicket] = useState(null)
@@ -167,11 +146,10 @@ export default function DangKyVeThang() {
     cho_phep_lay_ho: false,
   })
 
-  // Ref để lưu loại xe mặc định (ưu tiên) – dùng khi cần reset form
   const defaultLoaiXeRef = useRef('')
 
   useEffect(() => {
-    // Reset form về mặc định khi vào trang
+    // Reset form
     setForm({
       bien_so: '',
       id_loai_xe: '',
@@ -183,19 +161,33 @@ export default function DangKyVeThang() {
       cho_phep_lay_ho: false,
     })
 
-    // Load toàn bộ loại xe (cho logic xe đạp) và loại đã cấu hình (cho dropdown)
+    // Load dữ liệu: toàn bộ loại xe, loại đã cấu hình (không filter has_ve_thang), đồng giá nhóm
     Promise.all([
-      loaiXeApi.list(),                                                   // lấy toàn bộ loại xe (phục vụ logic xe đạp)
-      loaiXeApi.list({ da_cau_hinh: true, has_ve_thang: true })          // chỉ lấy loại đã cấu hình & có giá vé tháng
-    ]).then(([allData, configuredData]) => {
+      loaiXeApi.list(),
+      loaiXeApi.list({ da_cau_hinh: true }),          // lấy tất cả xe đã có giá (lượt/giờ/ngày)
+      loaiXeApi.listNhomGia().catch(() => [])         // thêm danh sách đồng giá nhóm
+    ]).then(([allData, configuredData, nhomGia]) => {
       setAllLoaiXe(allData)
-      const grouped = groupByNhom(configuredData)
+
+      // Tạo map nhom_xe_id → thông tin đồng giá
+      const nhomGiaMap = {}
+      nhomGia.forEach(ng => { nhomGiaMap[ng.nhom_xe_id] = ng })
+
+      // Lọc xe có vé tháng: riêng (gia_ve_thang > 0) hoặc nhóm có đồng giá vé tháng
+      const coVeThang = configuredData.filter(lx => {
+        if (Number(lx.gia_ve_thang || 0) > 0) return true
+        const ng = nhomGiaMap[lx.nhom_xe_id]
+        return ng && Number(ng.gia_ve_thang || 0) > 0
+      })
+
+      const grouped = groupByNhom(coVeThang)
       setGroupedLoaiXe(grouped)
 
-      if (configuredData.length > 0) {
-        const oto = configuredData.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('ôtô'))
-        const fallback = configuredData.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('oto'))
-        const defaultId = oto ? oto.id : (fallback ? fallback.id : configuredData[0].id)
+      if (coVeThang.length > 0) {
+        // Ưu tiên chọn ô tô, nếu không có thì lấy xe đầu tiên
+        const oto = coVeThang.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('ôtô'))
+        const fallback = coVeThang.find(lx => lx.ten.toLowerCase().replace(/\s+/g, '').includes('oto'))
+        const defaultId = oto ? oto.id : (fallback ? fallback.id : coVeThang[0].id)
         setForm(f => ({ ...f, id_loai_xe: defaultId }))
         defaultLoaiXeRef.current = defaultId
       } else {
@@ -220,7 +212,6 @@ export default function DangKyVeThang() {
     // Xử lý biển số
     let bienSoGui
     if (isBicycle) {
-      // Xe đạp: có thể trống hoặc tự sinh mã
       if (!form.bien_so.trim()) {
         bienSoGui = 'XD' + Date.now().toString().slice(-6)
       } else {
@@ -248,7 +239,6 @@ export default function DangKyVeThang() {
     setError(null)
 
     const fd = new FormData()
-    // Sử dụng biển số đã xử lý
     fd.append('bien_so', bienSoGui)
     fd.append('id_loai_xe', form.id_loai_xe)
     fd.append('ten_chu_xe', form.ten_chu_xe.trim())
@@ -278,10 +268,7 @@ export default function DangKyVeThang() {
 
   return (
     <PageLayout title="📝 Đăng ký vé tháng" backTo="/ve-thang">
-
       <form onSubmit={submit} noValidate>
-
-        {/* Thông tin xe */}
         <div className="card" style={{ marginBottom: '0.75rem' }}>
           <h5 style={sectionTitle}>Thông tin xe</h5>
           <Field label="Biển số" required>
@@ -308,7 +295,6 @@ export default function DangKyVeThang() {
           </Field>
         </div>
 
-        {/* Thông tin chủ xe */}
         <div className="card" style={{ marginBottom: '0.75rem' }}>
           <h5 style={sectionTitle}>Thông tin chủ xe</h5>
           <Field label="Tên chủ xe" required>
@@ -334,21 +320,10 @@ export default function DangKyVeThang() {
           </label>
         </div>
 
-        {/* Ảnh đính kèm */}
         <div className="card" style={{ marginBottom: '0.75rem' }}>
           <h5 style={sectionTitle}>Ảnh đính kèm</h5>
-          <ImagePicker
-            label="Ảnh biển số"
-            required
-            file={fileBienSo}
-            onFile={setFileBienSo}
-          />
-          <ImagePicker
-            label="Ảnh người dùng"
-            required
-            file={fileNguoiDung}
-            onFile={setFileNguoiDung}
-          />
+          <ImagePicker label="Ảnh biển số" required file={fileBienSo} onFile={setFileBienSo} />
+          <ImagePicker label="Ảnh người dùng" required file={fileNguoiDung} onFile={setFileNguoiDung} />
         </div>
 
         {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
@@ -357,7 +332,6 @@ export default function DangKyVeThang() {
         <button type="submit" className="btn btn-accent" disabled={loading} style={{ marginTop: '0.5rem' }}>
           {loading ? 'Đang xử lý...' : '✓ Đăng ký vé tháng'}
         </button>
-
       </form>
 
       {ticket && (
@@ -395,7 +369,6 @@ export default function DangKyVeThang() {
           </div>
         </Modal>
       )}
-
     </PageLayout>
   )
 }

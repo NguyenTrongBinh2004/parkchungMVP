@@ -248,7 +248,7 @@ async def dang_ky_ve_thang(
         raise
 
 
-# ── Gia hạn vé tháng ──────────────────────────────────────────
+# ── Gia hạn vé tháng (ĐÃ XÓA QUERY THỪA) ─────────────────────
 @router.post("/ve-thang/{id_ve}/gia-han/")
 async def gia_han_ve_thang(
     id_ve: int,
@@ -270,44 +270,13 @@ async def gia_han_ve_thang(
                 (id_ve,),
             )
             ve = cur.fetchone()
-
-        if not ve:
-            raise HTTPException(status_code=404, detail="Không tìm thấy vé tháng.")
-
-        ngay_het_han_cu  = ve["ngay_het_han"]
-        ngay_bat_dau     = ngay_het_han_cu if ngay_het_han_cu >= hom_nay else hom_nay
-        ngay_het_han_moi = ngay_bat_dau + timedelta(days=30)
-
-        # Dùng helper để lấy giá vé tháng mới nhất (ưu tiên giá riêng, rồi đồng nhóm)
-        with KetNoi.cursor(dictionary=True) as cur:
-            so_tien = lay_gia_ve_thang(ve, cur)  # ve chứa các cột của loai_xe (l.*)
-            # Cần commit sau khi lấy giá? không cần vì chỉ SELECT, nhưng phải đảm bảo cur tồn tại
-            # Để an toàn, ta dùng chính cursor của transaction chính, nhưng cần chú ý không đóng.
-            # Sẽ gọi helper ngay bên trong transaction chính.
-        # Lưu ý: đoạn trên đã dùng cur, ta sẽ chuyển vào trong with KetNoi... bên dưới để dùng chung cursor.
-
-        # Viết lại logic gia hạn với một cursor xuyên suốt
-        with KetNoi.cursor(dictionary=True) as cur:
-            # Lấy lại thông tin vé + loai_xe
-            cur.execute(
-                """
-                SELECT v.*, k.ten AS ten_chu_xe, k.email, k.sdt,
-                       l.*
-                  FROM ve_thang v
-                  JOIN khach_hang k ON v.id_khach_hang = k.id
-                  JOIN loai_xe l    ON v.id_loai_xe    = l.id
-                 WHERE v.id = %s
-                """,
-                (id_ve,),
-            )
-            ve = cur.fetchone()
             if not ve:
                 raise HTTPException(status_code=404, detail="Không tìm thấy vé tháng.")
 
             ngay_het_han_cu  = ve["ngay_het_han"]
             ngay_bat_dau     = ngay_het_han_cu if ngay_het_han_cu >= hom_nay else hom_nay
             ngay_het_han_moi = ngay_bat_dau + timedelta(days=30)
-            so_tien          = lay_gia_ve_thang(ve, cur)  # dùng chung cur của transaction
+            so_tien          = lay_gia_ve_thang(ve, cur)
 
             du_lieu_qr = {
                 "loai": "ve_thang", "id": id_ve,
@@ -330,6 +299,7 @@ async def gia_han_ve_thang(
             )
             KetNoi.commit()
 
+        # Gửi thông báo (dùng biến ve vẫn còn hiệu lực)
         if ve.get("email"):
             asyncio.create_task(
                 gui_email_qr(
