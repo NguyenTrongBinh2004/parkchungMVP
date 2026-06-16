@@ -145,26 +145,36 @@ function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
   return Object.values(map)
     .sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0))
     .map(group => {
-      const finalItems = [...group.items]
+      let finalItems = [...group.items]   // bắt đầu bằng các xe riêng lẻ có giá
       const nhomGia = nhomGiaMap[group.nhom_id]
+
       if (nhomGia) {
+        // Tìm xe đại diện: ưu tiên xe mặc định, không có giá riêng
         let xeDaiDien = allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default && !coGiaRieng(lx))
                      || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && !coGiaRieng(lx))
                      || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default)
                      || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id)
+
         if (xeDaiDien) {
+          // Thêm dòng đại diện vào đầu danh sách
           finalItems.unshift({
-            ...xeDaiDien, ...nhomGia,
+            ...xeDaiDien,
+            ...nhomGia,
             id: xeDaiDien.id,
             ten: group.ten_nhom,
             _la_dai_dien_dong_gia: true,
           })
+
+          // Loại bỏ xe gốc (đã dùng làm đại diện) khỏi danh sách riêng lẻ
+          finalItems = finalItems.filter((item, index) => index === 0 || item.id !== xeDaiDien.id)
         }
       }
+
       return { ...group, items: finalItems }
     })
     .filter(g => g.items.length > 0)
 }
+
 
 // ── useLoaiXeData — hook dùng chung, chỉ gọi API 1 lần ───────────
 function useLoaiXeData() {
@@ -192,10 +202,16 @@ function useLoaiXeData() {
 function pickDefaultLoaiXe(groupedLoaiXe) {
   const flatItems = groupedLoaiXe.flatMap(g => g.items)
   if (flatItems.length === 0) return ''
-  const oto = flatItems.find(lx => lx.ten?.toLowerCase().replace(/\s+/g, '').includes('ôtô'))
-  const fallback = flatItems.find(lx => lx.ten?.toLowerCase().replace(/\s+/g, '').includes('oto'))
-  return oto ? oto.id : (fallback ? fallback.id : flatItems[0].id)
+
+  // Chỉ chọn xe riêng lẻ (không phải đại diện đồng giá) nếu có
+  const riengLe = flatItems.filter(lx => !lx._la_dai_dien_dong_gia)
+  const pool = riengLe.length > 0 ? riengLe : flatItems
+
+  const oto = pool.find(lx => lx.ten?.toLowerCase().replace(/\s+/g, '').includes('ôtô'))
+  const fallback = pool.find(lx => lx.ten?.toLowerCase().replace(/\s+/g, '').includes('oto'))
+  return oto ? oto.id : (fallback ? fallback.id : pool[0].id)
 }
+
 
 // ── SmartPanel ─────────────────────────────────────────────────────
 function SmartPanel({ loaiXeData }) {
