@@ -67,7 +67,7 @@ function ImagePicker({ label, required, file, onFile, refInput }) {
   )
 }
 
-// ── VeThangCard (fallback khi không có ảnh hồ sơ) ──────────────────
+// ── VeThangCard ────────────────────────────────────────────────────
 function VeThangCard({ result, onXacNhan, loading }) {
   const [fileBienSo, setFileBienSo] = useState(null)
   const [fileNguoiLai, setFileNguoiLai] = useState(null)
@@ -111,30 +111,7 @@ function VeThangCard({ result, onXacNhan, loading }) {
   )
 }
 
-// ── VeThangInfo (dùng chung cho cả 2 panel) ────────────────────────
-function VeThangInfo({ result, onXacNhanAuto, loading }) {
-  return (
-    <div className="card" style={{ borderColor: 'var(--info)', marginBottom: '0.75rem' }}>
-      <h5 style={{ color: 'var(--info)', marginBottom: '0.75rem' }}>🎫 Vé tháng</h5>
-      <p><strong>Biển số:</strong> {result.bien_so}</p>
-      <p><strong>Chủ xe:</strong> {result.ten_chu_xe}</p>
-      <p><strong>Hết hạn:</strong> {result.ngay_het_han}</p>
-      {result.so_ngay_con <= 7 && <p style={{ color: 'var(--warning)' }}>⚠️ Vé tháng còn {result.so_ngay_con} ngày</p>}
-      {result.ghi_chu && <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>📝 {result.ghi_chu}</p>}
-      <div style={{ margin: '10px 0', padding: '10px', background: 'rgba(13,202,240,0.07)', borderRadius: 8, border: '1px solid rgba(13,202,240,0.2)' }}>
-        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>📋 Ảnh hồ sơ đối chiếu</p>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-          {result.anh_bien_so && <img src={result.anh_bien_so} alt="Biển số hồ sơ" style={{ width: 130, height: 80, objectFit: 'cover', borderRadius: 6, border: '2px solid var(--border)' }} />}
-          {result.anh_nguoi_dung && <img src={result.anh_nguoi_dung} alt="Người dùng hồ sơ" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: '50%', border: '2px solid var(--border)' }} />}
-        </div>
-      </div>
-      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>✅ Hệ thống sẽ tự động dùng ảnh hồ sơ đã lưu.</p>
-      <button className="btn btn-accent" onClick={onXacNhanAuto} disabled={loading} style={{ marginTop: 8 }}>✅ Xác nhận xe vào (Vé tháng)</button>
-    </div>
-  )
-}
-
-// ── groupByNhomWithGia (cải tiến: tránh trùng ID) ─────────────────
+// ── groupByNhomWithGia ─────────────────────────────────────────────
 function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
   const nhomGiaMap = {}
   nhomGiaList.forEach(ng => { nhomGiaMap[ng.nhom_xe_id] = ng })
@@ -168,45 +145,33 @@ function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
   return Object.values(map)
     .sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0))
     .map(group => {
+      const finalItems = [...group.items]
       const nhomGia = nhomGiaMap[group.nhom_id]
-      let finalItems = [...group.items]   // danh sách xe riêng lẻ có giá
-
       if (nhomGia) {
-        // Tìm xe đại diện (ưu tiên xe không có giá riêng, tránh trùng với xe riêng lẻ)
         let xeDaiDien = allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default && !coGiaRieng(lx))
                      || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && !coGiaRieng(lx))
                      || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default)
                      || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id)
-
         if (xeDaiDien) {
-          // Thêm dòng đại diện vào đầu
           finalItems.unshift({
-            ...xeDaiDien,
-            ...nhomGia,
+            ...xeDaiDien, ...nhomGia,
             id: xeDaiDien.id,
             ten: group.ten_nhom,
             _la_dai_dien_dong_gia: true,
           })
-
-          // Loại bỏ xe gốc (nếu nó đã có trong danh sách riêng lẻ) để tránh trùng ID
-          finalItems = finalItems.filter((item, index, arr) =>
-            index === 0 || item.id !== xeDaiDien.id
-          )
         }
       }
-
       return { ...group, items: finalItems }
     })
     .filter(g => g.items.length > 0)
 }
 
-// ── useLoaiXeData (hook dùng chung, có error handling) ────────────
+// ── useLoaiXeData — hook dùng chung, chỉ gọi API 1 lần ───────────
 function useLoaiXeData() {
   const [allLoaiXe, setAllLoaiXe] = useState([])
   const [configuredLoaiXe, setConfiguredLoaiXe] = useState([])
   const [groupedLoaiXe, setGroupedLoaiXe] = useState([])
   const [dataLoading, setDataLoading] = useState(true)
-  const [dataError, setDataError] = useState(null)
 
   useEffect(() => {
     Promise.all([
@@ -217,33 +182,24 @@ function useLoaiXeData() {
       setAllLoaiXe(allData)
       setConfiguredLoaiXe(configuredData)
       setGroupedLoaiXe(groupByNhomWithGia(configuredData, nhomGia, allData))
-      setDataError(null)
-    }).catch(err => {
-      console.error('Lỗi load dữ liệu loại xe:', err)
-      setDataError(err.message)
-    }).finally(() => setDataLoading(false))
+    }).catch(() => {}).finally(() => setDataLoading(false))
   }, [])
 
-  return { allLoaiXe, configuredLoaiXe, groupedLoaiXe, dataLoading, dataError }
+  return { allLoaiXe, configuredLoaiXe, groupedLoaiXe, dataLoading }
 }
 
-// ── Helper: chọn loại xe mặc định, ưu tiên xe riêng lẻ ────────────
+// ── Helper: chọn loại xe mặc định từ groupedLoaiXe ────────────────
 function pickDefaultLoaiXe(groupedLoaiXe) {
   const flatItems = groupedLoaiXe.flatMap(g => g.items)
   if (flatItems.length === 0) return ''
-
-  // Ưu tiên xe riêng lẻ (không phải đại diện đồng giá)
-  const riengLe = flatItems.filter(lx => !lx._la_dai_dien_dong_gia)
-  const pool = riengLe.length > 0 ? riengLe : flatItems
-
-  const oto = pool.find(lx => lx.ten?.toLowerCase().replace(/\s+/g, '').includes('ôtô'))
-  const fallback = pool.find(lx => lx.ten?.toLowerCase().replace(/\s+/g, '').includes('oto'))
-  return oto ? oto.id : (fallback ? fallback.id : pool[0].id)
+  const oto = flatItems.find(lx => lx.ten?.toLowerCase().replace(/\s+/g, '').includes('ôtô'))
+  const fallback = flatItems.find(lx => lx.ten?.toLowerCase().replace(/\s+/g, '').includes('oto'))
+  return oto ? oto.id : (fallback ? fallback.id : flatItems[0].id)
 }
 
 // ── SmartPanel ─────────────────────────────────────────────────────
 function SmartPanel({ loaiXeData }) {
-  const { allLoaiXe, configuredLoaiXe, groupedLoaiXe, dataLoading, dataError } = loaiXeData
+  const { allLoaiXe, configuredLoaiXe, groupedLoaiXe, dataLoading } = loaiXeData
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -373,7 +329,28 @@ function SmartPanel({ loaiXeData }) {
   }
 
   const hasProfileImages = result && (result.anh_bien_so || result.anh_nguoi_dung) && !autoModeFailed
-  const isVeThang = result?.loai === 've_thang_qr' || result?.loai === 've_thang'
+  const isVeThangQR = result?.loai === 've_thang_qr'
+  const isVeThang = result?.loai === 've_thang'
+
+  const VeThangInfo = ({ r }) => (
+    <div className="card" style={{ borderColor: 'var(--info)', marginBottom: '0.75rem' }} key={r.ma_qr || 'auto'}>
+      <h5 style={{ color: 'var(--info)', marginBottom: '0.75rem' }}>🎫 Vé tháng</h5>
+      <p><strong>Biển số:</strong> {r.bien_so}</p>
+      <p><strong>Chủ xe:</strong> {r.ten_chu_xe}</p>
+      <p><strong>Hết hạn:</strong> {r.ngay_het_han}</p>
+      {r.so_ngay_con <= 7 && <p style={{ color: 'var(--warning)' }}>⚠️ Vé tháng còn {r.so_ngay_con} ngày</p>}
+      {r.ghi_chu && <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>📝 {r.ghi_chu}</p>}
+      <div style={{ margin: '10px 0', padding: '10px', background: 'rgba(13,202,240,0.07)', borderRadius: 8, border: '1px solid rgba(13,202,240,0.2)' }}>
+        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>📋 Ảnh hồ sơ đối chiếu</p>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+          {r.anh_bien_so && <img src={r.anh_bien_so} alt="Biển số hồ sơ" style={{ width: 130, height: 80, objectFit: 'cover', borderRadius: 6, border: '2px solid var(--border)' }} />}
+          {r.anh_nguoi_dung && <img src={r.anh_nguoi_dung} alt="Người dùng hồ sơ" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: '50%', border: '2px solid var(--border)' }} />}
+        </div>
+      </div>
+      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>✅ Hệ thống sẽ tự động dùng ảnh hồ sơ đã lưu.</p>
+      <button className="btn btn-accent" onClick={xacNhanVeThangAuto} disabled={loading} style={{ marginTop: 8 }}>✅ Xác nhận xe vào (Vé tháng)</button>
+    </div>
+  )
 
   return (
     <div>
@@ -385,13 +362,12 @@ function SmartPanel({ loaiXeData }) {
       </div>
 
       {(loading || dataLoading) && <Spinner />}
-      {dataError && <Alert type="danger">Lỗi tải dữ liệu: {dataError}</Alert>}
       {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
       {success && <Alert type="success">✅ Xe vào thành công!</Alert>}
 
-      {isVeThang && (
+      {(isVeThangQR || isVeThang) && (
         hasProfileImages
-          ? <VeThangInfo result={result} onXacNhanAuto={xacNhanVeThangAuto} loading={loading} />
+          ? <VeThangInfo r={result} />
           : <VeThangCard key={result.ma_qr || 'manual'} result={result} onXacNhan={xacNhanVeThangManual} loading={loading} />
       )}
 
@@ -454,7 +430,7 @@ function SmartPanel({ loaiXeData }) {
 
 // ── BienSoPanel ────────────────────────────────────────────────────
 function BienSoPanel({ loaiXeData }) {
-  const { allLoaiXe, configuredLoaiXe, groupedLoaiXe, dataLoading, dataError } = loaiXeData
+  const { allLoaiXe, configuredLoaiXe, groupedLoaiXe, dataLoading } = loaiXeData
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -572,13 +548,30 @@ function BienSoPanel({ loaiXeData }) {
       </div>
 
       {(loading || dataLoading) && <Spinner />}
-      {dataError && <Alert type="danger">Lỗi tải dữ liệu: {dataError}</Alert>}
       {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
 
       {result?.loai === 've_thang' && (
-        hasProfileImages
-          ? <VeThangInfo result={result} onXacNhanAuto={xacNhanVeThangAuto} loading={loading} />
-          : <VeThangCard key={result.ma_qr || 'manual'} result={result} onXacNhan={xacNhanVeThangManual} loading={loading} />
+        hasProfileImages ? (
+          <div className="card" style={{ borderColor: 'var(--info)', marginTop: '0.75rem' }} key={result.ma_qr || 'auto'}>
+            <h5 style={{ color: 'var(--info)', marginBottom: '0.75rem' }}>🎫 Vé tháng</h5>
+            <p><strong>Biển số:</strong> {result.bien_so}</p>
+            <p><strong>Chủ xe:</strong> {result.ten_chu_xe}</p>
+            <p><strong>Hết hạn:</strong> {result.ngay_het_han}</p>
+            {result.so_ngay_con <= 7 && <p style={{ color: 'var(--warning)' }}>⚠️ Vé tháng còn {result.so_ngay_con} ngày</p>}
+            {result.ghi_chu && <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>📝 {result.ghi_chu}</p>}
+            <div style={{ margin: '10px 0', padding: '10px', background: 'rgba(13,202,240,0.07)', borderRadius: 8, border: '1px solid rgba(13,202,240,0.2)' }}>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>📋 Ảnh hồ sơ đối chiếu</p>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+                {result.anh_bien_so && <img src={result.anh_bien_so} alt="Biển số hồ sơ" style={{ width: 130, height: 80, objectFit: 'cover', borderRadius: 6, border: '2px solid var(--border)' }} />}
+                {result.anh_nguoi_dung && <img src={result.anh_nguoi_dung} alt="Người dùng hồ sơ" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: '50%', border: '2px solid var(--border)' }} />}
+              </div>
+            </div>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>✅ Hệ thống sẽ tự động dùng ảnh hồ sơ đã lưu.</p>
+            <button className="btn btn-accent" onClick={xacNhanVeThangAuto} disabled={loading} style={{ marginTop: 8 }}>✅ Xác nhận xe vào (Vé tháng)</button>
+          </div>
+        ) : (
+          <VeThangCard key={result.ma_qr || 'manual'} result={result} onXacNhan={xacNhanVeThangManual} loading={loading} />
+        )
       )}
 
       {showFormThuong && (
