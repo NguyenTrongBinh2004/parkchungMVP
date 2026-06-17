@@ -111,7 +111,7 @@ function VeThangCard({ result, onXacNhan, loading }) {
   )
 }
 
-// ── groupByNhomWithGia (phiên bản cuối cùng, chính xác) ─────────
+// ── groupByNhomWithGia ─────────────────────────────────────────────
 function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
   const nhomGiaMap = {}
   nhomGiaList.forEach(ng => { nhomGiaMap[ng.nhom_xe_id] = ng })
@@ -152,19 +152,23 @@ function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
         return { ...group, items: danhSachXeRieng }
       }
 
-      // Kiểm tra xem trong tất cả xe của nhóm (không chỉ xe đã cấu hình) có xe nào chưa có giá riêng không
+      // Kiểm tra xem trong tất cả xe đang hoạt động của nhóm, có xe nào chưa có giá riêng không
       const coXeChuaCoGiaRieng = allLoaiXe.some(lx => lx.nhom_xe_id === group.nhom_id && !coGiaRieng(lx))
 
       if (coXeChuaCoGiaRieng) {
+        // Tìm xe đại diện: ưu tiên xe mặc định chưa có giá riêng
         let xeDaiDien = allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default && !coGiaRieng(lx))
                      || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && !coGiaRieng(lx))
 
         if (xeDaiDien) {
+          // Loại bỏ xe đại diện khỏi danh sách riêng lẻ (tránh trùng ID)
           danhSachXeRieng = danhSachXeRieng.filter(lx => lx.id !== xeDaiDien.id)
+
+          // Thêm dòng đồng giá vào đầu danh sách
           danhSachXeRieng.unshift({
             ...xeDaiDien,
             ...nhomGia,
-            id: xeDaiDien.id,
+            id: xeDaiDien.id,            // dùng ID của xe đại diện (chưa có giá riêng)
             ten: group.ten_nhom,
             _la_dai_dien_dong_gia: true,
           })
@@ -174,20 +178,6 @@ function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
       return { ...group, items: danhSachXeRieng }
     })
     .filter(g => g.items.length > 0)
-}
-
-// ── Helper: chọn loại xe mặc định, ưu tiên xe riêng lẻ ────────────
-function pickDefaultLoaiXe(groupedLoaiXe) {
-  const flatItems = groupedLoaiXe.flatMap(g => g.items)
-  if (flatItems.length === 0) return ''
-
-  // Chỉ chọn xe riêng lẻ (không phải đại diện đồng giá) nếu có
-  const riengLe = flatItems.filter(lx => !lx._la_dai_dien_dong_gia)
-  const pool = riengLe.length > 0 ? riengLe : flatItems
-
-  const oto = pool.find(lx => lx.ten?.toLowerCase().replace(/\s+/g, '').includes('ôtô'))
-  const fallback = pool.find(lx => lx.ten?.toLowerCase().replace(/\s+/g, '').includes('oto'))
-  return oto ? oto.id : (fallback ? fallback.id : pool[0].id)
 }
 
 // ── useLoaiXeData — hook dùng chung, chỉ gọi API 1 lần ───────────
@@ -210,6 +200,15 @@ function useLoaiXeData() {
   }, [])
 
   return { allLoaiXe, configuredLoaiXe, groupedLoaiXe, dataLoading }
+}
+
+// ── Helper: chọn loại xe mặc định từ groupedLoaiXe ────────────────
+function pickDefaultLoaiXe(groupedLoaiXe) {
+  const flatItems = groupedLoaiXe.flatMap(g => g.items)
+  if (flatItems.length === 0) return ''
+  const oto = flatItems.find(lx => lx.ten?.toLowerCase().replace(/\s+/g, '').includes('ôtô'))
+  const fallback = flatItems.find(lx => lx.ten?.toLowerCase().replace(/\s+/g, '').includes('oto'))
+  return oto ? oto.id : (fallback ? fallback.id : flatItems[0].id)
 }
 
 // ── SmartPanel ─────────────────────────────────────────────────────
