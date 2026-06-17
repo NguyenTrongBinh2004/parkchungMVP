@@ -145,37 +145,23 @@ function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
   return Object.values(map)
     .sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0))
     .map(group => {
-      let riengLe = [...group.items]   // danh sách các xe riêng lẻ (đã có giá)
+      const finalItems = [...group.items]
       const nhomGia = nhomGiaMap[group.nhom_id]
-
-      if (!nhomGia) {
-        return { ...group, items: riengLe }
-      }
-
-      // Kiểm tra trong nhóm có xe nào chưa có giá riêng không
-      const coXeChuaCoGia = allLoaiXe.some(lx => lx.nhom_xe_id === group.nhom_id && !coGiaRieng(lx))
-
-      if (coXeChuaCoGia) {
-        // Tìm xe đại diện: ưu tiên xe mặc định, chưa có giá riêng
+      if (nhomGia) {
         let xeDaiDien = allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default && !coGiaRieng(lx))
                      || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && !coGiaRieng(lx))
-
+                     || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default)
+                     || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id)
         if (xeDaiDien) {
-          // Loại bỏ xe đại diện khỏi danh sách riêng lẻ (tránh trùng value)
-          riengLe = riengLe.filter(lx => lx.id !== xeDaiDien.id)
-
-          // Thêm dòng đồng giá vào đầu
-          riengLe.unshift({
-            ...xeDaiDien,
-            ...nhomGia,
+          finalItems.unshift({
+            ...xeDaiDien, ...nhomGia,
             id: xeDaiDien.id,
             ten: group.ten_nhom,
             _la_dai_dien_dong_gia: true,
           })
         }
       }
-
-      return { ...group, items: riengLe }
+      return { ...group, items: finalItems }
     })
     .filter(g => g.items.length > 0)
 }
