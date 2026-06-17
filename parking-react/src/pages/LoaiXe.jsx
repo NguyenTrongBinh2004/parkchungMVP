@@ -7,7 +7,7 @@ const NHOM_ICON = { 1: '🛵', 2: '🚗', 3: '🚛', 4: '🚲' }
 
 // ─── Danh sách tên gợi ý cố định cho Chọn nhanh ─────────────────
 const TEN_MAU = {
-  1: ['Xe máy phổ thông (Số, ga)', 'Xe mô tô PKL / Xe tay côn', 'Xe 3 gác'],
+  1: ['Xe máy phổ thông (Số, ga)', 'Xe mô tô PKL / Xe tay côn',],
   2: ['Ô tô 4 - 7 chỗ', 'Ô tô 9 - 16 chỗ', 'Xe bán tải (Pick-up)'],
   3: ['Xe tải / Xe khách lớn (>16 chỗ)'],
   4: ['Xe đạp / Xe đạp điện'],
