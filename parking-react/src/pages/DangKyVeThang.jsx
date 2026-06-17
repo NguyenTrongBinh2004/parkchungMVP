@@ -173,9 +173,14 @@ export default function DangKyVeThang() {
       const nhomGiaMap = {}
       nhomGia.forEach(ng => { nhomGiaMap[ng.nhom_xe_id] = ng })
 
-      // Lọc xe có vé tháng: riêng (gia_ve_thang > 0) hoặc nhóm có đồng giá vé tháng
+      // Lọc xe có vé tháng: riêng (gia_ve_thang > 0) hoặc nhóm có đồng giá vé tháng,
+      // đồng thời loại bỏ các xe mồi (tên chứa "(đồng giá)")
       const coVeThang = configuredData.filter(lx => {
+        // Bỏ qua xe mồi
+        if (lx.ten && lx.ten.includes('(đồng giá)')) return false
+        // Giữ lại nếu có giá vé tháng riêng
         if (Number(lx.gia_ve_thang || 0) > 0) return true
+        // Hoặc nhóm có đồng giá vé tháng
         const ng = nhomGiaMap[lx.nhom_xe_id]
         return ng && Number(ng.gia_ve_thang || 0) > 0
       })
