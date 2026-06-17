@@ -8,7 +8,7 @@ from services.ocr import nhan_dien_bien_so
 from services.qr_service import tao_ma_qr, doc_ma_qr
 from services.email_service import gui_email_qr
 from services.sms_service import gui_thong_bao_ve_thang
-from services.billing_service import BillingService
+from services.billing_service import BillingService, _co_gia_rieng
 from routers import loai_xe, xe_ra, thanh_toan, xe_vao,ve_thang
 from utils import bay_gio_vn, build_url, chuan_hoa_bien_so, tinh_trang_thai, luu_anh, is_valid_bien_so
 from dotenv import load_dotenv
@@ -84,8 +84,7 @@ def xe_trong_bai(KetNoi=Depends(lay_ket_noi_CSDL)):
             SELECT p.id, p.ma_phien, p.bien_so, p.gio_vao, p.id_ve_thang,
                    p.duong_dan_anh_bien_so, p.duong_dan_anh_nguoi_lai,
                    k.ten AS ten_chu_xe,
-                   l.ten AS ten_loai_xe, l.kieu_tinh_gia, l.gia_luot,
-                   l.gia_ngay, l.gia_dem, l.gia_ngay_dem, l.cau_hinh_theo_gio
+                   l.*
               FROM phien_gui_xe p
               JOIN loai_xe l ON p.id_loai_xe = l.id
               LEFT JOIN khach_hang k ON p.id_khach_hang = k.id
@@ -95,28 +94,36 @@ def xe_trong_bai(KetNoi=Depends(lay_ket_noi_CSDL)):
         )
         danh_sach = cur.fetchall()
 
-    return [
-        {
+    ket_qua = []
+    for xe in danh_sach:
+        if xe.get("id_ve_thang"):
+            so_tien = 0
+        else:
+            # Nếu xe không có giá riêng, thử lấy đồng giá từ nhom_xe_gia
+            if not _co_gia_rieng(xe):
+                with KetNoi.cursor(dictionary=True) as cur2:
+                    cur2.execute(
+                        "SELECT * FROM nhom_xe_gia WHERE nhom_xe_id = %s",
+                        (xe["nhom_xe_id"],)
+                    )
+                    nhom_gia = cur2.fetchone()
+            else:
+                nhom_gia = None
+            so_tien = BillingService.tinh_tien_chi_tiet(
+                xe, xe["gio_vao"], bay_gio, nhom_gia=nhom_gia
+            )
+
+        ket_qua.append({
             "id": xe["id"],
             "ma_phien": xe["ma_phien"],
             "bien_so": xe["bien_so"],
-            "ten_loai_xe": xe["ten_loai_xe"],
+            "ten_loai_xe": xe["ten"],          # lấy từ l.*
             "ten_chu_xe": xe.get("ten_chu_xe"),
             "gio_vao": str(xe["gio_vao"]),
-            "so_tien_tam_tinh": (
-                0
-                if xe.get("id_ve_thang")
-                else BillingService.tinh_tien_chi_tiet(xe, xe["gio_vao"], bay_gio)
-            ),
+            "so_tien_tam_tinh": so_tien,
             "la_xe_ve_thang": bool(xe.get("id_ve_thang")),
             "anh_bien_so": build_url(xe.get("duong_dan_anh_bien_so")),
             "anh_nguoi_lai": build_url(xe.get("duong_dan_anh_nguoi_lai")),
-        }
-        for xe in danh_sach
-    ]
-@app.get("/{full_path:path}")
-async def serve_spa(full_path: str):
-    file_path = os.path.join("frontend", full_path)
-    if full_path and os.path.isfile(file_path):
-        return FileResponse(file_path)
-    return FileResponse(os.path.join("frontend", "index.html"))
+        })
+
+    return ket_qua
