@@ -96,28 +96,58 @@ def xe_trong_bai(KetNoi=Depends(lay_ket_noi_CSDL)):
 
     ket_qua = []
     for xe in danh_sach:
-        if xe.get("id_ve_thang"):
-            so_tien = 0
-        else:
-            # Nếu xe không có giá riêng, thử lấy đồng giá từ nhom_xe_gia
-            if not _co_gia_rieng(xe):
-                with KetNoi.cursor(dictionary=True) as cur2:
-                    cur2.execute(
-                        "SELECT * FROM nhom_xe_gia WHERE nhom_xe_id = %s",
-                        (xe["nhom_xe_id"],)
-                    )
-                    nhom_gia = cur2.fetchone()
+        try:
+            if xe.get("id_ve_thang"):
+                so_tien = 0
             else:
+                # Kiểm tra xe có giá riêng không (tự kiểm tra, không phụ thuộc import _co_gia_rieng)
+                co_gia_rieng = False
+                if xe.get("kieu_tinh_gia") == "theo_luot":
+                    if (xe.get("gia_luot") or 0) > 0:
+                        co_gia_rieng = True
+                elif xe.get("kieu_tinh_gia") == "theo_gio":
+                    cfg = xe.get("cau_hinh_theo_gio")
+                    if cfg:
+                        if isinstance(cfg, str):
+                            try:
+                                cfg = json.loads(cfg)
+                            except:
+                                cfg = []
+                        if isinstance(cfg, list) and len(cfg) > 0:
+                            for b in cfg:
+                                if (b.get("gia") or 0) > 0 or (b.get("moi_gio_tiep") or 0) > 0:
+                                    co_gia_rieng = True
+                                    break
+                elif xe.get("kieu_tinh_gia") == "theo_ngay_dem":
+                    if any([
+                        (xe.get("gia_ngay") or 0) > 0,
+                        (xe.get("gia_dem") or 0) > 0,
+                        (xe.get("gia_ngay_dem") or 0) > 0,
+                    ]):
+                        co_gia_rieng = True
+
                 nhom_gia = None
-            so_tien = BillingService.tinh_tien_chi_tiet(
-                xe, xe["gio_vao"], bay_gio, nhom_gia=nhom_gia
-            )
+                if not co_gia_rieng:
+                    with KetNoi.cursor(dictionary=True) as cur2:
+                        cur2.execute(
+                            "SELECT * FROM nhom_xe_gia WHERE nhom_xe_id = %s",
+                            (xe["nhom_xe_id"],)
+                        )
+                        nhom_gia = cur2.fetchone()
+
+                so_tien = BillingService.tinh_tien_chi_tiet(
+                    xe, xe["gio_vao"], bay_gio, nhom_gia=nhom_gia
+                )
+        except Exception as e:
+            # Nếu có lỗi bất ngờ, vẫn trả về so_tien = 0 để không làm vỡ cả danh sách
+            so_tien = 0
+            print(f"Lỗi tính tiền xe id={xe.get('id')}: {e}")
 
         ket_qua.append({
             "id": xe["id"],
             "ma_phien": xe["ma_phien"],
             "bien_so": xe["bien_so"],
-            "ten_loai_xe": xe["ten"],          # lấy từ l.*
+            "ten_loai_xe": xe.get("ten", ""),
             "ten_chu_xe": xe.get("ten_chu_xe"),
             "gio_vao": str(xe["gio_vao"]),
             "so_tien_tam_tinh": so_tien,
