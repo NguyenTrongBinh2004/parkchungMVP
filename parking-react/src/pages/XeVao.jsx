@@ -145,27 +145,41 @@ function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
   return Object.values(map)
     .sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0))
     .map(group => {
-      const finalItems = [...group.items]
       const nhomGia = nhomGiaMap[group.nhom_id]
-      if (nhomGia) {
+      let riengLe = [...group.items]   // danh sách xe riêng lẻ có giá
+
+      if (!nhomGia) {
+        return { ...group, items: riengLe }
+      }
+
+      // Kiểm tra xem trong nhóm còn xe nào CHƯA có giá riêng không
+      const coXeChuaCoGia = allLoaiXe.some(lx => lx.nhom_xe_id === group.nhom_id && !coGiaRieng(lx))
+
+      // Chỉ thêm dòng đồng giá nếu còn xe chưa có giá riêng
+      if (coXeChuaCoGia) {
+        // Tìm xe đại diện ưu tiên: mặc định & chưa có giá riêng
         let xeDaiDien = allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default && !coGiaRieng(lx))
                      || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && !coGiaRieng(lx))
-                     || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default)
-                     || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id)
+
         if (xeDaiDien) {
-          finalItems.unshift({
-            ...xeDaiDien, ...nhomGia,
+          // Loại bỏ xe đại diện khỏi danh sách riêng lẻ (tránh trùng value)
+          riengLe = riengLe.filter(lx => lx.id !== xeDaiDien.id)
+
+          // Thêm dòng đồng giá vào đầu
+          riengLe.unshift({
+            ...xeDaiDien,
+            ...nhomGia,
             id: xeDaiDien.id,
             ten: group.ten_nhom,
             _la_dai_dien_dong_gia: true,
           })
         }
       }
-      return { ...group, items: finalItems }
+
+      return { ...group, items: riengLe }
     })
     .filter(g => g.items.length > 0)
 }
-
 // ── useLoaiXeData — hook dùng chung, chỉ gọi API 1 lần ───────────
 function useLoaiXeData() {
   const [allLoaiXe, setAllLoaiXe] = useState([])
