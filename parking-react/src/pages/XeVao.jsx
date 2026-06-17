@@ -113,9 +113,11 @@ function VeThangCard({ result, onXacNhan, loading }) {
 
 // ── groupByNhomWithGia ─────────────────────────────────────────────
 function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
+  // Tạo bảng tra nhanh: nhom_xe_id -> thông tin đồng giá
   const nhomGiaMap = {}
   nhomGiaList.forEach(ng => { nhomGiaMap[ng.nhom_xe_id] = ng })
 
+  // Hàm kiểm tra một xe có giá riêng hay không
   const coGiaRieng = (lx) => {
     if (lx.kieu_tinh_gia === 'theo_luot') return Number(lx.gia_luot || 0) > 0
     if (lx.kieu_tinh_gia === 'theo_gio') {
@@ -128,6 +130,7 @@ function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
     return false
   }
 
+  // Gom tất cả các xe đã có giá riêng vào đúng nhóm của chúng
   const map = {}
   configuredData.forEach(lx => {
     if (!map[lx.nhom_xe_id]) {
@@ -136,57 +139,54 @@ function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
     map[lx.nhom_xe_id].items.push(lx)
   })
 
+  // Thêm các nhóm có đồng giá nhưng chưa có xe riêng lẻ nào vào danh sách (để có thể hiển thị dòng đồng giá)
   nhomGiaList.forEach(ng => {
     if (!map[ng.nhom_xe_id]) {
       map[ng.nhom_xe_id] = { nhom_id: ng.nhom_xe_id, ten_nhom: ng.ten_nhom || '', thu_tu: 0, items: [] }
     }
   })
 
+  // Xử lý từng nhóm để tạo danh sách option cuối cùng
   return Object.values(map)
     .sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0))
     .map(group => {
-      let finalItems = [...group.items]   // bắt đầu bằng các xe riêng lẻ có giá
+      let danhSachXeRieng = [...group.items]  // danh sách các xe đã có giá riêng
       const nhomGia = nhomGiaMap[group.nhom_id]
 
-      if (nhomGia) {
-        // Tìm xe đại diện: ưu tiên xe mặc định, không có giá riêng
-        let xeDaiDien = allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default && !coGiaRieng(lx))
-                     || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && !coGiaRieng(lx))
-                     || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default)
-                     || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id)
-
-        if (xeDaiDien) {
-          // Thêm dòng đại diện vào đầu danh sách
-          finalItems.unshift({
-            ...xeDaiDien,
-            ...nhomGia,
-            id: xeDaiDien.id,
-            ten: group.ten_nhom,
-            _la_dai_dien_dong_gia: true,
-          })
-
-          // Loại bỏ xe gốc (đã dùng làm đại diện) khỏi danh sách riêng lẻ
-          finalItems = finalItems.filter((item, index) => index === 0 || item.id !== xeDaiDien.id)
-        }
+      // Nếu nhóm không có đồng giá, trả về luôn danh sách xe riêng
+      if (!nhomGia) {
+        return { ...group, items: danhSachXeRieng }
       }
 
-      return { ...group, items: finalItems }
+      // Kiểm tra xem trong toàn bộ xe của nhóm (không chỉ xe đã cấu hình) có xe nào chưa có giá riêng không
+      const coXeChuaCoGiaRieng = allLoaiXe.some(lx => lx.nhom_xe_id === group.nhom_id && !coGiaRieng(lx))
+
+      // Chỉ thêm dòng đồng giá nếu thực sự còn xe "mồ côi" chưa có giá riêng
+      if (coXeChuaCoGiaRieng) {
+        // Ưu tiên chọn một xe chưa có giá riêng làm "đại diện" để lấy ID
+        let xeDaiDien = allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default && !coGiaRieng(lx))
+                     || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && !coGiaRieng(lx))
+
+        // Nếu tìm thấy xe đại diện, thêm dòng đồng giá
+        if (xeDaiDien) {
+          // Loại bỏ xe đại diện khỏi danh sách riêng lẻ (nếu nó vô tình có ở đó) để tránh trùng ID
+          danhSachXeRieng = danhSachXeRieng.filter(lx => lx.id !== xeDaiDien.id)
+
+          // Thêm dòng đồng giá vào đầu danh sách
+          danhSachXeRieng.unshift({
+            ...xeDaiDien,       // giữ lại các thông tin như màu sắc...
+            ...nhomGia,         // ghi đè giá bằng giá đồng
+            id: xeDaiDien.id,   // sử dụng ID của xe đại diện (xe này không có giá riêng, backend sẽ fallback về giá đồng)
+            ten: group.ten_nhom,
+            _la_dai_dien_dong_gia: true,  // cờ để giao diện hiển thị icon ⚖️
+          })
+        }
+      }
+      // Nếu coXeChuaCoGiaRieng là false, nghĩa là mọi xe đều đã có giá riêng -> không thêm dòng đồng giá
+
+      return { ...group, items: danhSachXeRieng }
     })
-    .filter(g => g.items.length > 0)
-}
-
-// ── Helper: chọn loại xe mặc định, ưu tiên xe riêng lẻ ────────────
-function pickDefaultLoaiXe(groupedLoaiXe) {
-  const flatItems = groupedLoaiXe.flatMap(g => g.items)
-  if (flatItems.length === 0) return ''
-
-  // Chỉ chọn xe riêng lẻ (không phải đại diện đồng giá) nếu có
-  const riengLe = flatItems.filter(lx => !lx._la_dai_dien_dong_gia)
-  const pool = riengLe.length > 0 ? riengLe : flatItems
-
-  const oto = pool.find(lx => lx.ten?.toLowerCase().replace(/\s+/g, '').includes('ôtô'))
-  const fallback = pool.find(lx => lx.ten?.toLowerCase().replace(/\s+/g, '').includes('oto'))
-  return oto ? oto.id : (fallback ? fallback.id : pool[0].id)
+    .filter(g => g.items.length > 0) // ẩn những nhóm không có lựa chọn nào
 }
 
 // ── Helper: chọn loại xe mặc định, ưu tiên xe riêng lẻ ────────────
