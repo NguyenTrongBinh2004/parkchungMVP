@@ -299,7 +299,10 @@ function LoaiXeCard({ lx, onXoa }) {
 
 // ─── Card nhóm xe (giữ nguyên) ───────────────────────────────────
 function NhomXeCard({ nhom, loaiXeList, nhomGia, onXoa, onXoaDongGia, isOpen, onToggle }) {
-  const loaiTrongNhom = loaiXeList.filter(lx => lx.nhom_xe_id === nhom.id && lx.co_gia)
+  const loaiTrongNhom = loaiXeList.filter(lx => 
+    lx.nhom_xe_id === nhom.id && lx.co_gia && 
+    !(lx.gia_luot === 0 && lx.ten && lx.ten.includes('(đồng giá)'))
+  )
 
   if (!nhomGia && loaiTrongNhom.length === 0) return null
 
