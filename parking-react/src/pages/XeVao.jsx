@@ -145,34 +145,40 @@ function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
   return Object.values(map)
     .sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0))
     .map(group => {
+      let riengLe = [...group.items]   // các xe riêng lẻ (có giá)
       const nhomGia = nhomGiaMap[group.nhom_id]
-      // Bắt đầu bằng tất cả xe riêng lẻ có giá trong nhóm
-      let riengLe = [...group.items]
 
-      if (!nhomGia) {
-        return { ...group, items: riengLe }
-      }
-
-      // Tìm xe đại diện cho dòng đồng giá (ưu tiên xe mặc định, không có giá riêng)
-      const xeDaiDien = allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default && !coGiaRieng(lx))
+      if (nhomGia) {
+        // Tìm xe đại diện: ưu tiên xe mặc định, không có giá riêng
+        let xeDaiDien = allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default && !coGiaRieng(lx))
                      || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && !coGiaRieng(lx))
-                     || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default)
-                     || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id)
 
-      // Loại bỏ xe đại diện khỏi danh sách riêng lẻ để tránh trùng value
-      if (xeDaiDien) {
-        riengLe = riengLe.filter(lx => lx.id !== xeDaiDien.id)
+        // Nếu không tìm thấy xe không có giá riêng, fallback về xe mặc định đầu tiên
+        if (!xeDaiDien) {
+          xeDaiDien = allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default)
+                   || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id)
+        }
+
+        if (xeDaiDien) {
+          // Loại bỏ xe đại diện khỏi danh sách riêng lẻ (tránh trùng value)
+          riengLe = riengLe.filter(lx => lx.id !== xeDaiDien.id)
+
+          // Thêm dòng đồng giá vào đầu danh sách
+          riengLe.unshift({
+            ...xeDaiDien,
+            ...nhomGia,
+            id: xeDaiDien.id,
+            ten: group.ten_nhom,
+            _la_dai_dien_dong_gia: true,
+          })
+        }
       }
 
-      // Danh sách cuối cùng: dòng đồng giá (nếu có) + các xe riêng lẻ còn lại
-      const finalItems = xeDaiDien
-        ? [{ ...xeDaiDien, ...nhomGia, id: xeDaiDien.id, ten: group.ten_nhom, _la_dai_dien_dong_gia: true }, ...riengLe]
-        : riengLe
-
-      return { ...group, items: finalItems }
+      return { ...group, items: riengLe }
     })
     .filter(g => g.items.length > 0)
 }
+
 // ── useLoaiXeData — hook dùng chung, chỉ gọi API 1 lần ───────────
 function useLoaiXeData() {
   const [allLoaiXe, setAllLoaiXe] = useState([])
