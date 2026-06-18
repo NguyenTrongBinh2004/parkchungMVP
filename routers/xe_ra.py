@@ -30,55 +30,24 @@ def _tra_cuu_qr(ma_qr: str, KetNoi):
     return phien
 
 
-def _so_tien_tam(phien: dict, KetNoi, bay_gio) -> int:
-    """Tính tiền tạm (hỗ trợ đồng giá nhóm)."""
-    if phien.get("id_ve_thang"):
-        return 0
-
-    with KetNoi.cursor(dictionary=True) as cur:
-        cur.execute("SELECT * FROM loai_xe WHERE id = %s", (phien["id_loai_xe"],))
-        loai_xe = cur.fetchone()
-        if not loai_xe:
-            return 0
-
-        # Tự kiểm tra xe có giá riêng hay không
-        co_gia_rieng = False
-        kieu = loai_xe.get("kieu_tinh_gia")
-        if kieu == "theo_luot":
-            if (loai_xe.get("gia_luot") or 0) > 0:
-                co_gia_rieng = True
-        elif kieu == "theo_gio":
-            cfg = loai_xe.get("cau_hinh_theo_gio")
-            if cfg:
-                if isinstance(cfg, str):
-                    try:
-                        cfg = json.loads(cfg)
-                    except Exception:
-                        cfg = []
-                if isinstance(cfg, list) and len(cfg) > 0:
-                    for b in cfg:
-                        if (b.get("gia") or 0) > 0 or (b.get("moi_gio_tiep") or 0) > 0:
-                            co_gia_rieng = True
-                            break
-        elif kieu == "theo_ngay_dem":
-            if any([
-                (loai_xe.get("gia_ngay") or 0) > 0,
-                (loai_xe.get("gia_dem") or 0) > 0,
-                (loai_xe.get("gia_ngay_dem") or 0) > 0,
-            ]):
-                co_gia_rieng = True
-
+def _so_tien_tam(xe: dict, KetNoi, bay_gio) -> int:
+    try:
+        # Tra nhom_gia nếu xe không có giá riêng
         nhom_gia = None
-        if not co_gia_rieng:
-            cur.execute(
-                "SELECT * FROM nhom_xe_gia WHERE nhom_xe_id = %s",
-                (loai_xe["nhom_xe_id"],)
-            )
-            nhom_gia = cur.fetchone()
+        if not _co_gia_rieng(xe):
+            with KetNoi.cursor(dictionary=True) as cur:
+                cur.execute(
+                    "SELECT * FROM nhom_xe_gia WHERE nhom_xe_id = %s",
+                    (xe["nhom_xe_id"],)
+                )
+                nhom_gia = cur.fetchone()
 
         return BillingService.tinh_tien_chi_tiet(
-            loai_xe, phien["gio_vao"], bay_gio, nhom_gia=nhom_gia
+            xe, xe["gio_vao"], bay_gio, nhom_gia=nhom_gia
         )
+    except ValueError:
+        # Xe chưa cấu hình giá — trả 0, không crash
+        return 0
 
 # ── 1. Nhận diện thông minh (QR ưu tiên → nhập tay) ──────────
 @router.post("/nhan-dien/")
