@@ -17,8 +17,12 @@ def _tra_cuu_qr(ma_qr: str, KetNoi):
     with KetNoi.cursor(dictionary=True) as cur:
         cur.execute(
             """
-            SELECT p.*, k.ten AS ten_chu_xe, k.sdt, k.email, k.cho_phep_lay_ho
+            SELECT p.*,
+                   l.nhom_xe_id, l.kieu_tinh_gia, l.gia_luot,
+                   l.cau_hinh_theo_gio, l.gia_ngay, l.gia_dem, l.gia_ngay_dem,
+                   k.ten AS ten_chu_xe, k.sdt, k.email, k.cho_phep_lay_ho
               FROM phien_gui_xe p
+              JOIN loai_xe l ON p.id_loai_xe = l.id
               LEFT JOIN khach_hang k ON p.id_khach_hang = k.id
              WHERE p.ma_qr = %s AND p.is_in_bai = 1
             """,
@@ -32,7 +36,6 @@ def _tra_cuu_qr(ma_qr: str, KetNoi):
 
 def _so_tien_tam(xe: dict, KetNoi, bay_gio) -> int:
     try:
-        # Tra nhom_gia nếu xe không có giá riêng
         nhom_gia = None
         if not _co_gia_rieng(xe):
             with KetNoi.cursor(dictionary=True) as cur:
@@ -46,10 +49,10 @@ def _so_tien_tam(xe: dict, KetNoi, bay_gio) -> int:
             xe, xe["gio_vao"], bay_gio, nhom_gia=nhom_gia
         )
     except ValueError:
-        # Xe chưa cấu hình giá — trả 0, không crash
         return 0
 
-# ── 1. Nhận diện thông minh (QR ưu tiên → nhập tay) ──────────
+
+# ── 1. Nhận diện thông minh ──────────────────────────────────
 @router.post("/nhan-dien/")
 async def nhan_dien_xe_ra(
     anh: UploadFile = File(...),
@@ -57,7 +60,6 @@ async def nhan_dien_xe_ra(
 ):
     du_lieu_anh = await anh.read()
 
-    # Thử đọc QR trước (qr_service đã có tiền xử lý ảnh tốt hơn)
     try:
         du_lieu_qr = doc_ma_qr(du_lieu_anh)
         ma_qr = du_lieu_qr.get("ma_qr")
@@ -85,9 +87,8 @@ async def nhan_dien_xe_ra(
     except HTTPException:
         raise
     except Exception:
-        pass  # Không đọc được QR → nhập tay
+        pass
 
-    # Fallback: yêu cầu nhập biển số thủ công
     return {
         "loai": "bien_so",
         "bien_so_nhan_dien": "",
@@ -95,7 +96,7 @@ async def nhan_dien_xe_ra(
     }
 
 
-# ── 2. Quét QR (ảnh QR thuần) ─────────────────────────────────
+# ── 2. Quét QR ────────────────────────────────────────────────
 @router.post("/quet-qr/")
 async def quet_qr_xem_thong_tin(
     anh_qr: UploadFile = File(...),
@@ -131,16 +132,13 @@ async def quet_qr_xem_thong_tin(
     }
 
 
-# ── 3. Tìm theo biển số ────────────────────────────────────────
+# ── 3. Tìm theo biển số ──────────────────────────────────────
 @router.post("/bien-so/")
 def kiem_tra_xe_ra_bien_so(
     bien_so: str = Form(...),
     KetNoi=Depends(lay_ket_noi_CSDL),
 ):
     bien_so_sach = chuan_hoa_bien_so(bien_so)
-
-    # 🚲 Bỏ validate is_valid_bien_so để hỗ trợ biển số tạm của xe đạp (XD...)
-    # Chỉ cần đảm bảo không rỗng
     if not bien_so_sach:
         raise HTTPException(status_code=400, detail="Vui lòng nhập biển số")
 
@@ -148,8 +146,12 @@ def kiem_tra_xe_ra_bien_so(
         with KetNoi.cursor(dictionary=True) as cur:
             cur.execute(
                 """
-                SELECT p.*, k.ten AS ten_chu_xe, k.sdt, k.cho_phep_lay_ho
+                SELECT p.*,
+                       l.nhom_xe_id, l.kieu_tinh_gia, l.gia_luot,
+                       l.cau_hinh_theo_gio, l.gia_ngay, l.gia_dem, l.gia_ngay_dem,
+                       k.ten AS ten_chu_xe, k.sdt, k.cho_phep_lay_ho
                   FROM phien_gui_xe p
+                  JOIN loai_xe l ON p.id_loai_xe = l.id
                   LEFT JOIN khach_hang k ON p.id_khach_hang = k.id
                  WHERE REPLACE(REPLACE(REPLACE(p.bien_so,'-',''),'.',''),' ','') = %s
                    AND p.is_in_bai = 1
@@ -170,8 +172,12 @@ def kiem_tra_xe_ra_bien_so(
             with KetNoi.cursor(dictionary=True) as cur:
                 cur.execute(
                     """
-                    SELECT p.*, k.ten AS ten_chu_xe, k.sdt, k.cho_phep_lay_ho
+                    SELECT p.*,
+                           l.nhom_xe_id, l.kieu_tinh_gia, l.gia_luot,
+                           l.cau_hinh_theo_gio, l.gia_ngay, l.gia_dem, l.gia_ngay_dem,
+                           k.ten AS ten_chu_xe, k.sdt, k.cho_phep_lay_ho
                       FROM phien_gui_xe p
+                      JOIN loai_xe l ON p.id_loai_xe = l.id
                       LEFT JOIN khach_hang k ON p.id_khach_hang = k.id
                      WHERE p.duoi_bien_so LIKE %s AND p.is_in_bai = 1
                     """,
