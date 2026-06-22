@@ -20,7 +20,6 @@ CACHE_TTL = 5  # giây
 
 
 def _clear_cache():
-    """Xóa cache toàn cục."""
     global _cache_data, _cache_expire
     with _cache_lock:
         _cache_data = None
@@ -28,7 +27,6 @@ def _clear_cache():
 
 
 def _set_cache_data(data):
-    """Lưu dữ liệu vào cache (bản sao độc lập)."""
     global _cache_data, _cache_expire
     with _cache_lock:
         _cache_data = copy.deepcopy(data)
@@ -36,11 +34,10 @@ def _set_cache_data(data):
 
 
 def _get_cached_data():
-    """Trả về dữ liệu cache nếu còn hạn."""
     global _cache_data, _cache_expire
     with _cache_lock:
         if _cache_data and time.monotonic() < _cache_expire:
-            return copy.deepcopy(_cache_data)  # trả về bản sao, tránh bị sửa đổi
+            return copy.deepcopy(_cache_data)
     return None
 
 
@@ -90,7 +87,7 @@ def lay_toan_bo_du_lieu(KetNoi=Depends(lay_ket_noi_CSDL)):
         "nhom_gia": nhom_gia
     }
     _set_cache_data(data)
-    return _get_cached_data()  # trả về bản sao an toàn
+    return _get_cached_data()
 
 
 # ── 2. Danh sách nhóm xe ────────────────────────────────────────
@@ -170,6 +167,7 @@ def tao_loai_xe(
     cau_hinh_theo_gio: Optional[str] = Form(None),
     KetNoi=Depends(lay_ket_noi_CSDL)
 ):
+    # ── Validate chung ──
     allowed = ["theo_luot", "theo_gio", "theo_ngay_dem"]
     if kieu_tinh_gia not in allowed:
         raise HTTPException(status_code=422, detail="Kiểu tính giá không hợp lệ.")
@@ -179,6 +177,14 @@ def tao_loai_xe(
         raise HTTPException(status_code=422, detail="Phải nhập đầy đủ giá ngày, đêm, ngày-đêm.")
     if kieu_tinh_gia == "theo_gio" and not cau_hinh_theo_gio:
         raise HTTPException(status_code=422, detail="Phải nhập cấu hình giá theo giờ.")
+
+    # ── Không cho phép tên chứa "(đồng giá)" ──
+    if ten and "(đồng giá)" in ten:
+        raise HTTPException(status_code=422, detail="Tên loại xe không được chứa '(đồng giá)'. Đây là tên dành riêng cho hệ thống.")
+
+    # ── Validate giá vé tháng nếu có ──
+    if gia_ve_thang is not None and float(gia_ve_thang) <= 0:
+        raise HTTPException(status_code=422, detail="Giá vé tháng phải lớn hơn 0.")
 
     json_gio = None
     if cau_hinh_theo_gio:
@@ -288,15 +294,32 @@ def tao_dong_gia(
         raise HTTPException(status_code=500, detail=f"Lỗi server: {e}")
 
 
-# ── 6. Xóa đồng giá nhóm ────────────────────────────────────────
+# ── 6. Xóa đồng giá nhóm (có cảnh báo xe chưa có giá riêng) ────
 @router.delete("/dong-gia/{nhom_xe_id}", status_code=200)
 def xoa_dong_gia(nhom_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
     try:
-        with KetNoi.cursor() as cur:
+        with KetNoi.cursor(dictionary=True) as cur:
+            # Kiểm tra xe đang trong bãi không có giá riêng
+            cur.execute(
+                """
+                SELECT COUNT(*) AS cnt FROM phien_gui_xe p
+                JOIN loai_xe l ON p.id_loai_xe = l.id
+                WHERE l.nhom_xe_id = %s AND p.is_in_bai = 1
+                  AND l.gia_luot = 0 AND l.gia_ngay IS NULL AND l.gia_dem IS NULL
+                  AND l.gia_ngay_dem IS NULL AND (l.cau_hinh_theo_gio IS NULL OR JSON_LENGTH(l.cau_hinh_theo_gio) = 0)
+                """,
+                (nhom_xe_id,)
+            )
+            xe_khong_gia = cur.fetchone()["cnt"]
+
             cur.execute("DELETE FROM nhom_xe_gia WHERE nhom_xe_id = %s", (nhom_xe_id,))
             KetNoi.commit()
             _clear_cache()
-            return {"ghi_chu": f"Đã xóa đồng giá cho nhóm {nhom_xe_id}."}
+
+            msg = f"Đã xóa đồng giá cho nhóm {nhom_xe_id}."
+            if xe_khong_gia > 0:
+                msg += f" Cảnh báo: có {xe_khong_gia} xe đang trong bãi sẽ không có giá sau thao tác này."
+            return {"ghi_chu": msg}
     except Exception as e:
         KetNoi.rollback()
         raise HTTPException(status_code=500, detail=f"Lỗi server: {e}")
@@ -322,16 +345,27 @@ def lay_nhom_xe_gia(KetNoi=Depends(lay_ket_noi_CSDL)):
 @router.delete("/{loai_xe_id}")
 def xoa_loai_xe(loai_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
     with KetNoi.cursor(dictionary=True) as cur:
-        cur.execute("SELECT id, is_default FROM loai_xe WHERE id=%s AND deleted_at IS NULL", (loai_xe_id,))
+        # Lấy thêm tên để kiểm tra xe mồi
+        cur.execute("SELECT id, is_default, ten FROM loai_xe WHERE id=%s AND deleted_at IS NULL", (loai_xe_id,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Không tìm thấy loại xe.")
+
+        # Không cho ẩn xe mồi
+        if row["ten"] and "(đồng giá)" in row["ten"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Không thể ẩn xe đại diện đồng giá của hệ thống. Vui lòng sử dụng chức năng Đồng giá nhóm."
+            )
+
         cur.execute("SELECT COUNT(*) AS cnt FROM ve_thang WHERE id_loai_xe=%s AND ngay_het_han >= CURDATE()", (loai_xe_id,))
         if cur.fetchone()["cnt"] > 0:
             raise HTTPException(status_code=400, detail="Không thể ẩn vì đang có vé tháng.")
+
         cur.execute("SELECT COUNT(*) AS cnt FROM phien_gui_xe WHERE id_loai_xe=%s AND is_in_bai=1", (loai_xe_id,))
         if cur.fetchone()["cnt"] > 0:
             raise HTTPException(status_code=400, detail="Không thể ẩn vì đang có xe trong bãi.")
+
         cur.execute("UPDATE loai_xe SET deleted_at=NOW() WHERE id=%s", (loai_xe_id,))
         KetNoi.commit()
         _clear_cache()
@@ -360,9 +394,18 @@ def cap_nhat_loai_xe(
 
     try:
         with KetNoi.cursor(dictionary=True) as cur:
-            cur.execute("SELECT id FROM loai_xe WHERE id=%s AND deleted_at IS NULL", (loai_xe_id,))
-            if not cur.fetchone():
+            cur.execute("SELECT id, ten FROM loai_xe WHERE id=%s AND deleted_at IS NULL", (loai_xe_id,))
+            row = cur.fetchone()
+            if not row:
                 raise HTTPException(status_code=404, detail="Không tìm thấy loại xe.")
+
+            # Cấm sửa giá riêng của xe mồi
+            if row["ten"] and "(đồng giá)" in row["ten"]:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Không thể sửa giá riêng của xe đại diện đồng giá. Vui lòng sử dụng chức năng Đồng giá nhóm."
+                )
+
             cur.execute("""
                 UPDATE loai_xe SET kieu_tinh_gia=%s, gia_luot=%s, gia_ngay=%s, gia_dem=%s,
                 gia_ngay_dem=%s, gia_ve_thang=%s, cau_hinh_theo_gio=%s
