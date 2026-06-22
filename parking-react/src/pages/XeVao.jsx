@@ -133,7 +133,10 @@ function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
     if (!map[lx.nhom_xe_id]) {
       map[lx.nhom_xe_id] = { nhom_id: lx.nhom_xe_id, ten_nhom: lx.ten_nhom, thu_tu: lx.thu_tu_nhom, items: [] }
     }
-    map[lx.nhom_xe_id].items.push(lx)
+    // Chỉ thêm vào danh sách riêng lẻ nếu KHÔNG phải xe mồi
+    if (!lx.ten || !lx.ten.includes('(đồng giá)')) {
+      map[lx.nhom_xe_id].items.push(lx)
+    }
   })
 
   nhomGiaList.forEach(ng => {
@@ -161,9 +164,6 @@ function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
                      || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && !coGiaRieng(lx))
 
         if (xeDaiDien) {
-          // Loại bỏ xe đại diện khỏi danh sách riêng lẻ (tránh trùng ID)
-          danhSachXeRieng = danhSachXeRieng.filter(lx => lx.id !== xeDaiDien.id)
-
           // Thêm dòng đồng giá vào đầu danh sách
           danhSachXeRieng.unshift({
             ...xeDaiDien,

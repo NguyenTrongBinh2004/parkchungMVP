@@ -300,10 +300,15 @@ async def xac_nhan_xe_vao_ve_thuong(
         if not loai_xe_row:
             raise HTTPException(status_code=404, detail=f"Không tìm thấy loại xe id: {id_loai_xe}")
 
-        # Nếu DB chưa có cột yeu_cau_bien_so, dùng quy ước tạm thời:
-        # yeu_cau_bien = loai_xe_row.get("yeu_cau_bien_so", True)  # mặc định TRUE nếu chưa có cột
-        # Dùng cách tạm: kiểm tra tên loại xe
-        yeu_cau_bien = not ("đạp" in loai_xe_row["ten"].lower() or "xe đạp" in loai_xe_row["ten"].lower())  # nếu tên chứa "đạp" -> FALSE
+        # 🚫 Không cho phép chọn trực tiếp xe mồi
+        if "(đồng giá)" in (loai_xe_row["ten"] or ""):
+            raise HTTPException(
+                status_code=422,
+                detail="Vui lòng chọn loại xe cụ thể hoặc sử dụng lựa chọn đồng giá của nhóm."
+            )
+
+        # Kiểm tra yêu cầu biển số
+        yeu_cau_bien = not ("đạp" in loai_xe_row["ten"].lower() or "xe đạp" in loai_xe_row["ten"].lower())
 
     if yeu_cau_bien:
         # ── Xe thường, có biển số ──
