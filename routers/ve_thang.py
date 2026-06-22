@@ -74,11 +74,17 @@ async def dang_ky_ve_thang(
     ngay_het_han  = hom_nay + timedelta(days=30)
 
     with KetNoi.cursor(dictionary=True) as cur:
-        # ─── Lấy thông tin loại xe ───
         cur.execute("SELECT * FROM loai_xe WHERE id = %s", (id_loai_xe,))
         loai_xe_row = cur.fetchone()
         if not loai_xe_row:
             raise HTTPException(status_code=404, detail="Không tìm thấy loại xe.")
+
+        # 🚫 Không cho phép chọn trực tiếp xe mồi (chỉ được thông qua dòng đồng giá)
+        if "(đồng giá)" in (loai_xe_row["ten"] or ""):
+            raise HTTPException(
+                status_code=422,
+                detail="Vui lòng chọn loại xe cụ thể hoặc sử dụng lựa chọn đồng giá của nhóm."
+            )
 
         # Số tiền vé tháng (theo logic ưu tiên mới)
         so_tien = lay_gia_ve_thang(loai_xe_row, cur)
