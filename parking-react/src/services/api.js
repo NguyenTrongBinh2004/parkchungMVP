@@ -94,3 +94,12 @@ export const veThangApi = {
   lichSu: (idVe) => request(`/ve-thang/${idVe}/lich-su/`),
   xoa: (idVe) => request(`/ve-thang/${idVe}`, { method: 'DELETE' }),
 };
+
+export const baoCaoApi = {
+  dashboard: (tuNgay, denNgay) =>
+    request(`/bao-cao/dashboard/?tu_ngay=${tuNgay}&den_ngay=${denNgay}`),
+  thongKe: (params) => {
+    const qs = new URLSearchParams(params).toString()
+    return request(`/bao-cao/thong-ke?${qs}`)
+  },
+}
