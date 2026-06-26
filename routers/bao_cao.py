@@ -16,6 +16,9 @@ def thong_ke(
     if loai == "hom_nay":
         tu_ngay = today
         den_ngay = today
+    elif loai == "hom_qua":              # ← THÊM nhánh này
+        tu_ngay = today - timedelta(days=1)
+        den_ngay = today - timedelta(days=1)
     elif loai == "ngay":
         if not ngay:
             ngay = today
