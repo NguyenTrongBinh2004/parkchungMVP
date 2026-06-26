@@ -3,7 +3,10 @@ import { useState, useEffect } from 'react'
 import { PageLayout, Spinner, Alert } from '../components/UI'
 import { baoCaoApi } from '../services/api'
 
-const formatVND = (v) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(v)
+const formatVND = (v) => {
+  if (v === undefined || v === null) return '0 đ';
+  return v.toLocaleString('vi-VN') + ' đ';
+}
 
 const CHE_DO = [
   { key: 'hom_nay', label: 'Hôm nay' },
