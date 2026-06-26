@@ -6,8 +6,8 @@ const MENUS = [
   { icon: '📋', label: 'DS trong bãi', path: '/danh-sach' },
   { icon: '🎫', label: 'Vé tháng',     path: '/ve-thang' },
   { icon: '⚙️', label: 'Cài đặt',      path: '/cai-dat' },
+  { icon: '📊', label: 'Thống kê',     path: '/thong-ke' },  
   { icon: '🏷️', label: 'Loại xe',      path: '/loai-xe' },
-  { icon: '📊', label: 'Thống kê',     path: '/thong-ke' },   // ← ĐÃ THÊM
 ]
 
 export default function Dashboard() {
