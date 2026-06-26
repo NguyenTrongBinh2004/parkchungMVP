@@ -1,51 +1,19 @@
 // src/pages/ThongKe.jsx
 import { useState, useEffect } from 'react'
-import { PageLayout, Spinner, Alert, Field } from '../components/UI'
+import { PageLayout, Spinner, Alert } from '../components/UI'
 import { baoCaoApi } from '../services/api'
 
-const formatVND = (value) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)
+const formatVND = (v) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(v)
 
-// Component hiển thị một card số liệu
-function StatCard({ title, value, icon, color = 'var(--accent)', suffix = '', isCurrency = false }) {
-  return (
-    <div style={{
-      background: 'linear-gradient(135deg, #1e1e2f 0%, #25253e 100%)',
-      borderRadius: 16,
-      padding: '20px 24px',
-      boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-      border: '1px solid rgba(255,255,255,0.05)',
-      display: 'flex',
-      alignItems: 'center',
-      gap: 16,
-      transition: 'transform 0.2s',
-    }}
-      onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-      onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-    >
-      <div style={{
-        width: 52, height: 52, borderRadius: 14,
-        background: `${color}20`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: '1.6rem',
-        flexShrink: 0
-      }}>
-        {icon}
-      </div>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: 4, fontWeight: 500 }}>
-          {title}
-        </div>
-        <div style={{ fontSize: '1.5rem', fontWeight: 700, color, fontFamily: 'var(--font-mono)' }}>
-          {isCurrency ? formatVND(value) : value.toLocaleString('vi-VN')}{suffix}
-        </div>
-      </div>
-    </div>
-  )
-}
+const CHE_DO = [
+  { key: 'hom_nay', label: 'Hôm nay' },
+  { key: 'hom_qua', label: 'Hôm qua' },
+  { key: 'tuan',    label: '7 ngày' },
+  { key: 'thang',   label: '30 ngày' },
+]
 
 export default function ThongKe() {
   const [loai, setLoai] = useState('hom_nay')
-  const [ngay, setNgay] = useState(new Date().toISOString().slice(0, 10))
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -55,7 +23,6 @@ export default function ThongKe() {
     setError(null)
     try {
       const params = { loai }
-      if (loai === 'ngay') params.ngay = ngay
       const res = await baoCaoApi.thongKe(params)
       setData(res)
     } catch (err) {
@@ -67,58 +34,35 @@ export default function ThongKe() {
 
   useEffect(() => {
     fetchData()
-  }, [loai, ngay])
-
-  const handleLoaiChange = (e) => {
-    setLoai(e.target.value)
-    if (e.target.value !== 'ngay') {
-      setNgay(new Date().toISOString().slice(0, 10))
-    }
-  }
+  }, [loai])
 
   return (
     <PageLayout title="📊 Thống kê" backTo="/">
-      {/* Bộ lọc */}
+      {/* Nút chọn chế độ – to, rõ ràng */}
       <div style={{
-        display: 'flex', gap: 12, marginBottom: 24, alignItems: 'flex-end',
-        background: 'rgba(255,255,255,0.03)', borderRadius: 12, padding: '14px 18px',
-        border: '1px solid var(--border)',
+        display: 'flex', justifyContent: 'center', gap: 10, marginBottom: 28,
+        flexWrap: 'wrap'
       }}>
-        <Field label="Chế độ xem">
-          <select value={loai} onChange={handleLoaiChange} style={{
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border)',
-            borderRadius: 8,
-            padding: '8px 12px',
-            color: 'var(--text)',
-            fontSize: '0.9rem',
-          }}>
-            <option value="hom_nay">📅 Hôm nay</option>
-            <option value="ngay">🔍 Ngày cụ thể</option>
-            <option value="tuan">📆 7 ngày qua</option>
-            <option value="thang">📈 30 ngày qua</option>
-          </select>
-        </Field>
-        {loai === 'ngay' && (
-          <Field label="Chọn ngày">
-            <input type="date" value={ngay} onChange={e => setNgay(e.target.value)} style={{
-              background: 'var(--bg-secondary)',
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              padding: '8px 12px',
-              color: 'var(--text)',
-              fontSize: '0.9rem',
-            }} />
-          </Field>
-        )}
-        <button
-          className="btn btn-accent"
-          onClick={fetchData}
-          disabled={loading}
-          style={{ height: 42, padding: '0 20px', fontSize: '0.95rem', fontWeight: 600 }}
-        >
-          {loading ? '⏳ Đang tải...' : '🔍 Xem thống kê'}
-        </button>
+        {CHE_DO.map(cd => (
+          <button
+            key={cd.key}
+            onClick={() => setLoai(cd.key)}
+            style={{
+              padding: '12px 24px',
+              fontSize: '1.05rem',
+              fontWeight: 600,
+              borderRadius: 40,
+              border: cd.key === loai ? '2px solid var(--accent)' : '2px solid var(--border)',
+              background: cd.key === loai ? 'var(--accent)' : 'transparent',
+              color: cd.key === loai ? '#fff' : 'var(--text)',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              minWidth: 100,
+            }}
+          >
+            {cd.label}
+          </button>
+        ))}
       </div>
 
       {loading && <Spinner />}
@@ -126,156 +70,92 @@ export default function ThongKe() {
 
       {data && (
         <>
-          {/* Tiêu đề khoảng thời gian */}
-          <div style={{ marginBottom: 20 }}>
-            <h5 style={{
-              margin: 0, fontSize: '1.1rem', color: 'var(--text)',
-              background: 'linear-gradient(90deg, var(--accent), #6c63ff)',
-              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-              fontWeight: 700,
-            }}>
-              {data.loai === 'hom_nay' ? '📌 HÔM NAY' : `📅 Từ ${data.tu_ngay} đến ${data.den_ngay}`}
-            </h5>
-          </div>
-
-          {/* Grid các card tổng quan */}
+          {/* 3 con số CHÍNH – cực lớn, dễ đọc */}
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: 16,
-            marginBottom: 28,
+            display: 'flex', justifyContent: 'center', gap: 20, marginBottom: 32,
+            flexWrap: 'wrap'
           }}>
-            <StatCard
-              icon="🏍️"
-              title="Tổng xe đã phục vụ"
-              value={data.tong_xe_da_phuc_vu}
-              color="#4CAF50"
-              suffix=" xe"
-            />
-            <StatCard
-              icon="🅿️"
-              title="Xe đang trong bãi"
-              value={data.xe_dang_trong_bai}
-              color="#FF9800"
-              suffix=" xe"
-            />
-            <StatCard
-              icon="💰"
-              title="Doanh thu xe lượt"
-              value={data.doanh_thu_xe_luot}
-              color="#2196F3"
-              isCurrency
-            />
-            <StatCard
-              icon="🎫"
-              title="Doanh thu vé tháng"
-              value={data.doanh_thu_ve_thang}
-              color="#9C27B0"
-              isCurrency
-            />
-            <StatCard
-              icon="🏆"
-              title="Tổng doanh thu"
-              value={data.tong_doanh_thu}
-              color="var(--accent)"
-              isCurrency
-            />
+            {/* Card: Tổng xe đã phục vụ */}
+            <div style={{
+              background: '#1e293b', borderRadius: 20, padding: '24px 32px',
+              textAlign: 'center', minWidth: 160, flex: 1, maxWidth: 220,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+            }}>
+              <div style={{ fontSize: '2.8rem', fontWeight: 800, color: '#38bdf8' }}>
+                {data.tong_xe_da_phuc_vu}
+              </div>
+              <div style={{ color: '#94a3b8', marginTop: 6, fontSize: '0.95rem' }}>
+                🏍️ Xe đã phục vụ
+              </div>
+            </div>
+
+            {/* Card: Xe đang trong bãi */}
+            <div style={{
+              background: '#1e293b', borderRadius: 20, padding: '24px 32px',
+              textAlign: 'center', minWidth: 160, flex: 1, maxWidth: 220,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+            }}>
+              <div style={{ fontSize: '2.8rem', fontWeight: 800, color: '#fbbf24' }}>
+                {data.xe_dang_trong_bai}
+              </div>
+              <div style={{ color: '#94a3b8', marginTop: 6, fontSize: '0.95rem' }}>
+                🅿️ Đang trong bãi
+              </div>
+            </div>
+
+            {/* Card: Tổng doanh thu */}
+            <div style={{
+              background: '#1e293b', borderRadius: 20, padding: '24px 32px',
+              textAlign: 'center', minWidth: 180, flex: 1, maxWidth: 260,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+            }}>
+              <div style={{ fontSize: '2.8rem', fontWeight: 800, color: '#4ade80' }}>
+                {formatVND(data.tong_doanh_thu)}
+              </div>
+              <div style={{ color: '#94a3b8', marginTop: 6, fontSize: '0.95rem' }}>
+                💰 Tổng doanh thu
+              </div>
+            </div>
           </div>
 
-          {/* Bảng chi tiết theo loại xe */}
+          {/* Dòng phụ: doanh thu xe lượt + vé tháng (nếu muốn xem chi tiết hơn) */}
+          <div style={{
+            display: 'flex', justifyContent: 'center', gap: 20, marginBottom: 28,
+            color: '#94a3b8', fontSize: '0.95rem', flexWrap: 'wrap'
+          }}>
+            <span>💵 Xe lượt: <strong style={{ color: '#e2e8f0' }}>{formatVND(data.doanh_thu_xe_luot)}</strong></span>
+            <span>🎫 Vé tháng: <strong style={{ color: '#e2e8f0' }}>{formatVND(data.doanh_thu_ve_thang)}</strong></span>
+          </div>
+
+          {/* Chi tiết theo loại xe – chỉ hiển thị nếu có */}
           {data.chi_tiet_loai_xe.length > 0 && (
             <div style={{
-              background: 'rgba(255,255,255,0.02)',
-              borderRadius: 16,
-              padding: '20px 24px',
-              border: '1px solid var(--border)',
+              maxWidth: 500, margin: '0 auto', background: '#1e293b',
+              borderRadius: 16, padding: '16px 20px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
             }}>
-              <h5 style={{
-                marginBottom: 16, fontSize: '1rem', color: 'var(--text)',
-                display: 'flex', alignItems: 'center', gap: 8,
-              }}>
-                <span style={{ fontSize: '1.2rem' }}>📋</span> Chi tiết theo loại xe
-              </h5>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{
-                    borderBottom: '2px solid var(--border)',
-                    color: 'var(--text-muted)',
-                    fontSize: '0.85rem',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                  }}>
-                    <th style={{ padding: '10px 12px', textAlign: 'left' }}>Loại xe</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'right' }}>Số lượt</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'right' }}>Doanh thu</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.chi_tiet_loai_xe.map((item, idx) => (
-                    <tr key={idx} style={{
-                      borderBottom: '1px solid rgba(255,255,255,0.04)',
-                      transition: 'background 0.2s',
-                    }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    >
-                      <td style={{ padding: '12px' }}>
-                        <span style={{ fontWeight: 600 }}>{item.ten_loai_xe}</span>
-                      </td>
-                      <td style={{ padding: '12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                        {item.so_luot.toLocaleString('vi-VN')}
-                      </td>
-                      <td style={{
-                        padding: '12px', textAlign: 'right',
-                        fontFamily: 'var(--font-mono)', fontWeight: 600,
-                        color: 'var(--accent)',
-                      }}>
-                        {formatVND(item.doanh_thu)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr style={{ borderTop: '2px solid var(--border)', fontWeight: 700, fontSize: '0.95rem' }}>
-                    <td style={{ padding: '12px' }}>Tổng</td>
-                    <td style={{ padding: '12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                      {data.chi_tiet_loai_xe.reduce((sum, item) => sum + item.so_luot, 0).toLocaleString('vi-VN')}
-                    </td>
-                    <td style={{
-                      padding: '12px', textAlign: 'right', fontFamily: 'var(--font-mono)',
-                      color: 'var(--accent)',
-                    }}>
-                      {formatVND(data.tong_doanh_thu)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
-
-          {/* Nếu không có dữ liệu chi tiết */}
-          {data.chi_tiet_loai_xe.length === 0 && (
-            <div style={{
-              textAlign: 'center', padding: '2rem', color: 'var(--text-muted)',
-              background: 'rgba(255,255,255,0.02)', borderRadius: 12,
-              border: '1px solid var(--border)',
-            }}>
-              <span style={{ fontSize: '2rem', display: 'block', marginBottom: 8 }}>📭</span>
-              Chưa có dữ liệu trong khoảng thời gian này
+              <div style={{ color: '#94a3b8', marginBottom: 12, fontWeight: 600 }}>
+                📋 Chi tiết theo loại xe
+              </div>
+              {data.chi_tiet_loai_xe.map((item, idx) => (
+                <div key={idx} style={{
+                  display: 'flex', justifyContent: 'space-between',
+                  padding: '8px 0', borderBottom: '1px solid #334155'
+                }}>
+                  <span style={{ color: '#e2e8f0' }}>{item.ten_loai_xe}</span>
+                  <span style={{ color: '#94a3b8' }}>
+                    {item.so_luot} lượt · {formatVND(item.doanh_thu)}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
         </>
       )}
 
-      {/* Trạng thái rỗng khi chưa load */}
       {!data && !loading && !error && (
-        <div style={{
-          textAlign: 'center', padding: '3rem', color: 'var(--text-muted)',
-          background: 'rgba(255,255,255,0.02)', borderRadius: 16,
-          border: '1px solid var(--border)',
-        }}>
-          <span style={{ fontSize: '3rem', display: 'block', marginBottom: 12 }}>📊</span>
-          <p>Chọn chế độ xem và nhấn "Xem thống kê" để hiển thị dữ liệu</p>
+        <div style={{ textAlign: 'center', color: '#64748b', marginTop: 40 }}>
+          Chọn chế độ xem để hiển thị số liệu
         </div>
       )}
     </PageLayout>

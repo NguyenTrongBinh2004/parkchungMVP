@@ -5,9 +5,9 @@ const MENUS = [
   { icon: '📤', label: 'Xe ra',        path: '/xe-ra' },
   { icon: '📋', label: 'DS trong bãi', path: '/danh-sach' },
   { icon: '🎫', label: 'Vé tháng',     path: '/ve-thang' },
-  { icon: '⚙️', label: 'Cài đặt',      path: '/cai-dat' },
-  { icon: '📊', label: 'Thống kê',     path: '/thong-ke' },  
+  { icon: '📊', label: 'Thống kê',     path: '/thong-ke' },
   { icon: '🏷️', label: 'Loại xe',      path: '/loai-xe' },
+  { icon: '⚙️', label: 'Cài đặt',      path: '/cai-dat' },   // ← xuống cuối
 ]
 
 export default function Dashboard() {
@@ -34,7 +34,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ─── Footer (3 dòng, căn trái) ─── */}
+      {/* Footer */}
       <div style={{
         padding: '1.25rem 1rem',
         borderTop: '1px solid var(--border)',
@@ -45,7 +45,7 @@ export default function Dashboard() {
         color: 'var(--text-muted)',
         fontSize: '0.85rem',
         textAlign: 'left',
-        backgroundColor: 'var(--bg)' // để che nội dung bên dưới nếu có
+        backgroundColor: 'var(--bg)'
       }}>
         {/* Dòng 1: Logo + PARKCHUNG */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
