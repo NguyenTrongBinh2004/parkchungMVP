@@ -24,7 +24,9 @@ def xe_trong_bai(KetNoi=Depends(lay_ket_noi_CSDL)):
             SELECT p.id, p.ma_phien, p.bien_so, p.gio_vao, p.id_ve_thang,
                    p.duong_dan_anh_bien_so, p.duong_dan_anh_nguoi_lai,
                    k.ten AS ten_chu_xe,
-                   l.*
+                   l.ten, l.kieu_tinh_gia, l.gia_luot,
+                   l.gia_ngay, l.gia_dem, l.gia_ngay_dem,
+                   l.cau_hinh_theo_gio, l.nhom_xe_id
               FROM phien_gui_xe p
               JOIN loai_xe l ON p.id_loai_xe = l.id
               LEFT JOIN khach_hang k ON p.id_khach_hang = k.id
