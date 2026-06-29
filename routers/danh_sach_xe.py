@@ -16,6 +16,7 @@ from utils import (
 router = APIRouter(prefix="/danh-sach-xe", tags=["Danh sách xe"])
 
 
+# ─── 1. Xe đang trong bãi ─────────────────────────────────────────
 @router.get("/trong-bai")
 def xe_trong_bai(KetNoi=Depends(lay_ket_noi_CSDL)):
     bay_gio = bay_gio_vn()
@@ -97,6 +98,7 @@ def xe_trong_bai(KetNoi=Depends(lay_ket_noi_CSDL)):
     return ket_qua
 
 
+# ─── 2. Xe đã ra ───────────────────────────────────────────────────
 @router.get("/da-ra")
 def xe_da_ra(
     ngay: date = Query(None),
@@ -136,12 +138,11 @@ def xe_da_ra(
     } for x in danh_sach]
 
 
-# ───────────────────────────────────────────
-# SỬA THÔNG TIN XE — chỉ áp dụng cho xe đang trong bãi
-# ───────────────────────────────────────────
+# ─── 3. Chi tiết phiên/xe (dùng cho modal sửa) ─────────────────────
 @router.get("/phien/{id_phien}")
 def chi_tiet_phien(id_phien: int, KetNoi=Depends(lay_ket_noi_CSDL)):
     with KetNoi.cursor(dictionary=True) as cur:
+        # Thử tìm trong phien_gui_xe
         cur.execute("""
             SELECT p.id, p.ma_phien, p.bien_so, p.id_loai_xe, p.id_khach_hang,
                    p.id_ve_thang, p.ghi_chu, p.is_in_bai,
@@ -154,24 +155,53 @@ def chi_tiet_phien(id_phien: int, KetNoi=Depends(lay_ket_noi_CSDL)):
         """, (id_phien,))
         phien = cur.fetchone()
 
-    if not phien:
-        raise HTTPException(status_code=404, detail="Không tìm thấy phiên xe.")
+        if phien:
+            return {
+                "id": phien["id"],
+                "ma_phien": phien["ma_phien"],
+                "bien_so": phien["bien_so"],
+                "id_loai_xe": phien["id_loai_xe"],
+                "ten_loai_xe": phien["ten_loai_xe"],
+                "ten_chu_xe": phien.get("ten_chu_xe"),
+                "sdt": phien.get("sdt"),
+                "email": phien.get("email"),
+                "ghi_chu": phien.get("ghi_chu"),
+                "dang_trong_bai": bool(phien["is_in_bai"]),
+                "la_ve_thang": phien["id_ve_thang"] is not None,
+                "id_ve_thang": phien["id_ve_thang"],
+            }
 
-    return {
-        "id": phien["id"],
-        "ma_phien": phien["ma_phien"],
-        "bien_so": phien["bien_so"],
-        "id_loai_xe": phien["id_loai_xe"],
-        "ten_loai_xe": phien["ten_loai_xe"],
-        "ten_chu_xe": phien.get("ten_chu_xe"),
-        "sdt": phien.get("sdt"),
-        "email": phien.get("email"),
-        "ghi_chu": phien.get("ghi_chu"),
-        "dang_trong_bai": bool(phien["is_in_bai"]),
-        "la_ve_thang": phien["id_ve_thang"] is not None,
-    }
+        # Nếu không tìm thấy phiên, thử tìm trong ve_thang (dành cho màn VeThang gửi ID vé)
+        cur.execute("""
+            SELECT v.id, v.bien_so, v.id_loai_xe, v.ghi_chu,
+                   k.ten AS ten_chu_xe, k.sdt, k.email,
+                   l.ten AS ten_loai_xe
+              FROM ve_thang v
+              LEFT JOIN khach_hang k ON v.id_khach_hang = k.id
+              LEFT JOIN loai_xe l ON v.id_loai_xe = l.id
+             WHERE v.id = %s
+        """, (id_phien,))
+        ve = cur.fetchone()
+        if not ve:
+            raise HTTPException(status_code=404, detail="Không tìm thấy phiên xe hoặc vé tháng.")
+
+        return {
+            "id": ve["id"],
+            "ma_phien": None,
+            "bien_so": ve["bien_so"],
+            "id_loai_xe": ve["id_loai_xe"],
+            "ten_loai_xe": ve["ten_loai_xe"],
+            "ten_chu_xe": ve.get("ten_chu_xe"),
+            "sdt": ve.get("sdt"),
+            "email": ve.get("email"),
+            "ghi_chu": ve.get("ghi_chu"),
+            "dang_trong_bai": False,
+            "la_ve_thang": True,
+            "id_ve_thang": ve["id"],
+        }
 
 
+# ─── 4. Cập nhật thông tin xe (có hỗ trợ vé tháng) ─────────────────
 @router.put("/phien/{id_phien}")
 def sua_thong_tin_xe(
     id_phien: int,
@@ -194,43 +224,74 @@ def sua_thong_tin_xe(
 
     try:
         with KetNoi.cursor(dictionary=True) as cur:
+            # Xác định nguồn gốc ID: phiên hay vé tháng
             cur.execute(
                 """SELECT id, bien_so, id_loai_xe, id_khach_hang, id_ve_thang, is_in_bai
                      FROM phien_gui_xe WHERE id = %s""",
                 (id_phien,)
             )
             phien = cur.fetchone()
-            if not phien:
-                raise HTTPException(status_code=404, detail="Không tìm thấy phiên xe.")
-            if not phien["is_in_bai"]:
-                raise HTTPException(
-                    status_code=403,
-                    detail="Không thể sửa thông tin xe đã ra bãi để đảm bảo tính minh bạch."
+
+            la_ve_thang = False
+            id_ve_thang = None
+
+            if phien:
+                # Có phiên gửi xe
+                id_ve_thang = phien["id_ve_thang"]
+                la_ve_thang = id_ve_thang is not None
+
+                if la_ve_thang:
+                    # Vé tháng: kiểm tra vé còn hạn
+                    cur.execute(
+                        "SELECT id FROM ve_thang WHERE id = %s AND ngay_het_han >= CURDATE()",
+                        (id_ve_thang,)
+                    )
+                    if not cur.fetchone():
+                        raise HTTPException(status_code=400, detail="Vé tháng đã hết hạn, không thể sửa.")
+                    # Cho phép sửa dù xe có đang trong bãi hay không
+                else:
+                    # Xe thường: phải đang trong bãi
+                    if not phien["is_in_bai"]:
+                        raise HTTPException(
+                            status_code=403,
+                            detail="Không thể sửa thông tin xe đã ra bãi (xe thường)."
+                        )
+            else:
+                # Không tìm thấy phiên → thử coi id_phien là id của vé tháng
+                cur.execute(
+                    "SELECT id FROM ve_thang WHERE id = %s AND ngay_het_han >= CURDATE()",
+                    (id_phien,)
                 )
+                ve = cur.fetchone()
+                if ve:
+                    la_ve_thang = True
+                    id_ve_thang = id_phien
+                    phien = None  # không có phiên để cập nhật
+                else:
+                    raise HTTPException(status_code=404, detail="Không tìm thấy phiên xe hoặc vé tháng còn hạn.")
 
-            la_ve_thang = phien["id_ve_thang"] is not None
-
-            # ── Loại xe: chỉ cho đổi khi KHÔNG phải phiên vé tháng ──
-            if la_ve_thang and id_loai_xe is not None and id_loai_xe != phien["id_loai_xe"]:
-                raise HTTPException(
-                    status_code=422,
-                    detail="Không thể đổi loại xe của phiên đang dùng vé tháng."
-                )
-
-            if not la_ve_thang and id_loai_xe is not None and id_loai_xe != phien["id_loai_xe"]:
-                cur.execute("SELECT id, ten FROM loai_xe WHERE id = %s", (id_loai_xe,))
-                loai_xe_row = cur.fetchone()
-                if not loai_xe_row:
-                    raise HTTPException(status_code=404, detail="Không tìm thấy loại xe.")
-                if "(đồng giá)" in (loai_xe_row["ten"] or ""):
+            # ── Loại xe ──
+            if la_ve_thang:
+                if id_loai_xe is not None:
                     raise HTTPException(
                         status_code=422,
-                        detail="Vui lòng chọn loại xe cụ thể, không chọn dòng đồng giá."
+                        detail="Không thể đổi loại xe của phiên/vé tháng."
                     )
-                cur.execute(
-                    "UPDATE phien_gui_xe SET id_loai_xe = %s WHERE id = %s",
-                    (id_loai_xe, id_phien)
-                )
+            else:
+                if id_loai_xe is not None and id_loai_xe != phien["id_loai_xe"]:
+                    cur.execute("SELECT id, ten FROM loai_xe WHERE id = %s", (id_loai_xe,))
+                    loai_xe_row = cur.fetchone()
+                    if not loai_xe_row:
+                        raise HTTPException(status_code=404, detail="Không tìm thấy loại xe.")
+                    if "(đồng giá)" in (loai_xe_row["ten"] or ""):
+                        raise HTTPException(
+                            status_code=422,
+                            detail="Vui lòng chọn loại xe cụ thể, không chọn dòng đồng giá."
+                        )
+                    cur.execute(
+                        "UPDATE phien_gui_xe SET id_loai_xe = %s WHERE id = %s",
+                        (id_loai_xe, id_phien)
+                    )
 
             # ── Biển số ──
             bien_so_moi = bien_so.strip().upper()
@@ -241,11 +302,12 @@ def sua_thong_tin_xe(
             if not la_ma_xe_khong_bien_so(bien_so_sach_moi) and not is_valid_bien_so(bien_so_sach_moi):
                 raise HTTPException(status_code=422, detail="Biển số không đúng định dạng.")
 
+            # Trùng biển số với xe khác trong bãi
             cur.execute(
                 """SELECT id FROM phien_gui_xe
                     WHERE REPLACE(REPLACE(REPLACE(bien_so,'-',''),'.',''),' ','') = %s
                       AND is_in_bai = 1 AND id != %s""",
-                (bien_so_sach_moi, id_phien)
+                (bien_so_sach_moi, id_phien if phien else 0)
             )
             if cur.fetchone():
                 raise HTTPException(
@@ -253,6 +315,7 @@ def sua_thong_tin_xe(
                     detail="Biển số này đang được dùng bởi xe khác trong bãi."
                 )
 
+            # Nếu là xe thường, kiểm tra trùng vé tháng còn hạn
             if not la_ve_thang:
                 cur.execute(
                     """SELECT id FROM ve_thang
@@ -267,20 +330,28 @@ def sua_thong_tin_xe(
                     )
 
             _, duoi_bien_so_moi = tach_bien_so(bien_so_sach_moi)
-            cur.execute(
-                "UPDATE phien_gui_xe SET bien_so = %s, duoi_bien_so = %s WHERE id = %s",
-                (bien_so_moi, duoi_bien_so_moi, id_phien)
-            )
 
-            # Đồng bộ biển số sang vé tháng gốc (nếu là phiên vé tháng)
+            # Cập nhật biển số cho phiên (nếu có)
+            if phien:
+                cur.execute(
+                    "UPDATE phien_gui_xe SET bien_so = %s, duoi_bien_so = %s WHERE id = %s",
+                    (bien_so_moi, duoi_bien_so_moi, id_phien)
+                )
+
+            # Nếu là vé tháng, đồng bộ biển số vào ve_thang và tất cả phiên đang mở của vé đó
             if la_ve_thang:
                 cur.execute(
                     "UPDATE ve_thang SET bien_so = %s, duoi_bien_so = %s WHERE id = %s",
-                    (bien_so_moi, duoi_bien_so_moi, phien["id_ve_thang"])
+                    (bien_so_moi, duoi_bien_so_moi, id_ve_thang)
+                )
+                cur.execute(
+                    "UPDATE phien_gui_xe SET bien_so = %s, duoi_bien_so = %s WHERE id_ve_thang = %s AND is_in_bai = 1 AND id != %s",
+                    (bien_so_moi, duoi_bien_so_moi, id_ve_thang, id_phien if phien else 0)
                 )
 
             # ── Thông tin khách hàng ──
-            if phien["id_khach_hang"]:
+            id_khach = phien["id_khach_hang"] if phien else None
+            if id_khach:
                 sets, vals = [], []
                 if ten_chu_xe is not None:
                     sets.append("ten = %s"); vals.append(ten_chu_xe)
@@ -289,29 +360,32 @@ def sua_thong_tin_xe(
                 if email is not None:
                     sets.append("email = %s"); vals.append(email)
                 if sets:
-                    vals.append(phien["id_khach_hang"])
+                    vals.append(id_khach)
                     cur.execute(f"UPDATE khach_hang SET {', '.join(sets)} WHERE id = %s", tuple(vals))
             elif ten_chu_xe or sdt or email:
                 cur.execute(
                     "INSERT INTO khach_hang (ten, sdt, email) VALUES (%s, %s, %s)",
                     (ten_chu_xe or "Khách vãng lai", sdt, email)
                 )
-                id_khach_hang_moi = cur.lastrowid
-                cur.execute(
-                    "UPDATE phien_gui_xe SET id_khach_hang = %s WHERE id = %s",
-                    (id_khach_hang_moi, id_phien)
-                )
+                id_khach_moi = cur.lastrowid
+                if phien:
+                    cur.execute(
+                        "UPDATE phien_gui_xe SET id_khach_hang = %s WHERE id = %s",
+                        (id_khach_moi, id_phien)
+                    )
 
             # ── Ghi chú ──
             if ghi_chu is not None:
-                cur.execute(
-                    "UPDATE phien_gui_xe SET ghi_chu = %s WHERE id = %s",
-                    (ghi_chu, id_phien)
-                )
+                if phien:
+                    cur.execute(
+                        "UPDATE phien_gui_xe SET ghi_chu = %s WHERE id = %s",
+                        (ghi_chu, id_phien)
+                    )
+                # Với vé tháng không có phiên, tạm thời không lưu ghi chú (có thể mở rộng sau)
 
             KetNoi.commit()
 
-        return {"message": "Đã cập nhật thông tin xe thành công.", "id": id_phien}
+        return {"message": "Đã cập nhật thông tin thành công.", "id": id_phien if phien else id_ve_thang}
 
     except mysql.connector.Error as err:
         KetNoi.rollback()

@@ -147,11 +147,12 @@ export default function VeThang() {
               ➕ Gia hạn vé
             </button>
 
-            {ve.dang_trong_bai && (
+            {/* ← SỬA Ở ĐÂY: hiển thị nút Sửa cho mọi vé còn hạn */}
+            {(ve.trang_thai === 'con_han' || ve.trang_thai === 'sap_het') && (
               <button
                 className="btn btn-outline btn-sm"
                 style={{ width: 'auto' }}
-                onClick={() => setSuaPhienId(ve.id_phien_dang_bai)}
+                onClick={() => setSuaPhienId(ve.id_phien_dang_bai || ve.id)}
               >
                 ✏️ Sửa thông tin xe
               </button>
