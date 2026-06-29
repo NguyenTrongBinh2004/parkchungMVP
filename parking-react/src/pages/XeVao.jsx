@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { PageLayout, Spinner, Alert, Field, Modal, fmtDt } from '../components/UI'
 import { xeVaoApi, loaiXeApi } from '../services/api'
 import imageCompression from 'browser-image-compression'
-import { chuanHoaBienSo, isValidBienSo } from '../utils'
+import { chuanHoaBienSo, isValidBienSo, isMaTuSinhXeDap } from '../utils'
 
 // ── Tiện ích ──────────────────────────────────────────────────────
 async function compressImage(file) {
@@ -258,7 +258,7 @@ function SmartPanel({ loaiXeData }) {
     finally { setLoading(false) }
   }
 
-  async function kiemTraBienSo() {
+async function kiemTraBienSo() {
     const raw = bienSoText.trim()
     if (!raw) {
       const xeDap = configuredLoaiXe.find(lx => lx.ten.toLowerCase().includes('đạp'))
@@ -270,9 +270,12 @@ function SmartPanel({ loaiXeData }) {
       setError('Loại "Xe đạp" chưa được cấu hình giá.'); return
     }
     const cleaned = chuanHoaBienSo(raw)
-    const loaiXeObj = configuredLoaiXe.find(lx => lx.id == formThuong.loaiXe)
-    const isBicycle = loaiXeObj?.ten.toLowerCase().includes('đạp')
-    if (!isBicycle && !isValidBienSo(cleaned)) { setError('Biển số không đúng định dạng (VD: 51F-123.45)'); return }
+    // Mã tự sinh cho xe đạp (XD + số) luôn được chấp nhận, không phụ thuộc
+    // vào loại xe đang chọn trong formThuong (vì lúc này người dùng chưa kịp chọn).
+    if (!isMaTuSinhXeDap(cleaned) && !isValidBienSo(cleaned)) {
+      setError('Biển số không đúng định dạng (VD: 51F-123.45)')
+      return
+    }
     setBienSoText(cleaned); setLoading(true); setError(null)
     const fd = new FormData(); fd.append('bien_so', cleaned)
     try {
@@ -467,7 +470,7 @@ function BienSoPanel({ loaiXeData }) {
 
   useEffect(() => { setAutoModeFailed(false) }, [result])
 
-  async function kiemTra() {
+async function kiemTra() {
     const raw = bienSo.trim()
     if (!raw) {
       const xeDap = configuredLoaiXe.find(lx => lx.ten.toLowerCase().includes('đạp'))
@@ -479,9 +482,12 @@ function BienSoPanel({ loaiXeData }) {
       setError('Loại "Xe đạp" chưa được cấu hình giá.'); return
     }
     const cleaned = chuanHoaBienSo(raw)
-    const loaiXeObj = configuredLoaiXe.find(lx => lx.id == formThuong.loaiXe)
-    const isBicycle = loaiXeObj?.ten.toLowerCase().includes('đạp')
-    if (!isBicycle && !isValidBienSo(cleaned)) { setError('Biển số không đúng định dạng (VD: 51F-123.45)'); return }
+    // Mã tự sinh cho xe đạp (XD + số) luôn được chấp nhận, không phụ thuộc
+    // vào loại xe đang chọn trong formThuong (vì lúc này người dùng chưa kịp chọn).
+    if (!isMaTuSinhXeDap(cleaned) && !isValidBienSo(cleaned)) {
+      setError('Biển số không đúng định dạng (VD: 51F-123.45)')
+      return
+    }
     setBienSo(cleaned); setLoading(true); setError(null); setResult(null); setShowFormThuong(false)
     const fd = new FormData(); fd.append('bien_so', cleaned)
     try {

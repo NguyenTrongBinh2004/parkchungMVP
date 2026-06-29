@@ -91,6 +91,10 @@ SPECIAL_PREFIXES = [
     'AD','BT','LT','PX','RM','XM','HQ','CS','CT','DT'
 ]
 
+def is_valid_ma_xe_dap(ma: str) -> bool:
+    # Mã tự sinh dạng XD + 6 chữ số, ví dụ: XD610694
+    return bool(re.fullmatch(r'XD\d{6}', ma))
+
 def is_valid_bien_so(bien_so_sach: str) -> bool:
     if not (6 <= len(bien_so_sach) <= 10):
         return False
@@ -114,3 +118,7 @@ def is_valid_bien_so(bien_so_sach: str) -> bool:
     if letter_count > 4:
         return False
     return True
+
+def la_ma_xe_khong_bien_so(chuoi: str) -> bool:
+    """Mã tự sinh cho xe không có biển số thật (xe đạp...): 'XD' + chữ số."""
+    return bool(re.fullmatch(r'XD\d+', chuoi.upper()))

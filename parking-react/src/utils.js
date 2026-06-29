@@ -38,3 +38,4 @@ export function isValidBienSo(bienSoSach) {
 
   return true;
 }
+export const isMaTuSinhXeDap = (s) => /^XD\d+$/i.test(s)
