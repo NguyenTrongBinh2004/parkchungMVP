@@ -12,6 +12,7 @@ export default function XeDaRa() {
   const [error, setError] = useState(null)
 
   const fetchData = async () => {
+    if (!ngay) return  // tránh gọi API với ngày rỗng
     setLoading(true)
     setError(null)
     try {
@@ -25,16 +26,17 @@ export default function XeDaRa() {
   }
 
   useEffect(() => {
-    fetchData()
+    if (ngay) fetchData()
   }, [ngay])
 
   return (
     <PageLayout title="📋 Xe đã ra" backTo="/">
-      {/* Bộ lọc ngày */}
+      {/* Bộ lọc ngày – thiết kế gọn, đẹp */}
       <div style={{
         display: 'flex', gap: 12, marginBottom: 24, alignItems: 'flex-end',
-        background: 'rgba(255,255,255,0.03)', borderRadius: 12, padding: '14px 18px',
-        border: '1px solid var(--border)',
+        background: 'rgba(255,255,255,0.03)', borderRadius: 16,
+        padding: '16px 20px', border: '1px solid var(--border)',
+        flexWrap: 'wrap'
       }}>
         <Field label="Chọn ngày">
           <input
@@ -44,10 +46,11 @@ export default function XeDaRa() {
             style={{
               background: 'var(--bg-secondary)',
               border: '1px solid var(--border)',
-              borderRadius: 8,
-              padding: '8px 12px',
+              borderRadius: 10,
+              padding: '10px 14px',
               color: 'var(--text)',
-              fontSize: '0.9rem',
+              fontSize: '0.95rem',
+              minWidth: 160,
             }}
           />
         </Field>
@@ -55,7 +58,16 @@ export default function XeDaRa() {
           className="btn btn-accent"
           onClick={fetchData}
           disabled={loading}
-          style={{ height: 42, padding: '0 20px', fontSize: '0.95rem', fontWeight: 600 }}
+          style={{
+            height: 44,
+            padding: '0 24px',
+            fontSize: '0.95rem',
+            fontWeight: 600,
+            borderRadius: 10,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
         >
           {loading ? '⏳ Đang tải...' : '🔄 Làm mới'}
         </button>
@@ -64,7 +76,7 @@ export default function XeDaRa() {
       {loading && <Spinner />}
       {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
 
-      {/* Trạng thái không có dữ liệu */}
+      {/* Trạng thái rỗng */}
       {!loading && !error && list.length === 0 && (
         <div style={{
           textAlign: 'center', padding: '3rem', color: 'var(--text-muted)',
@@ -84,17 +96,16 @@ export default function XeDaRa() {
             style={{
               background: 'rgba(255,255,255,0.02)',
               borderRadius: 16,
-              padding: '16px 20px',
+              padding: '18px 20px',
               border: '1px solid var(--border)',
               display: 'flex',
               alignItems: 'center',
               gap: 16,
               transition: 'all 0.2s',
-              cursor: 'default',
             }}
             onMouseEnter={e => {
               e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
-              e.currentTarget.style.transform = 'translateY(-1px)'
+              e.currentTarget.style.transform = 'translateY(-2px)'
             }}
             onMouseLeave={e => {
               e.currentTarget.style.background = 'rgba(255,255,255,0.02)'
@@ -106,10 +117,10 @@ export default function XeDaRa() {
               src={xe.anh_bien_so || PLACEHOLDER}
               alt="biển số"
               style={{
-                width: 80,
-                height: 56,
+                width: 85,
+                height: 60,
                 objectFit: 'cover',
-                borderRadius: 10,
+                borderRadius: 12,
                 border: '1px solid var(--border)',
                 flexShrink: 0,
               }}
@@ -118,12 +129,11 @@ export default function XeDaRa() {
 
             {/* Thông tin chính */}
             <div style={{ flex: 1, minWidth: 0 }}>
-              {/* Biển số + trạng thái vé tháng */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                 <span style={{
                   fontFamily: 'var(--font-mono)',
                   fontWeight: 700,
-                  fontSize: '1.1rem',
+                  fontSize: '1.15rem',
                   color: 'var(--text)',
                 }}>
                   {xe.bien_so}
@@ -133,7 +143,7 @@ export default function XeDaRa() {
                     fontSize: '0.7rem',
                     background: 'var(--info)',
                     color: '#fff',
-                    padding: '2px 8px',
+                    padding: '2px 10px',
                     borderRadius: 12,
                     fontWeight: 600,
                     textTransform: 'uppercase',
@@ -144,14 +154,12 @@ export default function XeDaRa() {
                 )}
               </div>
 
-              {/* Thời gian vào/ra */}
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 2 }}>
+              <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: 4 }}>
                 🟢 {fmtDt(xe.gio_vao)}  →  🔴 {fmtDt(xe.gio_ra)}
               </div>
 
-              {/* Tên chủ xe (nếu có) */}
               {xe.ten_chu_xe && (
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
                   👤 {xe.ten_chu_xe}
                 </div>
               )}
@@ -160,11 +168,11 @@ export default function XeDaRa() {
             {/* Tiền + ảnh người lái */}
             <div style={{ textAlign: 'right', flexShrink: 0 }}>
               <div style={{
-                fontSize: '1.1rem',
+                fontSize: '1.2rem',
                 fontWeight: 700,
                 color: 'var(--accent)',
                 fontFamily: 'var(--font-mono)',
-                marginBottom: 4,
+                marginBottom: 6,
               }}>
                 {fmtTien(xe.so_tien)}
               </div>
@@ -173,8 +181,8 @@ export default function XeDaRa() {
                   src={xe.anh_nguoi_lai}
                   alt="người lái"
                   style={{
-                    width: 44,
-                    height: 44,
+                    width: 46,
+                    height: 46,
                     objectFit: 'cover',
                     borderRadius: '50%',
                     border: '2px solid var(--border)',
@@ -183,7 +191,7 @@ export default function XeDaRa() {
                 />
               ) : (
                 <div style={{
-                  width: 44, height: 44,
+                  width: 46, height: 46,
                   borderRadius: '50%',
                   background: 'rgba(255,255,255,0.05)',
                   display: 'flex',
