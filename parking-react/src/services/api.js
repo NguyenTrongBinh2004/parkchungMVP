@@ -105,5 +105,8 @@ export const baoCaoApi = {
 }
 
 export const timXeApi = {
-  timKiem: (params) => apiClient.get('/tim-xe/', { params }).then(r => r.data),
+  timKiem: (params) => {
+    const qs = new URLSearchParams(params).toString()
+    return request(`/tim-xe/?${qs}`)
+  },
 }
