@@ -103,3 +103,7 @@ export const baoCaoApi = {
     return request(`/bao-cao/thong-ke?${qs}`)
   },
 }
+
+export const timXeApi = {
+  timKiem: (params) => apiClient.get('/tim-xe/', { params }).then(r => r.data),
+}

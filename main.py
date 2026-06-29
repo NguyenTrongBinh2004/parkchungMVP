@@ -9,7 +9,7 @@ from services.qr_service import tao_ma_qr, doc_ma_qr
 from services.email_service import gui_email_qr
 from services.sms_service import gui_thong_bao_ve_thang
 from services.billing_service import BillingService, _co_gia_rieng
-from routers import loai_xe, xe_ra, thanh_toan, xe_vao,ve_thang, bao_cao
+from routers import loai_xe, xe_ra, thanh_toan, xe_vao,ve_thang, bao_cao, tim_xe
 from utils import bay_gio_vn, build_url, chuan_hoa_bien_so, tinh_trang_thai, luu_anh, is_valid_bien_so
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,6 +37,7 @@ app.include_router(thanh_toan.router)
 app.include_router(xe_vao.router)
 app.include_router(ve_thang.router)
 app.include_router(bao_cao.router)
+app.include_router(tim_xe.router)
 
 os.makedirs("uploads", exist_ok=True)
 
@@ -158,3 +159,5 @@ def xe_trong_bai(KetNoi=Depends(lay_ket_noi_CSDL)):
         })
 
     return ket_qua
+
+

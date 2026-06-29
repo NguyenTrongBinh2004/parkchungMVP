@@ -8,6 +8,7 @@ import DangKyVeThang from './pages/DangKyVeThang'
 import LoaiXe from './pages/LoaiXe'
 import CaiDat from './pages/CaiDat'
 import ThongKe from './pages/ThongKe'
+import TimXe from './pages/TimXe'
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
       <Route path="/dang-ky-ve-thang"   element={<DangKyVeThang />} />
       <Route path="/loai-xe"            element={<LoaiXe />} />
       <Route path="/thong-ke"           element={<ThongKe />} />
+      <Route path="/tim-xe"             element={<TimXe />} />
       <Route path="/cai-dat"            element={<CaiDat />} />
       <Route path="*"                   element={<Navigate to="/" />} />
     </Routes>

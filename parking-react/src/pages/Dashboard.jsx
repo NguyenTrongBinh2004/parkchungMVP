@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 const MENUS = [
   { icon: '📸', label: 'Xe vào',       path: '/xe-vao' },
   { icon: '📤', label: 'Xe ra',        path: '/xe-ra' },
+  { icon: '🔍', label: 'Tìm xe',       path: '/tim-xe' },
   { icon: '📋', label: 'DS trong bãi', path: '/danh-sach' },
   { icon: '🎫', label: 'Vé tháng',     path: '/ve-thang' },
   { icon: '📊', label: 'Thống kê',     path: '/thong-ke' },
