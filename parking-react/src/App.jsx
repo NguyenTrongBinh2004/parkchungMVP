@@ -9,7 +9,7 @@ import LoaiXe from './pages/LoaiXe'
 import CaiDat from './pages/CaiDat'
 import ThongKe from './pages/ThongKe'
 import TimXe from './pages/TimXe'
-
+import XeDaRa from './pages/XeDaRa'
 export default function App() {
   return (
     <Routes>
@@ -17,6 +17,7 @@ export default function App() {
       <Route path="/xe-vao"             element={<XeVao />} />
       <Route path="/xe-ra"              element={<XeRa />} />
       <Route path="/danh-sach"          element={<DanhSach />} />
+      <Route path="/xe-da-ra"           element={<XeDaRa />} />
       <Route path="/ve-thang"           element={<VeThang />} />
       <Route path="/dang-ky-ve-thang"   element={<DangKyVeThang />} />
       <Route path="/loai-xe"            element={<LoaiXe />} />

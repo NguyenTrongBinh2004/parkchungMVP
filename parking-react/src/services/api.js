@@ -1,9 +1,7 @@
-// Tập trung tất cả các API call vào một nơi
-
-// Lấy link API từ biến môi trường của Vercel/Vite, nếu không có thì dùng link Render (để chạy local)
 const BASE = import.meta.env.VITE_API_URL || 'https://parking-mvp-backend.onrender.com';
 console.log('BASE URL:', BASE);
 console.log('ENV:', import.meta.env.VITE_API_URL);
+
 async function request(url, options = {}) {
   const fullUrl = BASE + url;
   console.log('🌐 REQUEST:', fullUrl, options.method || 'GET');
@@ -19,12 +17,10 @@ async function request(url, options = {}) {
   const contentType = res.headers.get('content-type');
   console.log('📬 RESPONSE:', res.status, contentType);
 
-  // Đọc raw text (để an toàn, không parse ngay)
   const text = await res.text();
 
   if (!res.ok) {
     console.error('❌ HTTP ERROR', res.status, text.substring(0, 500));
-    // Nếu có JSON trong response lỗi thì parse, nếu không thì quăng nguyên text
     let detail = text;
     if (contentType && contentType.includes('application/json')) {
       try {
@@ -35,7 +31,6 @@ async function request(url, options = {}) {
     throw new Error(detail || `HTTP ${res.status}`);
   }
 
-  // Nếu thành công nhưng không phải JSON -> log cảnh báo
   if (!contentType || !contentType.includes('application/json')) {
     console.error('⚠️ NOT JSON response:', text.substring(0, 500));
     throw new Error('Server trả về HTML thay vì JSON');
@@ -44,9 +39,7 @@ async function request(url, options = {}) {
   return JSON.parse(text);
 }
 
-
 // ─── Loại xe ───
-// services/api.js (phần liên quan đến loaiXeApi)
 export const loaiXeApi = {
   list: (params) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : ''
@@ -61,13 +54,15 @@ export const loaiXeApi = {
   update: (id, formData) => request(`/loai-xe/${id}`, { method: 'PUT', body: formData }),
   delete: (id) => request(`/loai-xe/${id}`, { method: 'DELETE' }),
 }
+
 // ─── Xe vào ───
 export const xeVaoApi = {
   nhanDien: (formData) => request('/xe-vao/nhan-dien/', { method: 'POST', body: formData }),
-  kiemTraBienSo: (formData) => request('/xe-vao/kiem-tra-bien-so/', { method: 'POST', body: formData }), // thêm dòng này
+  kiemTraBienSo: (formData) => request('/xe-vao/kiem-tra-bien-so/', { method: 'POST', body: formData }),
   xacNhanVeThang: (formData) => request('/xe-vao/ve-thang/xac-nhan/', { method: 'POST', body: formData }),
   xacNhanThuong: (formData) => request('/xe-vao/ve-thuong/xac-nhan/', { method: 'POST', body: formData }),
 }
+
 // ─── Xe ra ───
 export const xeRaApi = {
   nhanDien: (formData) => request('/xe-ra/nhan-dien/', { method: 'POST', body: formData }),
@@ -83,7 +78,12 @@ export const thanhToanApi = {
 
 // ─── Xe trong bãi ───
 export const xeTrongBaiApi = {
-  list: () => request('/xe-trong-bai/'),
+  list: () => request('/danh-sach-xe/trong-bai'),   // URL mới
+}
+
+// ─── Xe đã ra ───
+export const xeDaRaApi = {
+  list: (ngay) => request(`/danh-sach-xe/da-ra?ngay=${ngay}`),
 }
 
 // ─── Vé tháng ───
