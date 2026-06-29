@@ -351,10 +351,12 @@ def danh_sach_ve_thang(KetNoi=Depends(lay_ket_noi_CSDL)):
                    v.so_tien, v.ma_qr, v.ghi_chu,
                    v.duong_dan_anh_bien_so, v.duong_dan_anh_nguoi_dung,
                    k.ten AS ten_chu_xe, k.sdt, k.email,
-                   l.ten AS ten_loai_xe
+                   l.ten AS ten_loai_xe,
+                   p.id AS id_phien_dang_bai
               FROM ve_thang v
               LEFT JOIN khach_hang k ON v.id_khach_hang = k.id
               LEFT JOIN loai_xe    l ON v.id_loai_xe    = l.id
+              LEFT JOIN phien_gui_xe p ON p.id_ve_thang = v.id AND p.is_in_bai = 1
              ORDER BY v.ngay_het_han ASC
             """
         )
@@ -378,6 +380,8 @@ def danh_sach_ve_thang(KetNoi=Depends(lay_ket_noi_CSDL)):
             "anh_bien_so": build_url(ve.get("duong_dan_anh_bien_so")),
             "anh_nguoi_dung": build_url(ve.get("duong_dan_anh_nguoi_dung")),
             "anh_qr": build_url(f"uploads/qr/{ve['ma_qr']}.png") if ve.get("ma_qr") else None,
+            "dang_trong_bai": ve.get("id_phien_dang_bai") is not None,
+            "id_phien_dang_bai": ve.get("id_phien_dang_bai"),
         }
         for ve in danh_sach
     ]

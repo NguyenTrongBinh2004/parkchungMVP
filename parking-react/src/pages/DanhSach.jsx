@@ -2,10 +2,13 @@ import { useState, useEffect } from 'react'
 import { PageLayout, Spinner, Alert, fmtDt, fmtTien } from '../components/UI'
 import { xeTrongBaiApi } from '../services/api'
 import { PLACEHOLDER } from '../components/UI';
+import SuaXeModal from '../components/SuaXeModal'
+
 export default function DanhSach() {
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [suaPhienId, setSuaPhienId] = useState(null)
 
   async function fetchData() {
     setLoading(true)
@@ -59,6 +62,15 @@ export default function DanhSach() {
               Tạm tính: <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{fmtTien(xe.so_tien_tam_tinh)}</span>
             </div>
             {xe.la_xe_ve_thang && <span className="badge badge-info" style={{ marginTop: 4 }}>Vé tháng</span>}
+            <div style={{ marginTop: 6 }}>
+              <button
+                className="btn btn-outline btn-sm"
+                style={{ width: 'auto' }}
+                onClick={() => setSuaPhienId(xe.id)}
+              >
+                ✏️ Sửa
+              </button>
+            </div>
           </div>
           {xe.anh_nguoi_lai && (
             <img
@@ -70,6 +82,14 @@ export default function DanhSach() {
           )}
         </div>
       ))}
+
+      {suaPhienId && (
+        <SuaXeModal
+          phienId={suaPhienId}
+          onClose={() => setSuaPhienId(null)}
+          onSuccess={() => { setSuaPhienId(null); fetchData() }}
+        />
+      )}
     </PageLayout>
   )
 }

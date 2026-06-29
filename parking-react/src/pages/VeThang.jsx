@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { PageLayout, Spinner, Alert, TrangThaiBadge, Modal, fmtTien } from '../components/UI'
 import { veThangApi } from '../services/api'
 import { PLACEHOLDER } from '../components/UI';
+import SuaXeModal from '../components/SuaXeModal'
 
 function GiaHanModal({ ve, onClose, onSuccess }) {
   const [ghiChu, setGhiChu] = useState('')
@@ -46,6 +47,7 @@ export default function VeThang() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [giaHanVe, setGiaHanVe] = useState(null)
+  const [suaPhienId, setSuaPhienId] = useState(null)
 
   async function load() {
     setLoading(true)
@@ -75,7 +77,7 @@ export default function VeThang() {
       {list.map(ve => (
         <div key={ve.id} className="card" style={{ marginBottom: 12 }}>
           <div style={{ display: 'flex', gap: 15, alignItems: 'flex-start' }}>
-            
+
             {/* Cột 1: Chứa ảnh Biển số và ảnh Người đăng ký */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
               <div style={{ textAlign: 'center' }}>
@@ -87,7 +89,7 @@ export default function VeThang() {
                   onError={e => e.target.src = PLACEHOLDER}
                 />
               </div>
-              
+
               <div style={{ textAlign: 'center' }}>
                 <small style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Người đăng ký</small>
                 <img
@@ -105,35 +107,38 @@ export default function VeThang() {
                 <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '1.1rem' }}>{ve.bien_so}</span>
                 <TrangThaiBadge trangThai={ve.trang_thai} />
               </div>
-              
+
               <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
                 <div>Chủ xe: <span style={{ color: 'var(--text)', fontWeight: 500 }}>{ve.ten_chu_xe}</span></div>
                 <div>SĐT: {ve.sdt || 'N/A'}</div>
                 <div>Loại: {ve.ten_loai_xe}</div>
-                <div>Hết hạn: <strong style={{ color: 'var(--text)' }}>{ve.ngay_het_han}</strong> 
+                <div>Hết hạn: <strong style={{ color: 'var(--text)' }}>{ve.ngay_het_han}</strong>
                   <span style={{ marginLeft: 5 }}>({ve.so_ngay_con >= 0 ? `còn ${ve.so_ngay_con} ngày` : 'đã hết hạn'})</span>
                 </div>
                 <div style={{ marginTop: 4 }}>
                   Tiền: <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{Number(ve.so_tien).toLocaleString('vi-VN')} đ</span>
                 </div>
+                {ve.dang_trong_bai && (
+                  <span className="badge badge-success" style={{ marginTop: 4 }}>🟢 Đang trong bãi</span>
+                )}
               </div>
             </div>
 
             {/* Cột 3: Mã QR */}
             {ve.anh_qr && (
               <div style={{ flexShrink: 0, textAlign: 'center' }}>
-                <img 
-                  src={ve.anh_qr} 
-                  style={{ width: 70, height: 70, objectFit: 'contain', borderRadius: 6, background: '#fff', padding: 2 }} 
-                  alt="QR" 
+                <img
+                  src={ve.anh_qr}
+                  style={{ width: 70, height: 70, objectFit: 'contain', borderRadius: 6, background: '#fff', padding: 2 }}
+                  alt="QR"
                 />
                 <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: 4 }}>Mã vé</div>
               </div>
             )}
           </div>
 
-          {/* Nút gia hạn và xóa phía dưới cùng của card */}
-          <div style={{ borderTop: '1px solid var(--border)', marginTop: 12, paddingTop: 10, display: 'flex', gap: 8 }}>
+          {/* Nút gia hạn, sửa, xóa phía dưới cùng của card */}
+          <div style={{ borderTop: '1px solid var(--border)', marginTop: 12, paddingTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button
               className="btn btn-outline btn-sm"
               style={{ width: 'auto' }}
@@ -141,6 +146,17 @@ export default function VeThang() {
             >
               ➕ Gia hạn vé
             </button>
+
+            {ve.dang_trong_bai && (
+              <button
+                className="btn btn-outline btn-sm"
+                style={{ width: 'auto' }}
+                onClick={() => setSuaPhienId(ve.id_phien_dang_bai)}
+              >
+                ✏️ Sửa thông tin xe
+              </button>
+            )}
+
             <button
               className="btn btn-sm"
               style={{ width: 'auto', background: 'var(--danger)', color: '#fff' }}
@@ -166,6 +182,14 @@ export default function VeThang() {
           ve={giaHanVe}
           onClose={() => setGiaHanVe(null)}
           onSuccess={() => { setGiaHanVe(null); load() }}
+        />
+      )}
+
+      {suaPhienId && (
+        <SuaXeModal
+          phienId={suaPhienId}
+          onClose={() => setSuaPhienId(null)}
+          onSuccess={() => { setSuaPhienId(null); load() }}
         />
       )}
     </PageLayout>

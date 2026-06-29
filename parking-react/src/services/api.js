@@ -110,3 +110,8 @@ export const timXeApi = {
     return request(`/tim-xe/?${qs}`)
   },
 }
+
+export const suaXeApi = {
+  chiTiet: (id) => request(`/danh-sach-xe/phien/${id}`),
+  capNhat: (id, formData) => request(`/danh-sach-xe/phien/${id}`, { method: 'PUT', body: formData }),
+}

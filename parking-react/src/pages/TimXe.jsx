@@ -2,6 +2,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { PageLayout, Spinner, Alert, Field, fmtDt } from '../components/UI'
 import { timXeApi } from '../services/api'
+import SuaXeModal from '../components/SuaXeModal'
 
 const formatVND = (v) => {
   if (v === undefined || v === null) return ''
@@ -10,7 +11,7 @@ const formatVND = (v) => {
 
 const LIMIT = 20
 
-function ResultCard({ item }) {
+function ResultCard({ item, onSua }) {
   const [showAnh, setShowAnh] = useState(false)
   const coAnh = item.anh_bien_so || item.anh_nguoi_lai
 
@@ -56,24 +57,36 @@ function ResultCard({ item }) {
         {item.ghi_chu && <div style={{ color: 'var(--text-muted)' }}>📝 {item.ghi_chu}</div>}
       </div>
 
-      {coAnh && (
-        <div style={{ marginTop: 8 }}>
+      <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+        {coAnh && (
           <button
             type="button"
             className="btn btn-outline btn-sm"
+            style={{ width: 'auto' }}
             onClick={() => setShowAnh(s => !s)}
           >
             {showAnh ? 'Ẩn ảnh' : '🖼 Xem ảnh'}
           </button>
-          {showAnh && (
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              {item.anh_bien_so && (
-                <img src={item.anh_bien_so} alt="Biển số" style={{ width: 140, height: 90, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)' }} />
-              )}
-              {item.anh_nguoi_lai && (
-                <img src={item.anh_nguoi_lai} alt="Người lái" style={{ width: 90, height: 90, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)' }} />
-              )}
-            </div>
+        )}
+        {item.dang_trong_bai && (
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            style={{ width: 'auto' }}
+            onClick={() => onSua(item.id)}
+          >
+            ✏️ Sửa
+          </button>
+        )}
+      </div>
+
+      {showAnh && coAnh && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          {item.anh_bien_so && (
+            <img src={item.anh_bien_so} alt="Biển số" style={{ width: 140, height: 90, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)' }} />
+          )}
+          {item.anh_nguoi_lai && (
+            <img src={item.anh_nguoi_lai} alt="Người lái" style={{ width: 90, height: 90, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)' }} />
           )}
         </div>
       )}
@@ -89,6 +102,7 @@ export default function TimXe() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [daTimKiem, setDaTimKiem] = useState(false)
+  const [suaPhienId, setSuaPhienId] = useState(null)
   const debounceRef = useRef(null)
 
   const search = useCallback(async (raw, pageToLoad = 1) => {
@@ -118,6 +132,11 @@ export default function TimXe() {
 
   function loadMore() {
     search(bienSo, page + 1)
+  }
+
+  function refreshSauKhiSua() {
+    setSuaPhienId(null)
+    search(bienSo, 1)
   }
 
   const conThem = items.length < total
@@ -150,7 +169,7 @@ export default function TimXe() {
           <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 10 }}>
             Tìm thấy {total} biển số khớp
           </div>
-          {items.map(item => <ResultCard key={item.id} item={item} />)}
+          {items.map(item => <ResultCard key={item.id} item={item} onSua={setSuaPhienId} />)}
 
           {conThem && (
             <div style={{ textAlign: 'center', marginTop: 8 }}>
@@ -166,6 +185,14 @@ export default function TimXe() {
         <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: 40 }}>
           Nhập ít nhất 2 ký tự để tìm kiếm
         </div>
+      )}
+
+      {suaPhienId && (
+        <SuaXeModal
+          phienId={suaPhienId}
+          onClose={() => setSuaPhienId(null)}
+          onSuccess={refreshSauKhiSua}
+        />
       )}
     </PageLayout>
   )
