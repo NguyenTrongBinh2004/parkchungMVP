@@ -472,26 +472,6 @@ function BienSoPanel({ loaiXeData }) {
 
   const isVeThang = result?.loai === 've_thang'
 
-  // Kiểm tra biển số: chỉ dùng để phát hiện sớm vé tháng / xe đang trong bãi.
-  // Không bắt buộc phải bấm trước khi xác nhận xe vào.
-  async function kiemTra() {
-    const raw = bienSo.trim()
-    if (!raw) { setError('Vui lòng nhập biển số'); return }
-    const cleaned = chuanHoaBienSo(raw)
-    if (!isMaTuSinhXeDap(cleaned) && !isValidBienSo(cleaned)) {
-      setError('Biển số không đúng định dạng (VD: 51F-123.45)')
-      return
-    }
-    setBienSo(cleaned); setLoading(true); setError(null); setResult(null)
-    const fd = new FormData(); fd.append('bien_so', cleaned)
-    try {
-      const data = await xeVaoApi.kiemTraBienSo(fd)
-      if (data.loai === 've_thang') setResult(data)
-      else setResult(null) // xe_thuong: form thông tin đã hiển thị sẵn, không cần làm gì thêm
-    } catch (err) { setError(err.message) }
-    finally { setLoading(false) }
-  }
-
   async function xacNhanVeThangAuto() {
     if (!result?.ma_qr) { setError('Thiếu mã QR vé tháng'); return }
     setLoading(true)
@@ -521,25 +501,8 @@ function BienSoPanel({ loaiXeData }) {
     finally { setLoading(false) }
   }
 
-  async function xacNhanThuong() {
-    if (!formThuong.loaiXe) { setError('Vui lòng chọn loại xe'); return }
-    const loaiXeObj = configuredLoaiXe.find(lx => lx.id == formThuong.loaiXe)
-    const isBicycle = loaiXeObj?.ten.toLowerCase().includes('đạp')
-
-    let bienSoFinal = bienSo.trim()
-    if (!isBicycle) {
-      if (!bienSoFinal) { setError('Vui lòng nhập biển số'); return }
-      const cleaned = chuanHoaBienSo(bienSoFinal)
-      if (!isValidBienSo(cleaned)) { setError('Biển số không đúng định dạng (VD: 51F-123.45)'); return }
-      bienSoFinal = cleaned
-    }
-
-    if (coChupAnh) {
-      if (!fileBienSo) { setError('Vui lòng chụp ảnh biển số'); return }
-      if (!fileNguoiLai) { setError('Vui lòng chụp ảnh người lái'); return }
-    }
-
-    setLoading(true)
+  // Xác nhận xe thường: gửi thẳng dữ liệu lên backend
+  async function guiXacNhanThuong(bienSoFinal) {
     const fd = new FormData()
     fd.append('id_loai_xe', formThuong.loaiXe)
     fd.append('bien_so_xac_nhan', bienSoFinal.toUpperCase())
@@ -559,6 +522,51 @@ function BienSoPanel({ loaiXeData }) {
     finally { setLoading(false) }
   }
 
+  // Nút duy nhất: vừa kiểm tra (phát hiện vé tháng / đang trong bãi), vừa xác nhận luôn nếu là xe thường
+  async function handleXacNhan() {
+    setError(null)
+    if (!formThuong.loaiXe) { setError('Vui lòng chọn loại xe'); return }
+    const loaiXeObj = configuredLoaiXe.find(lx => lx.id == formThuong.loaiXe)
+    const isBicycle = loaiXeObj?.ten.toLowerCase().includes('đạp')
+
+    let bienSoFinal = bienSo.trim()
+    if (!isBicycle) {
+      if (!bienSoFinal) { setError('Vui lòng nhập biển số'); return }
+      const cleaned = chuanHoaBienSo(bienSoFinal)
+      if (!isValidBienSo(cleaned)) { setError('Biển số không đúng định dạng (VD: 51F-123.45)'); return }
+      bienSoFinal = cleaned
+    } else if (bienSoFinal) {
+      bienSoFinal = chuanHoaBienSo(bienSoFinal)
+    }
+
+    if (coChupAnh) {
+      if (!fileBienSo) { setError('Vui lòng chụp ảnh biển số'); return }
+      if (!fileNguoiLai) { setError('Vui lòng chụp ảnh người lái'); return }
+    }
+
+    setBienSo(bienSoFinal)
+    setLoading(true)
+
+    // Chỉ kiểm tra vé tháng / đang trong bãi khi có biển số thật (bỏ qua mã XD tự sinh cho xe đạp)
+    if (bienSoFinal && !isMaTuSinhXeDap(bienSoFinal)) {
+      try {
+        const fd = new FormData(); fd.append('bien_so', bienSoFinal)
+        const data = await xeVaoApi.kiemTraBienSo(fd)
+        if (data.loai === 've_thang') {
+          setResult(data)
+          setLoading(false)
+          return // dừng lại, hiện thẻ vé tháng để xác nhận riêng
+        }
+      } catch (err) {
+        setError(err.message)
+        setLoading(false)
+        return
+      }
+    }
+
+    await guiXacNhanThuong(bienSoFinal)
+  }
+
   function resetForm() {
     setBienSo(''); setResult(null); setError(null); setAutoModeFailed(false)
     setFileBienSo(null); setFileNguoiLai(null); setCoChupAnh(false)
@@ -570,11 +578,8 @@ function BienSoPanel({ loaiXeData }) {
   return (
     <div className="card">
       <Field label="Nhập biển số">
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input value={bienSo} onChange={e => setBienSo(e.target.value)} placeholder="VD: 51F-12345"
-            style={{ flex: 1, textTransform: 'uppercase' }} onKeyDown={e => e.key === 'Enter' && kiemTra()} />
-          <button className="btn btn-secondary btn-sm" onClick={kiemTra} disabled={loading} style={{ whiteSpace: 'nowrap' }}>Kiểm tra</button>
-        </div>
+        <input value={bienSo} onChange={e => setBienSo(e.target.value)} placeholder="VD: 51F-12345"
+          style={{ textTransform: 'uppercase' }} onKeyDown={e => e.key === 'Enter' && handleXacNhan()} />
       </Field>
 
       <div style={{ margin: '0.5rem 0' }}>
@@ -644,7 +649,7 @@ function BienSoPanel({ loaiXeData }) {
               <span>Có</span>
             </label>
           </Field>
-          <button className="btn btn-accent" onClick={xacNhanThuong} disabled={loading}>✅ Xác nhận xe vào</button>
+          <button className="btn btn-accent" onClick={handleXacNhan} disabled={loading}>✅ Xác nhận xe vào</button>
         </div>
       )}
 
