@@ -1,8 +1,54 @@
+// src/pages/DanhSach.jsx
 import { useState, useEffect } from 'react'
 import { PageLayout, Spinner, Alert, fmtDt, fmtTien } from '../components/UI'
 import { xeTrongBaiApi } from '../services/api'
-import { PLACEHOLDER } from '../components/UI';
 import SuaXeModal from '../components/SuaXeModal'
+
+function AnhBienSo({ src }) {
+  if (src) {
+    return (
+      <img
+        src={src}
+        className="thumb"
+        alt="biển số"
+        onError={e => { e.target.style.display = 'none' }}
+        style={{ flexShrink: 0 }}
+      />
+    )
+  }
+  return (
+    <div className="thumb" style={{
+      flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)', fontSize: '1.4rem',
+      border: '1px solid var(--border)',
+    }}>
+      🚗
+    </div>
+  )
+}
+
+function AnhNguoiLai({ src }) {
+  if (src) {
+    return (
+      <img
+        src={src}
+        className="thumb-round"
+        alt="người lái"
+        onError={e => { e.target.style.display = 'none' }}
+        style={{ marginLeft: 10, flexShrink: 0 }}
+      />
+    )
+  }
+  return (
+    <div className="thumb-round" style={{
+      marginLeft: 10, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)', fontSize: '1.2rem',
+      border: '1px solid var(--border)',
+    }}>
+      👤
+    </div>
+  )
+}
 
 export default function DanhSach() {
   const [list, setList] = useState([])
@@ -47,13 +93,7 @@ export default function DanhSach() {
 
       {list.map(xe => (
         <div key={xe.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-          <img
-            src={xe.anh_bien_so || PLACEHOLDER}
-            className="thumb"
-            alt="biển số"
-            onError={e => e.target.src = PLACEHOLDER}
-            style={{ flexShrink: 0 }}
-          />
+          <AnhBienSo src={xe.anh_bien_so} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '1.1rem' }}>{xe.bien_so}</div>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Vào lúc: {fmtDt(xe.gio_vao)}</div>
@@ -72,14 +112,7 @@ export default function DanhSach() {
               </button>
             </div>
           </div>
-          {xe.anh_nguoi_lai && (
-            <img
-              src={xe.anh_nguoi_lai}
-              className="thumb-round"
-              alt="người lái"
-              style={{ marginLeft: 10, flexShrink: 0 }}
-            />
-          )}
+          <AnhNguoiLai src={xe.anh_nguoi_lai} />
         </div>
       ))}
 

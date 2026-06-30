@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react'
 import { PageLayout, Spinner, Alert, Field, fmtDt, fmtTien } from '../components/UI'
 import { xeDaRaApi } from '../services/api'
-import { PLACEHOLDER } from '../components/UI'
 
 export default function XeDaRa() {
   const today = new Date().toISOString().slice(0, 10)
@@ -113,19 +112,30 @@ export default function XeDaRa() {
             }}
           >
             {/* Ảnh biển số */}
-            <img
-              src={xe.anh_bien_so || PLACEHOLDER}
-              alt="biển số"
-              style={{
-                width: 85,
-                height: 60,
-                objectFit: 'cover',
-                borderRadius: 12,
-                border: '1px solid var(--border)',
-                flexShrink: 0,
-              }}
-              onError={e => { e.target.src = PLACEHOLDER }}
-            />
+            {xe.anh_bien_so ? (
+              <img
+                src={xe.anh_bien_so}
+                alt="biển số"
+                style={{
+                  width: 85,
+                  height: 60,
+                  objectFit: 'cover',
+                  borderRadius: 12,
+                  border: '1px solid var(--border)',
+                  flexShrink: 0,
+                }}
+                onError={e => { e.target.style.display = 'none' }}
+              />
+            ) : (
+              <div style={{
+                width: 85, height: 60, borderRadius: 12, flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)',
+                color: 'var(--text-muted)', fontSize: '1.4rem',
+              }}>
+                🚗
+              </div>
+            )}
 
             {/* Thông tin chính */}
             <div style={{ flex: 1, minWidth: 0 }}>
