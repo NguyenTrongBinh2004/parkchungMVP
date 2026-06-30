@@ -189,7 +189,7 @@ async def xac_nhan_xe_vao_ve_thang(
             if ConTro.fetchone():
                 raise HTTPException(status_code=400, detail="Xe này hiện đang trong bãi.")
 
-        duong_dan_bien_so   = await luu_anh(anh_bien_so,   "uploads/bien_so")
+        duong_dan_bien_so   = await luu_anh(anh_bien_so,   "uploads/bien_so")   if anh_bien_so   else None
         duong_dan_nguoi_lai = await luu_anh(anh_nguoi_lai, "uploads/nguoi_lai") if anh_nguoi_lai else None
 
         bien_so      = ve_thang["bien_so"]
@@ -269,8 +269,8 @@ async def xac_nhan_xe_vao_ve_thuong(
     email: Optional[str] = Form(None),
     ghi_chu: Optional[str] = Form(None),
     cho_phep_lay_ho: bool = Form(False),
-    anh_bien_so: UploadFile = File(...),
-    anh_nguoi_lai: UploadFile = File(...),
+    anh_bien_so: Optional[UploadFile] = File(None),
+    anh_nguoi_lai: Optional[UploadFile] = File(None),
     KetNoi=Depends(lay_ket_noi_CSDL)
 ):
     sdt   = sdt.strip()   if sdt   else None

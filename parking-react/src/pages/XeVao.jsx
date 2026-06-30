@@ -447,14 +447,14 @@ async function kiemTraBienSo() {
 
 // ── BienSoPanel ────────────────────────────────────────────────────
 function BienSoPanel({ loaiXeData }) {
-  const { allLoaiXe, configuredLoaiXe, groupedLoaiXe, dataLoading } = loaiXeData
+  const { configuredLoaiXe, groupedLoaiXe, dataLoading } = loaiXeData
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [ticket, setTicket] = useState(null)
   const [bienSo, setBienSo] = useState('')
-  const [result, setResult] = useState(null)
-  const [showFormThuong, setShowFormThuong] = useState(false)
+  const [result, setResult] = useState(null) // chỉ dùng để giữ thông tin khi phát hiện vé tháng
+  const [coChupAnh, setCoChupAnh] = useState(false)
   const [fileBienSo, setFileBienSo] = useState(null)
   const [fileNguoiLai, setFileNguoiLai] = useState(null)
   const [formThuong, setFormThuong] = useState({ loaiXe: '', tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false })
@@ -470,31 +470,24 @@ function BienSoPanel({ loaiXeData }) {
 
   useEffect(() => { setAutoModeFailed(false) }, [result])
 
-async function kiemTra() {
+  const isVeThang = result?.loai === 've_thang'
+
+  // Kiểm tra biển số: chỉ dùng để phát hiện sớm vé tháng / xe đang trong bãi.
+  // Không bắt buộc phải bấm trước khi xác nhận xe vào.
+  async function kiemTra() {
     const raw = bienSo.trim()
-    if (!raw) {
-      const xeDap = configuredLoaiXe.find(lx => lx.ten.toLowerCase().includes('đạp'))
-      if (xeDap) {
-        const tempPlate = 'XD' + Date.now().toString().slice(-6)
-        setBienSo(tempPlate); setResult({ loai: 'xe_thuong' })
-        setShowFormThuong(true); setFormThuong(f => ({ ...f, loaiXe: xeDap.id })); return
-      }
-      setError('Loại "Xe đạp" chưa được cấu hình giá.'); return
-    }
+    if (!raw) { setError('Vui lòng nhập biển số'); return }
     const cleaned = chuanHoaBienSo(raw)
-    // Mã tự sinh cho xe đạp (XD + số) luôn được chấp nhận, không phụ thuộc
-    // vào loại xe đang chọn trong formThuong (vì lúc này người dùng chưa kịp chọn).
     if (!isMaTuSinhXeDap(cleaned) && !isValidBienSo(cleaned)) {
       setError('Biển số không đúng định dạng (VD: 51F-123.45)')
       return
     }
-    setBienSo(cleaned); setLoading(true); setError(null); setResult(null); setShowFormThuong(false)
+    setBienSo(cleaned); setLoading(true); setError(null); setResult(null)
     const fd = new FormData(); fd.append('bien_so', cleaned)
     try {
       const data = await xeVaoApi.kiemTraBienSo(fd)
-      if (data.loai === 've_thang') { setResult(data) }
-      else if (data.loai === 'xe_thuong') { setResult(data); setShowFormThuong(true) }
-      else { setError('Không tìm thấy xe.') }
+      if (data.loai === 've_thang') setResult(data)
+      else setResult(null) // xe_thuong: form thông tin đã hiển thị sẵn, không cần làm gì thêm
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }
@@ -511,7 +504,7 @@ async function kiemTra() {
       fd.append('anh_bien_so', await compressImage(fileBS))
       fd.append('anh_nguoi_lai', await compressImage(fileNL))
       const data = await xeVaoApi.xacNhanVeThang(fd)
-      setTicket(data); setResult(null); setShowFormThuong(false)
+      setTicket(data); setResult(null)
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }
@@ -523,31 +516,53 @@ async function kiemTra() {
     fd.append('ma_qr', result.ma_qr)
     fd.append('anh_bien_so', fileBienSoThucTe)
     fd.append('anh_nguoi_lai', fileNguoiLaiThucTe)
-    try { const data = await xeVaoApi.xacNhanVeThang(fd); setTicket(data); setResult(null); setShowFormThuong(false) }
+    try { const data = await xeVaoApi.xacNhanVeThang(fd); setTicket(data); setResult(null) }
     catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }
 
   async function xacNhanThuong() {
-    if (!fileBienSo) { setError('Vui lòng chụp ảnh biển số'); return }
-    if (!fileNguoiLai) { setError('Vui lòng chụp ảnh người lái'); return }
+    if (!formThuong.loaiXe) { setError('Vui lòng chọn loại xe'); return }
     const loaiXeObj = configuredLoaiXe.find(lx => lx.id == formThuong.loaiXe)
     const isBicycle = loaiXeObj?.ten.toLowerCase().includes('đạp')
-    if (!isBicycle && !bienSo.trim()) { setError('Vui lòng nhập biển số'); return }
+
+    let bienSoFinal = bienSo.trim()
+    if (!isBicycle) {
+      if (!bienSoFinal) { setError('Vui lòng nhập biển số'); return }
+      const cleaned = chuanHoaBienSo(bienSoFinal)
+      if (!isValidBienSo(cleaned)) { setError('Biển số không đúng định dạng (VD: 51F-123.45)'); return }
+      bienSoFinal = cleaned
+    }
+
+    if (coChupAnh) {
+      if (!fileBienSo) { setError('Vui lòng chụp ảnh biển số'); return }
+      if (!fileNguoiLai) { setError('Vui lòng chụp ảnh người lái'); return }
+    }
+
     setLoading(true)
     const fd = new FormData()
     fd.append('id_loai_xe', formThuong.loaiXe)
-    fd.append('bien_so_xac_nhan', bienSo.trim().toUpperCase())
+    fd.append('bien_so_xac_nhan', bienSoFinal.toUpperCase())
     fd.append('ten_chu_xe', formThuong.tenChuXe || '')
     fd.append('sdt', formThuong.sdt || '')
     fd.append('email', formThuong.email || '')
     fd.append('ghi_chu', formThuong.ghiChu || '')
     fd.append('cho_phep_lay_ho', formThuong.cho_phep_lay_ho)
-    fd.append('anh_bien_so', await compressImage(fileBienSo))
-    fd.append('anh_nguoi_lai', await compressImage(fileNguoiLai))
-    try { const data = await xeVaoApi.xacNhanThuong(fd); setTicket(data); setResult(null); setShowFormThuong(false) }
-    catch (err) { setError(err.message) }
+    if (coChupAnh && fileBienSo)   fd.append('anh_bien_so', await compressImage(fileBienSo))
+    if (coChupAnh && fileNguoiLai) fd.append('anh_nguoi_lai', await compressImage(fileNguoiLai))
+
+    try {
+      const data = await xeVaoApi.xacNhanThuong(fd)
+      setTicket(data)
+      resetForm()
+    } catch (err) { setError(err.message) }
     finally { setLoading(false) }
+  }
+
+  function resetForm() {
+    setBienSo(''); setResult(null); setError(null); setAutoModeFailed(false)
+    setFileBienSo(null); setFileNguoiLai(null); setCoChupAnh(false)
+    setFormThuong({ loaiXe: defaultLoaiXeRef.current, tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false })
   }
 
   const hasProfileImages = result && (result.anh_bien_so || result.anh_nguoi_dung) && !autoModeFailed
@@ -558,19 +573,28 @@ async function kiemTra() {
         <div style={{ display: 'flex', gap: 8 }}>
           <input value={bienSo} onChange={e => setBienSo(e.target.value)} placeholder="VD: 51F-12345"
             style={{ flex: 1, textTransform: 'uppercase' }} onKeyDown={e => e.key === 'Enter' && kiemTra()} />
-          <button className="btn btn-secondary btn-sm" onClick={kiemTra} disabled={loading} style={{ whiteSpace: 'nowrap' }}>Xác nhận</button>
+          <button className="btn btn-secondary btn-sm" onClick={kiemTra} disabled={loading} style={{ whiteSpace: 'nowrap' }}>Kiểm tra</button>
         </div>
       </Field>
 
-      <div style={{ marginTop: '0.75rem', borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
-        <ImagePicker label="Ảnh biển số xe" required file={fileBienSo} onFile={setFileBienSo} />
-        <ImagePicker label="Ảnh người lái" required file={fileNguoiLai} onFile={setFileNguoiLai} />
+      <div style={{ margin: '0.5rem 0' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.88rem' }}>
+          <input type="checkbox" checked={coChupAnh} onChange={e => setCoChupAnh(e.target.checked)} style={{ width: 'auto', accentColor: 'var(--accent)' }} />
+          <span>📷 Chụp ảnh biển số & người lái</span>
+        </label>
       </div>
+
+      {coChupAnh && (
+        <div style={{ marginBottom: '0.75rem', borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+          <ImagePicker label="Ảnh biển số xe" required file={fileBienSo} onFile={setFileBienSo} />
+          <ImagePicker label="Ảnh người lái" required file={fileNguoiLai} onFile={setFileNguoiLai} />
+        </div>
+      )}
 
       {(loading || dataLoading) && <Spinner />}
       {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
 
-      {result?.loai === 've_thang' && (
+      {isVeThang && (
         hasProfileImages ? (
           <div className="card" style={{ borderColor: 'var(--info)', marginTop: '0.75rem' }} key={result.ma_qr || 'auto'}>
             <h5 style={{ color: 'var(--info)', marginBottom: '0.75rem' }}>🎫 Vé tháng</h5>
@@ -594,8 +618,9 @@ async function kiemTra() {
         )
       )}
 
-      {showFormThuong && (
+      {!isVeThang && (
         <div style={{ marginTop: '0.75rem' }}>
+          <h5 style={{ marginBottom: '0.75rem' }}>🚗 Thông tin xe</h5>
           <Field label="Loại xe" required>
             <select value={formThuong.loaiXe} onChange={e => setFormThuong(f => ({ ...f, loaiXe: e.target.value }))}>
               {groupedLoaiXe.map(group => (
@@ -636,7 +661,6 @@ async function kiemTra() {
     </div>
   )
 }
-
 // ── Trang chính ────────────────────────────────────────────────────
 export default function XeVao() {
   const [tab, setTab] = useState('smart')
@@ -644,7 +668,7 @@ export default function XeVao() {
 
   const tabs = [
     { id: 'smart', label: '📷 Chụp ảnh' },
-    { id: 'bien',  label: '🔢 Biển số' },
+    { id: 'bien',  label: '🔢 Nhập Biển Số' },
   ]
 
   return (
