@@ -348,7 +348,7 @@ async def xac_nhan_xe_vao_ve_thuong(
 
     # ── Các bước còn lại: lưu ảnh, tạo khách hàng, tạo phiên ──
     try:
-        duong_dan_bien_so   = await luu_anh(anh_bien_so,   "uploads/bien_so")
+        duong_dan_bien_so   = await luu_anh(anh_bien_so,   "uploads/bien_so")   if anh_bien_so   else None
         duong_dan_nguoi_lai = await luu_anh(anh_nguoi_lai, "uploads/nguoi_lai") if anh_nguoi_lai else None
 
         with KetNoi.cursor(dictionary=True) as ConTro:
@@ -415,3 +415,8 @@ async def xac_nhan_xe_vao_ve_thuong(
         raise HTTPException(status_code=500, detail=f"Lỗi CSDL: {err}")
     except HTTPException:
         raise
+    except Exception as err:
+        if KetNoi: KetNoi.rollback()
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Lỗi không xác định: {err}")
