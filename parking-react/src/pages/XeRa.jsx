@@ -250,80 +250,6 @@ function xacNhanBienSo() {
   )
 }
 
-// ─── Tab quét QR ─────────────────────────────────────────────
-function QRPanel() {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [xe, setXe] = useState(null)
-  const [httt, setHttt] = useState('tien_mat')
-  const [success, setSuccess] = useState(false)
-  const [resetKey, setResetKey] = useState(0)
-  const [fileQR, setFileQR] = useState(null)
-
-  async function handleFile(file) {
-    if (!file) return
-    setFileQR(file)
-    setLoading(true)
-    setError(null)
-    setXe(null)
-    setSuccess(false)
-
-    try {
-      const compressed = await compressImage(file)
-      const fd = new FormData()
-      fd.append('anh_qr', compressed)
-      const data = await xeRaApi.quetQR(fd)
-      if (data.ma_qr) setXe(data)
-      else setError('Không tìm thấy xe.')
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function thanhToan() {
-    if (!xe?.ma_qr) return
-    const fd = new FormData()
-    fd.append('hinh_thuc_thanh_toan', httt)
-    setLoading(true)
-    try {
-      await thanhToanApi.xacNhanQR(xe.ma_qr, fd)
-      setSuccess(true)
-      setXe(null)
-      setFileQR(null)
-      setResetKey(k => k + 1)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="card">
-      <ImagePicker
-        label="Chụp ảnh QR"
-        required
-        file={fileQR}
-        onFile={handleFile}
-      />
-
-      {loading && <Spinner />}
-      {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
-      {success && <Alert type="success">✅ Thanh toán thành công!</Alert>}
-      {xe && (
-        <>
-          <XeInfo xe={xe} />
-          <HinhThucSelect id="qr-httt" value={httt} onChange={e => setHttt(e.target.value)} />
-          <button className="btn btn-accent" onClick={thanhToan} disabled={loading}>
-            Xác nhận thanh toán
-          </button>
-        </>
-      )}
-    </div>
-  )
-}
 
 // ─── Tab Biển số ─────────────────────────────────────────────
 function BienSoPanel({ bienSoMacDinh }) {
@@ -476,8 +402,7 @@ export default function XeRa() {
 
   const tabs = [
     { id: 'smart', label: '📷 Chụp ảnh' },
-    { id: 'qr',    label: '🔳 Quét QR' },
-    { id: 'bien',  label: '🔢 Biển số' },
+    { id: 'bien',  label: '🔢 Nhập biển số' },
   ]
 
   return (
@@ -494,7 +419,6 @@ export default function XeRa() {
         ))}
       </div>
       {tab === 'smart' && <SmartPanel onChuyenTabBienSo={chuyenTabBienSo} />}
-      {tab === 'qr'    && <QRPanel />}
       {tab === 'bien'  && <BienSoPanel bienSoMacDinh={bienSoTuSmart} />}
     </PageLayout>
   )
