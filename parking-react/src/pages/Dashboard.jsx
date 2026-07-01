@@ -104,53 +104,40 @@ export default function Dashboard() {
               key={item.path}
               onClick={() => navigate(item.path)}
               style={{
-                background: 'var(--bg-secondary)',
-                border: `1.5px solid var(--border)`,
+                background: item.color,
+                border: 'none',
                 borderRadius: 18,
-                padding: '22px 16px',
+                padding: '28px 16px 22px',
                 cursor: 'pointer',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                gap: 10,
-                transition: 'transform 0.15s, background 0.15s, border-color 0.15s',
+                gap: 12,
+                transition: 'transform 0.12s, filter 0.12s',
                 outline: 'none',
                 WebkitTapHighlightColor: 'transparent',
+                boxShadow: `0 4px 20px ${item.color}55`,
               }}
               onPointerDown={e => {
-                e.currentTarget.style.transform = 'scale(0.96)'
-                e.currentTarget.style.background = `${item.color}18`
-                e.currentTarget.style.borderColor = `${item.color}60`
+                e.currentTarget.style.transform = 'scale(0.94)'
+                e.currentTarget.style.filter = 'brightness(0.85)'
               }}
               onPointerUp={e => {
                 e.currentTarget.style.transform = 'scale(1)'
-                e.currentTarget.style.background = 'var(--bg-secondary)'
-                e.currentTarget.style.borderColor = 'var(--border)'
+                e.currentTarget.style.filter = 'brightness(1)'
               }}
               onPointerLeave={e => {
                 e.currentTarget.style.transform = 'scale(1)'
-                e.currentTarget.style.background = 'var(--bg-secondary)'
-                e.currentTarget.style.borderColor = 'var(--border)'
+                e.currentTarget.style.filter = 'brightness(1)'
               }}
             >
-              <div style={{
-                width: 52,
-                height: 52,
-                borderRadius: 16,
-                background: `${item.color}22`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '1.6rem',
-                border: `1.5px solid ${item.color}40`,
-              }}>
-                {item.icon}
-              </div>
+              <span style={{ fontSize: '2.2rem', lineHeight: 1 }}>{item.icon}</span>
               <span style={{
-                fontSize: '0.88rem',
-                fontWeight: 600,
-                color: 'var(--text)',
+                fontSize: '0.92rem',
+                fontWeight: 700,
+                color: '#fff',
                 textAlign: 'center',
+                textShadow: '0 1px 3px rgba(0,0,0,0.3)',
               }}>
                 {item.label}
               </span>
