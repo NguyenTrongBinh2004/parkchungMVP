@@ -79,7 +79,7 @@ export default function Dashboard() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <LogoParkchung size={40} />
           <div>
-            <div style={{ fontWeight: 800, fontSize: '1.15rem', letterSpacing: '0.04em', color: 'var(--text)' }}>
+            <div style={{ fontWeight: 800, fontSize: '1.15rem', letterSpacing: '0.04em', color: '#13b47e', textShadow: '0 0 8px rgba(19,180,126,0.4)' }}>
               PARKCHUNG
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 1 }}>
