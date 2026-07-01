@@ -1,66 +1,225 @@
-import { useNavigate } from 'react-router-dom'
+// src/pages/Dashboard.jsx
+import { useNavigate, useLocation } from 'react-router-dom'
 
-const MENUS = [
-  { icon: '📸', label: 'Xe vào',       path: '/xe-vao' },
-  { icon: '📤', label: 'Xe ra',        path: '/xe-ra' },
-  { icon: '🔍', label: 'Tìm xe',       path: '/tim-xe' },
-  { icon: '🅿️', label: 'DS trong bãi', path: '/danh-sach' },
-  { icon: '✅', label: 'Xe đã ra',     path: '/xe-da-ra' },
-  { icon: '🎫', label: 'Vé tháng',     path: '/ve-thang' },
-  { icon: '📊', label: 'Thống kê',     path: '/thong-ke' },
-  { icon: '🏷️', label: 'Loại xe',      path: '/loai-xe' },
-  { icon: '⚙️', label: 'Cài đặt',      path: '/cai-dat' },
+const TABS = [
+  {
+    id: 'ban-gui-xe',
+    label: 'Bảng giữ xe',
+    icon: '🅿️',
+    items: [
+      { label: 'Xe vào',  icon: '📸', path: '/xe-vao',  color: '#22c55e' },
+      { label: 'Xe ra',   icon: '📤', path: '/xe-ra',   color: '#ef4444' },
+    ],
+  },
+  {
+    id: 'quan-ly',
+    label: 'Quản lý',
+    icon: '🏷️',
+    items: [
+      { label: 'Loại xe & giá', icon: '🏷️', path: '/loai-xe', color: '#f59e0b' },
+    ],
+  },
+  {
+    id: 'bai-xe',
+    label: 'QL Bãi xe',
+    icon: '🚗',
+    items: [
+      { label: 'Trong bãi',  icon: '🅿️', path: '/danh-sach',  color: '#3b82f6' },
+      { label: 'Đã ra',      icon: '✅', path: '/xe-da-ra',    color: '#6366f1' },
+      { label: 'Tìm xe',     icon: '🔍', path: '/tim-xe',      color: '#06b6d4' },
+      { label: 'Vé tháng',   icon: '🎫', path: '/ve-thang',    color: '#f97316' },
+      { label: 'Thống kê',   icon: '📊', path: '/thong-ke',    color: '#8b5cf6' },
+    ],
+  },
+  {
+    id: 'nguoi-dung',
+    label: 'Người dùng',
+    icon: '👤',
+    items: [
+      { label: 'Cài đặt', icon: '⚙️', path: '/cai-dat', color: '#64748b' },
+    ],
+  },
 ]
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const location = useLocation()
+
+  // Tab active: giữ lại lựa chọn theo hash, mặc định tab đầu tiên
+  const hash = location.hash.replace('#', '') || TABS[0].id
+  const activeTab = TABS.find(t => t.id === hash) || TABS[0]
+
+  function setTab(id) {
+    navigate({ hash: id }, { replace: true })
+  }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ flex: 1, maxWidth: 600, margin: '0 auto', padding: '1.5rem 1rem', width: '100%' }}>
-
-        {/* ─── Header: Logo + Version + Hotline (căn trái) ─── */}
-        <div style={{ marginBottom: '2rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <svg xmlns="http://www.w3.org/2000/svg" xmlnsXlink="http://www.w3.org/1999/xlink" xmlnsInkscape="http://www.inkscape.org/namespaces/inkscape" version="1.1" width="32" height="32" viewBox="0 0 100 100">
-              <defs>
-                <clipPath id="clip_top">
-                  <path transform="matrix(1,0,0,-1,0,100)" d="M0 100H100V0H0Z"/>
-                </clipPath>
-              </defs>
-              <g inkscape:groupmode="layer" inkscape:label="Layer 1">
-                <g clipPath="url(#clip_top)">
-                  <path transform="matrix(1,0,0,-1,60.9868,45.0564)" d="M0 0C1.669 1.669 1.669 4.374 0 6.043-1.669 7.712-4.374 7.712-6.043 6.043-7.712 4.374-7.712 1.669-6.043 0-4.374-1.669-1.669-1.669 0 0" fill="#13b47e"/>
-                  <path transform="matrix(1,0,0,-1,48.9003,32.969903)" d="M0 0C5.006 5.006 13.123 5.006 18.13 0 23.136-5.006 23.136-13.123 18.13-18.13L9.064-27.195 0-18.13C-5.006-13.123-5.006-5.006 0 0M36.259 18.129C21.241 33.149-3.11 33.149-18.129 18.129L-39.281-3.022-45.324-9.064-39.281-15.108 9.064-63.454 15.107-57.411-33.238-9.064-12.086 12.086C-.405 23.768 18.535 23.768 30.216 12.086 41.897 .405 41.897-18.535 30.216-30.216L21.152-39.281 15.107-33.238 24.173-24.173C32.517-15.83 32.517-2.301 24.173 6.043 15.83 14.387 2.301 14.387-6.043 6.043-14.203-2.115-14.382-15.232-6.584-23.61L-6.595-23.621 15.107-45.324 21.152-51.367 27.195-45.324 36.259-36.259C51.278-21.241 51.278 3.11 36.259 18.129" fill="#13b47e"/>
-                </g>
-              </g>
-            </svg>
-            <strong style={{ color: '#13b47e', fontSize: '1.1rem', letterSpacing: '0.02em' }}>PARKCHUNG</strong>
-          </div>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: 6 }}>
-            version: 1.0.0
-          </div>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: 2 }}>
-            <span>📞</span>
-            <a href="tel:0903229906" style={{ color: 'inherit', textDecoration: 'none', marginLeft: 4 }}>0903.229.906</a>
-            <span style={{ marginLeft: 6 }}>(8:00 AM - 9:00 PM)</span>
+    <div style={{
+      minHeight: '100dvh',
+      display: 'flex',
+      flexDirection: 'column',
+      background: 'var(--bg)',
+      maxWidth: 520,
+      margin: '0 auto',
+    }}>
+      {/* ── Header ── */}
+      <div style={{
+        padding: '20px 20px 10px',
+        borderBottom: '1px solid var(--border)',
+        background: 'var(--bg-secondary)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: '1.6rem' }}>🅿️</span>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: '1.15rem', letterSpacing: '0.04em', color: 'var(--text)' }}>
+              PARKCHUNG
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 1 }}>
+              version: 1.0.0 &nbsp;·&nbsp; 📞 0903.229.906
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* Grid menu */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-          {MENUS.map(m => (
+      {/* ── Nội dung tab ── */}
+      <div style={{ flex: 1, padding: '24px 16px 20px', overflowY: 'auto' }}>
+        <p style={{
+          fontSize: '0.72rem',
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: '0.1em',
+          color: 'var(--text-muted)',
+          marginBottom: 16,
+        }}>
+          {activeTab.label}
+        </p>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: activeTab.items.length === 1 ? '1fr' : 'repeat(2, 1fr)',
+          gap: 12,
+        }}>
+          {activeTab.items.map(item => (
             <button
-              key={m.path}
-              className="menu-card"
-              onClick={() => navigate(m.path)}
+              key={item.path}
+              onClick={() => navigate(item.path)}
+              style={{
+                background: 'var(--bg-secondary)',
+                border: `1.5px solid var(--border)`,
+                borderRadius: 18,
+                padding: '22px 16px',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 10,
+                transition: 'transform 0.15s, background 0.15s, border-color 0.15s',
+                outline: 'none',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+              onPointerDown={e => {
+                e.currentTarget.style.transform = 'scale(0.96)'
+                e.currentTarget.style.background = `${item.color}18`
+                e.currentTarget.style.borderColor = `${item.color}60`
+              }}
+              onPointerUp={e => {
+                e.currentTarget.style.transform = 'scale(1)'
+                e.currentTarget.style.background = 'var(--bg-secondary)'
+                e.currentTarget.style.borderColor = 'var(--border)'
+              }}
+              onPointerLeave={e => {
+                e.currentTarget.style.transform = 'scale(1)'
+                e.currentTarget.style.background = 'var(--bg-secondary)'
+                e.currentTarget.style.borderColor = 'var(--border)'
+              }}
             >
-              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>{m.icon}</div>
-              <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{m.label}</div>
+              <div style={{
+                width: 52,
+                height: 52,
+                borderRadius: 16,
+                background: `${item.color}22`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.6rem',
+                border: `1.5px solid ${item.color}40`,
+              }}>
+                {item.icon}
+              </div>
+              <span style={{
+                fontSize: '0.88rem',
+                fontWeight: 600,
+                color: 'var(--text)',
+                textAlign: 'center',
+              }}>
+                {item.label}
+              </span>
             </button>
           ))}
         </div>
       </div>
+
+      {/* ── Bottom nav ── */}
+      <nav style={{
+        display: 'flex',
+        borderTop: '1px solid var(--border)',
+        background: 'var(--bg-secondary)',
+        padding: '6px 0 max(6px, env(safe-area-inset-bottom))',
+        position: 'sticky',
+        bottom: 0,
+        zIndex: 100,
+      }}>
+        {TABS.map(tab => {
+          const isActive = tab.id === activeTab.id
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setTab(tab.id)}
+              style={{
+                flex: 1,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '6px 4px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 4,
+                outline: 'none',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+            >
+              <span style={{
+                fontSize: '1.35rem',
+                lineHeight: 1,
+                filter: isActive ? 'none' : 'grayscale(0.8) opacity(0.5)',
+                transition: 'filter 0.15s',
+              }}>
+                {tab.icon}
+              </span>
+              <span style={{
+                fontSize: '0.65rem',
+                fontWeight: isActive ? 700 : 500,
+                color: isActive ? 'var(--accent)' : 'var(--text-muted)',
+                letterSpacing: '0.02em',
+                transition: 'color 0.15s',
+                whiteSpace: 'nowrap',
+              }}>
+                {tab.label}
+              </span>
+              {isActive && (
+                <div style={{
+                  width: 20,
+                  height: 3,
+                  borderRadius: 2,
+                  background: 'var(--accent)',
+                  marginTop: -2,
+                }} />
+              )}
+            </button>
+          )
+        })}
+      </nav>
     </div>
   )
 }
