@@ -115,3 +115,12 @@ export const suaXeApi = {
   chiTiet: (id) => request(`/danh-sach-xe/phien/${id}`),
   capNhat: (id, formData) => request(`/danh-sach-xe/phien/${id}`, { method: 'PUT', body: formData }),
 }
+
+export const authApi = {
+  dangKy:     (data) => request('/auth/dang-ky/',      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  xacNhanOtp: (data) => request('/auth/xac-nhan-otp/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  guiLaiOtp:  (data) => request('/auth/gui-lai-otp/',  { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  dangNhap:   (data) => request('/auth/dang-nhap/',    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  refresh:    (data) => request('/auth/refresh/',      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  dangXuat:   (data) => request('/auth/dang-xuat/',    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+}

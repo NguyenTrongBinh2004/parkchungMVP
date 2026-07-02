@@ -12,7 +12,7 @@ Tài liệu: https://developers.esms.vn/esms-api/ham-gui-tin/tin-mutichanel-zalo
 """
 import requests
 import uuid
-import os
+import httpx, os
 import time
 import logging
 import re
@@ -165,3 +165,27 @@ def gui_thong_bao_xe_vao(sdt: str, bien_so: str, ma_phien: str):
                    f"Xuat trinh ma nay khi lay xe.")
 
     _gui_zalo_kem_sms(sdt_chuan, ESMS_TEMP_XE_VAO, params, sms_content, "ParkingMVP - Xe vao")
+
+def gui_otp(sdt: str, ma_otp: str):
+    """Gửi OTP qua ESMS. Raise Exception nếu thất bại."""
+    noi_dung = (
+        f"Ma OTP ParkChung: {ma_otp}. "
+        f"Hieu luc 5 phut. Khong chia se ma nay cho bat ky ai."
+    )
+    payload = {
+        "ApiKey":    ESMS_API_KEY,
+        "SecretKey": ESMS_SECRET_KEY,
+        "Phone":     sdt,
+        "Content":   noi_dung,
+        "SmsType":   "2",
+        "IsUnicode": "0",
+        "Sandbox":   os.getenv("ESMS_SANDBOX", "0"),
+    }
+    with httpx.Client(timeout=10) as client:
+        resp = client.post(
+            "https://rest.esms.vn/MainService.svc/json/SendMultipleMessage_V4_post_json/",
+            json=payload,
+        )
+    result = resp.json()
+    if result.get("CodeResult") != "100":
+        raise Exception(f"ESMS lỗi: {result.get('ErrorMessage', 'Không xác định')}")
