@@ -216,7 +216,7 @@ export default function DangKy() {
       }}>
         <LogoParkchung size={42} />
       </div>
-      <span style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text)', letterSpacing: '0.04em' }}>
+      <span style={{ fontSize: '1.45rem', fontWeight: 800, color: '#13b47e', letterSpacing: '0.04em', textShadow: '0 0 8px rgba(19,180,126,0.4)' }}>
         Parkchung
       </span>
     </div>
