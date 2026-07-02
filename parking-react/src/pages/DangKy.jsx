@@ -1,3 +1,4 @@
+// src/pages/DangKy.jsx
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Spinner } from '../components/UI'
@@ -17,10 +18,12 @@ function InputField({ icon, type = 'text', placeholder, value, onChange, onKeyDo
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 12,
-      background: '#f4f5f7', borderRadius: 12,
-      padding: '14px 16px', border: '1.5px solid transparent',
+      background: 'var(--bg-secondary)',
+      borderRadius: 12,
+      padding: '14px 16px',
+      border: '1.5px solid var(--border)',
     }}>
-      <span style={{ fontSize: '1.1rem', color: '#9ca3af', flexShrink: 0 }}>{icon}</span>
+      <span style={{ fontSize: '1.1rem', color: 'var(--text-muted)', flexShrink: 0 }}>{icon}</span>
       <input
         type={type}
         inputMode={inputMode}
@@ -30,7 +33,7 @@ function InputField({ icon, type = 'text', placeholder, value, onChange, onKeyDo
         onKeyDown={onKeyDown}
         style={{
           flex: 1, background: 'none', border: 'none', outline: 'none',
-          fontSize: '0.95rem', color: '#111827', fontFamily: 'inherit',
+          fontSize: '0.95rem', color: 'var(--text)', fontFamily: 'inherit',
         }}
       />
       {rightSlot}
@@ -42,21 +45,21 @@ function ErrorBanner({ message, onClose }) {
   if (!message) return null
   return (
     <div style={{
-      background: '#fef2f2', border: '1px solid #fecaca',
+      background: 'rgba(220,38,38,0.1)',
+      border: '1px solid var(--danger)',
       borderRadius: 10, padding: '12px 14px',
-      color: '#dc2626', fontSize: '0.88rem', marginBottom: 16,
+      color: 'var(--danger)', fontSize: '0.88rem', marginBottom: 16,
       display: 'flex', alignItems: 'center', gap: 8,
     }}>
       ⚠️ {message}
       <button onClick={onClose} style={{
         marginLeft: 'auto', background: 'none', border: 'none',
-        color: '#dc2626', cursor: 'pointer', fontSize: '1rem',
+        color: 'var(--danger)', cursor: 'pointer', fontSize: '1rem',
       }}>✕</button>
     </div>
   )
 }
 
-// ── Hook đếm ngược ────────────────────────────────────────────
 function useCountdown() {
   const [conLai, setConLai] = useState(0)
   const ref = useRef(null)
@@ -71,7 +74,6 @@ function useCountdown() {
   return { conLai, batDau }
 }
 
-// ── 6 ô nhập OTP ─────────────────────────────────────────────
 function OTPInput({ value, onChange, disabled }) {
   const refs = Array.from({ length: 6 }, () => useRef(null))
 
@@ -101,10 +103,11 @@ function OTPInput({ value, onChange, disabled }) {
           onChange={() => {}} onClick={() => ref.current?.select()}
           style={{
             width: 44, height: 54, textAlign: 'center',
-            fontSize: '1.5rem', fontWeight: 700, fontFamily: 'monospace',
-            background: value[i] ? 'rgba(19,180,126,0.08)' : '#f4f5f7',
-            border: `2px solid ${value[i] ? '#13b47e' : '#e5e7eb'}`,
-            borderRadius: 10, color: '#111827', outline: 'none',
+            fontSize: '1.5rem', fontWeight: 700,
+            fontFamily: 'var(--font-mono)',
+            background: value[i] ? 'rgba(19,180,126,0.12)' : 'var(--bg-secondary)',
+            border: `2px solid ${value[i] ? 'var(--accent)' : 'var(--border)'}`,
+            borderRadius: 10, color: 'var(--text)', outline: 'none',
             transition: 'border-color 0.15s, background 0.15s',
           }}
         />
@@ -113,11 +116,10 @@ function OTPInput({ value, onChange, disabled }) {
   )
 }
 
-// ── Nút chính ─────────────────────────────────────────────────
 function PrimaryButton({ onClick, disabled, children }) {
   return (
     <button onClick={onClick} disabled={disabled} style={{
-      background: disabled ? '#9ca3af' : '#111827',
+      background: disabled ? 'var(--text-muted)' : 'var(--accent)',
       color: '#fff', border: 'none', borderRadius: 12,
       padding: '16px', fontSize: '0.95rem', fontWeight: 800,
       letterSpacing: '0.08em', cursor: disabled ? 'not-allowed' : 'pointer',
@@ -135,8 +137,8 @@ function PrimaryButton({ onClick, disabled, children }) {
 function OutlineButton({ onClick, disabled, children }) {
   return (
     <button onClick={onClick} disabled={disabled} style={{
-      background: 'none', color: disabled ? '#9ca3af' : '#374151',
-      border: `1.5px solid ${disabled ? '#e5e7eb' : '#d1d5db'}`,
+      background: 'none', color: disabled ? 'var(--text-muted)' : 'var(--text)',
+      border: `1.5px solid ${disabled ? 'var(--border)' : 'var(--text-muted)'}`,
       borderRadius: 12, padding: '14px', fontSize: '0.9rem', fontWeight: 600,
       cursor: disabled ? 'not-allowed' : 'pointer',
       transition: 'border-color 0.15s', width: '100%',
@@ -146,7 +148,6 @@ function OutlineButton({ onClick, disabled, children }) {
   )
 }
 
-// ── Trang chính ───────────────────────────────────────────────
 export default function DangKy() {
   const navigate = useNavigate()
   const { dangNhapThanhCong } = useAuth()
@@ -195,7 +196,8 @@ export default function DangKy() {
   }
 
   const pageStyle = {
-    minHeight: '100dvh', background: '#ffffff',
+    minHeight: '100dvh',
+    background: 'var(--bg)',
     display: 'flex', flexDirection: 'column',
     alignItems: 'center', justifyContent: 'center',
     padding: '32px 24px',
@@ -207,29 +209,30 @@ export default function DangKy() {
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: '2rem' }}>
       <div style={{
         width: 64, height: 64, borderRadius: '50%',
-        border: '2px solid #e5e7eb', background: '#fff',
+        border: '2px solid var(--border)',
+        background: 'var(--bg-secondary)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+        boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
       }}>
         <LogoParkchung size={42} />
       </div>
-      <span style={{ fontSize: '1.45rem', fontWeight: 800, color: '#111827', letterSpacing: '0.04em' }}>
+      <span style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text)', letterSpacing: '0.04em' }}>
         Parkchung
       </span>
     </div>
   )
 
-  // ── Bước 1: Form đăng ký ──────────────────────────────────
+  // Bước 1: Form đăng ký
   if (buoc === 1) return (
     <div style={pageStyle}>
       <div style={wrapStyle}>
         {logoBlock}
 
         <div style={{ marginBottom: '1.75rem' }}>
-          <h1 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#111827', margin: 0, marginBottom: 6 }}>
+          <h1 style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text)', margin: 0, marginBottom: 6 }}>
             Tạo tài khoản
           </h1>
-          <p style={{ color: '#6b7280', fontSize: '0.88rem', margin: 0 }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', margin: 0 }}>
             Đăng ký để quản lý bãi xe của bạn
           </p>
         </div>
@@ -248,7 +251,7 @@ export default function DangKy() {
             rightSlot={
               <button type="button" onClick={() => setHienMatKhau(h => !h)} style={{
                 background: 'none', border: 'none', cursor: 'pointer',
-                color: '#9ca3af', fontSize: '1rem', padding: 0, lineHeight: 1,
+                color: 'var(--text-muted)', fontSize: '1rem', padding: 0, lineHeight: 1,
                 display: 'flex', alignItems: 'center',
               }}>
                 {hienMatKhau ? '🙈' : '👁️'}
@@ -272,7 +275,7 @@ export default function DangKy() {
             </PrimaryButton>
           </div>
 
-          <p style={{ textAlign: 'center', fontSize: '0.85rem', color: '#6b7280', margin: 0 }}>
+          <p style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
             Đã có tài khoản?{' '}
             <span style={{ color: '#13b47e', cursor: 'pointer', fontWeight: 700 }}
               onClick={() => navigate('/dang-nhap')}>
@@ -284,20 +287,20 @@ export default function DangKy() {
     </div>
   )
 
-  // ── Bước 2: Nhập OTP ──────────────────────────────────────
+  // Bước 2: Nhập OTP
   return (
     <div style={pageStyle}>
       <div style={wrapStyle}>
         {logoBlock}
 
         <div style={{ marginBottom: '1.75rem' }}>
-          <h1 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#111827', margin: 0, marginBottom: 6 }}>
+          <h1 style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text)', margin: 0, marginBottom: 6 }}>
             Xác nhận OTP
           </h1>
-          <p style={{ color: '#6b7280', fontSize: '0.88rem', margin: 0 }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', margin: 0 }}>
             Mã gồm 6 chữ số đã được gửi đến
           </p>
-          <p style={{ color: '#111827', fontSize: '0.95rem', fontWeight: 700, margin: '4px 0 0', fontFamily: 'monospace' }}>
+          <p style={{ color: 'var(--text)', fontSize: '0.95rem', fontWeight: 700, margin: '4px 0 0', fontFamily: 'var(--font-mono)' }}>
             {form.sdt}
           </p>
         </div>
@@ -306,19 +309,18 @@ export default function DangKy() {
 
         <OTPInput value={otp} onChange={setOtp} disabled={loading} />
 
-        {/* Đếm ngược */}
-        <p style={{ textAlign: 'center', fontSize: '0.85rem', color: '#6b7280', marginBottom: '1.25rem' }}>
+        <p style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
           {otpTimer.conLai > 0 ? (
             <>Mã hết hạn sau{' '}
               <span style={{
-                fontFamily: 'monospace', fontWeight: 700,
-                color: otpTimer.conLai <= 60 ? '#dc2626' : '#13b47e',
+                fontFamily: 'var(--font-mono)', fontWeight: 700,
+                color: otpTimer.conLai <= 60 ? 'var(--danger)' : '#13b47e',
               }}>
                 {fmtGiay(otpTimer.conLai)}
               </span>
             </>
           ) : (
-            <span style={{ color: '#dc2626', fontWeight: 600 }}>Mã OTP đã hết hạn</span>
+            <span style={{ color: 'var(--danger)', fontWeight: 600 }}>Mã OTP đã hết hạn</span>
           )}
         </p>
 
@@ -337,7 +339,7 @@ export default function DangKy() {
         <button type="button" onClick={() => { setBuoc(1); setOtp(''); setError(null) }}
           style={{
             display: 'block', margin: '16px auto 0', background: 'none', border: 'none',
-            color: '#9ca3af', fontSize: '0.82rem', cursor: 'pointer',
+            color: 'var(--text-muted)', fontSize: '0.82rem', cursor: 'pointer',
           }}>
           ← Quay lại sửa thông tin
         </button>

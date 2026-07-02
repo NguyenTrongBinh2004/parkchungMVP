@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Alert, Spinner } from '../components/UI'
+import { Spinner } from '../components/UI'
 import { authApi } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 
@@ -17,13 +17,12 @@ function InputField({ icon, type = 'text', placeholder, value, onChange, onKeyDo
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 12,
-      background: '#f4f5f7', borderRadius: 12,
-      padding: '14px 16px', border: '1.5px solid transparent',
+      background: 'var(--bg-secondary)',
+      borderRadius: 12,
+      padding: '14px 16px', border: '1.5px solid var(--border)',
       transition: 'border-color 0.15s',
-    }}
-      onFocus={() => {}} // handled by CSS if needed
-    >
-      <span style={{ fontSize: '1.1rem', color: '#9ca3af', flexShrink: 0 }}>{icon}</span>
+    }}>
+      <span style={{ fontSize: '1.1rem', color: 'var(--text-muted)', flexShrink: 0 }}>{icon}</span>
       <input
         type={type}
         placeholder={placeholder}
@@ -32,7 +31,7 @@ function InputField({ icon, type = 'text', placeholder, value, onChange, onKeyDo
         onKeyDown={onKeyDown}
         style={{
           flex: 1, background: 'none', border: 'none', outline: 'none',
-          fontSize: '0.95rem', color: '#111827',
+          fontSize: '0.95rem', color: 'var(--text)',
           fontFamily: 'inherit',
         }}
       />
@@ -65,7 +64,7 @@ export default function DangNhap() {
   return (
     <div style={{
       minHeight: '100dvh',
-      background: '#ffffff',
+      background: 'var(--bg)',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
@@ -81,16 +80,16 @@ export default function DangNhap() {
         }}>
           <div style={{
             width: 64, height: 64, borderRadius: '50%',
-            border: '2px solid #e5e7eb',
+            border: '2px solid var(--border)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: '#fff',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+            background: 'var(--bg-secondary)',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
           }}>
             <LogoParkchung size={42} />
           </div>
           <span style={{
             fontSize: '1.45rem', fontWeight: 800,
-            color: '#111827', letterSpacing: '0.04em',
+            color: 'var(--text)', letterSpacing: '0.04em',
           }}>
             Parkchung
           </span>
@@ -100,11 +99,11 @@ export default function DangNhap() {
         <div style={{ marginBottom: '2rem' }}>
           <h1 style={{
             fontSize: '1.6rem', fontWeight: 800,
-            color: '#111827', margin: 0, marginBottom: 6,
+            color: 'var(--text)', margin: 0, marginBottom: 6,
           }}>
             Đăng nhập hệ thống
           </h1>
-          <p style={{ color: '#6b7280', fontSize: '0.88rem', margin: 0 }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', margin: 0 }}>
             Hệ thống kiểm soát bãi xe di động
           </p>
         </div>
@@ -112,15 +111,16 @@ export default function DangNhap() {
         {/* ── Form ── */}
         {error && (
           <div style={{
-            background: '#fef2f2', border: '1px solid #fecaca',
+            background: 'rgba(220,38,38,0.1)',
+            border: '1px solid var(--danger)',
             borderRadius: 10, padding: '12px 14px',
-            color: '#dc2626', fontSize: '0.88rem', marginBottom: 16,
+            color: 'var(--danger)', fontSize: '0.88rem', marginBottom: 16,
             display: 'flex', alignItems: 'center', gap: 8,
           }}>
             ⚠️ {error}
             <button onClick={() => setError(null)} style={{
               marginLeft: 'auto', background: 'none', border: 'none',
-              color: '#dc2626', cursor: 'pointer', fontSize: '1rem',
+              color: 'var(--danger)', cursor: 'pointer', fontSize: '1rem',
             }}>✕</button>
           </div>
         )}
@@ -145,7 +145,7 @@ export default function DangNhap() {
             rightSlot={
               <button type="button" onClick={() => setHienMatKhau(h => !h)} style={{
                 background: 'none', border: 'none', cursor: 'pointer',
-                color: '#9ca3af', fontSize: '1rem', padding: 0, lineHeight: 1,
+                color: 'var(--text-muted)', fontSize: '1rem', padding: 0, lineHeight: 1,
                 display: 'flex', alignItems: 'center',
               }}>
                 {hienMatKhau ? '🙈' : '👁️'}
@@ -163,7 +163,7 @@ export default function DangNhap() {
             onClick={dangNhap}
             disabled={loading}
             style={{
-              background: loading ? '#374151' : '#111827',
+              background: loading ? 'var(--text-muted)' : 'var(--accent)',
               color: '#fff', border: 'none', borderRadius: 12,
               padding: '16px', fontSize: '0.95rem', fontWeight: 800,
               letterSpacing: '0.08em', cursor: loading ? 'not-allowed' : 'pointer',
@@ -177,7 +177,7 @@ export default function DangNhap() {
             ĐĂNG NHẬP
           </button>
 
-          <p style={{ textAlign: 'center', fontSize: '0.85rem', color: '#6b7280', margin: 0, marginTop: 4 }}>
+          <p style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0, marginTop: 4 }}>
             Chưa có tài khoản?{' '}
             <span
               style={{ color: '#13b47e', cursor: 'pointer', fontWeight: 700 }}
