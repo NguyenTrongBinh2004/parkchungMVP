@@ -167,24 +167,22 @@ def gui_thong_bao_xe_vao(sdt: str, bien_so: str, ma_phien: str):
     _gui_zalo_kem_sms(sdt_chuan, ESMS_TEMP_XE_VAO, params, sms_content, "ParkingMVP - Xe vao")
 
 def gui_otp(sdt: str, ma_otp: str):
-    """Gửi OTP qua ESMS SMS thường. Raise Exception nếu thất bại."""
     sdt_chuan = _chuan_hoa_sdt(sdt)
     if not _validate_sdt(sdt_chuan):
         raise Exception(f"SĐT không hợp lệ: {sdt}")
 
     noi_dung = (
         f"Ma OTP ParkChung: {ma_otp}. "
-        f"Hieu luc 5 phut. Khong chia se ma nay cho bat ky ai."
+        f"Kich hoat trong 5 phut. Khong chia se ma nay cho bat ky ai."
     )
     payload = {
         "ApiKey":    ESMS_API_KEY,
         "SecretKey": ESMS_SECRET_KEY,
         "Phone":     sdt_chuan,
         "Content":   noi_dung,
-        "SmsType":   "4",              # 4 = SMS có Brandname
-        "Brandname": ESMS_BRANDNAME,   # ← thiếu dòng này là lỗi
+        "SmsType":   "8",        # ← OTP type, không cần brandname
         "IsUnicode": "0",
-        "Sandbox":   ESMS_SANDBOX,     # int, nhất quán với phần còn lại
+        "Sandbox":   ESMS_SANDBOX,
     }
     with httpx.Client(timeout=10) as client:
         resp = client.post(
