@@ -168,6 +168,7 @@ def xac_nhan_otp(body: XacNhanOTPBody, KetNoi=Depends(lay_ket_noi_CSDL)):
     # Đánh dấu OTP đã dùng
     with KetNoi.cursor() as cur:
         cur.execute("UPDATE otp SET da_dung = 1 WHERE id = %s", (otp_row["id"],))
+    KetNoi.commit()
 
     # Kiểm tra race condition
     with KetNoi.cursor(dictionary=True) as cur:
@@ -207,6 +208,13 @@ def xac_nhan_otp(body: XacNhanOTPBody, KetNoi=Depends(lay_ket_noi_CSDL)):
     except mysql.connector.Error as err:
         KetNoi.rollback()
         raise HTTPException(500, f"Lỗi CSDL: {err}")
+    except HTTPException:
+        raise
+    except Exception as err:
+        KetNoi.rollback()
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"Lỗi không xác định: {err}")
 
 
 # ── 3. Gửi lại OTP ──────────────────────────────────────────────
