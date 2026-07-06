@@ -62,6 +62,7 @@ export default function App() {
       {/* Các route KHÔNG cần đăng nhập */}
       <Route path="/dang-ky" element={<DangKy />} />
       <Route path="/dang-nhap" element={<DangNhap />} />
+      <Route path="/quen-mat-khau" element={<QuenMatKhau />} />
 
       {/* Tất cả route còn lại yêu cầu đăng nhập */}
       <Route path="/*" element={
@@ -79,7 +80,6 @@ export default function App() {
             <Route path="/tim-xe" element={<TimXe />} />
             <Route path="/cai-dat" element={<CaiDat />} />
             <Route path="*" element={<Navigate to="/" />} />
-            <Route path="/quen-mat-khau" element={<QuenMatKhau />} />
           </Routes>
         </RequireAuth>
       } />
