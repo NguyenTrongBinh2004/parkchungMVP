@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Spinner } from '../components/UI'
 import { authApi } from '../services/api'
 import { useAuth } from '../context/AuthContext'
@@ -42,11 +42,14 @@ function InputField({ icon, type = 'text', placeholder, value, onChange, onKeyDo
 
 export default function DangNhap() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { dangNhapThanhCong } = useAuth()
   const [form, setForm]               = useState({ sdt: '', mat_khau: '' })
   const [loading, setLoading]         = useState(false)
   const [error, setError]             = useState(null)
   const [hienMatKhau, setHienMatKhau] = useState(false)
+
+  const thongBao = location.state?.thongBao
 
   function setField(k) { return e => setForm(f => ({ ...f, [k]: e.target.value })) }
 
@@ -95,6 +98,17 @@ export default function DangNhap() {
             Parkchung
           </span>
         </div>
+
+        {/* ── Banner thông báo thành công (từ redirect) ── */}
+        {thongBao && (
+          <div style={{
+            background: 'rgba(19,180,126,0.1)', border: '1px solid rgba(19,180,126,0.3)',
+            borderRadius: 12, padding: '12px 14px', color: '#13b47e',
+            fontSize: '0.88rem', marginBottom: 16, textAlign: 'center',
+          }}>
+            ✅ {thongBao}
+          </div>
+        )}
 
         {/* ── Tiêu đề ── */}
         <div style={{ marginBottom: '2rem' }}>
@@ -153,6 +167,14 @@ export default function DangNhap() {
               </button>
             }
           />
+
+          {/* Link quên mật khẩu */}
+          <p style={{ textAlign: 'right', fontSize: '0.82rem', margin: '-4px 0 4px' }}>
+            <span style={{ color: '#13b47e', cursor: 'pointer', fontWeight: 600 }}
+              onClick={() => navigate('/quen-mat-khau')}>
+              Quên mật khẩu?
+            </span>
+          </p>
 
           {loading && (
             <div style={{ textAlign: 'center', padding: '4px 0' }}>

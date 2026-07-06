@@ -17,6 +17,7 @@ import TimXe from './pages/TimXe'
 import XeDaRa from './pages/XeDaRa'
 import DangKy from './pages/DangKy'
 import DangNhap from './pages/DangNhap'
+import QuenMatKhau from './pages/QuenMatKhau' 
 
 // Component bảo vệ route yêu cầu đăng nhập
 function RequireAuth({ children }) {
@@ -78,6 +79,7 @@ export default function App() {
             <Route path="/tim-xe" element={<TimXe />} />
             <Route path="/cai-dat" element={<CaiDat />} />
             <Route path="*" element={<Navigate to="/" />} />
+            <Route path="/quen-mat-khau" element={<QuenMatKhau />} />
           </Routes>
         </RequireAuth>
       } />

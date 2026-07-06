@@ -48,6 +48,17 @@ class RefreshBody(BaseModel):
 class DangXuatBody(BaseModel):
     refresh_token: str
 
+class QuenMatKhauBody(BaseModel):
+    sdt: str
+
+class XacNhanOTPQMKBody(BaseModel):
+    sdt:    str
+    ma_otp: str = Field(..., min_length=6, max_length=6)
+
+class DatLaiMatKhauBody(BaseModel):
+    sdt:        str
+    ma_otp:     str = Field(..., min_length=6, max_length=6)
+    mat_khau:   str = Field(..., min_length=8)
 
 # ── Helpers ─────────────────────────────────────────────────────
 def _validate_sdt(sdt: str):
@@ -84,6 +95,31 @@ def _kiem_tra_cooldown(sdt: str, KetNoi):
         """, (sdt,))
         if cur.fetchone()["so_lan"] >= OTP_GIOI_HAN_NGAY:
             raise HTTPException(429, "Đã vượt giới hạn gửi OTP trong ngày. Thử lại vào ngày mai.")
+        
+
+def _kiem_tra_cooldown_qmk(sdt: str, KetNoi):
+    bay_gio = bay_gio_vn().replace(tzinfo=None)
+    with KetNoi.cursor(dictionary=True) as cur:
+        cur.execute("""
+            SELECT created_at FROM otp
+            WHERE sdt = %s AND muc_dich = 'quen_mat_khau'
+            ORDER BY created_at DESC LIMIT 1
+        """, (sdt,))
+        row = cur.fetchone()
+        if row:
+            delta = (bay_gio - row["created_at"]).total_seconds()
+            if delta < OTP_COOLDOWN_GIAY:
+                con_lai = int(OTP_COOLDOWN_GIAY - delta)
+                raise HTTPException(429, f"Vui lòng chờ {con_lai} giây trước khi gửi lại")
+
+        cur.execute("""
+            SELECT COUNT(*) AS so_lan FROM otp
+            WHERE sdt = %s AND muc_dich = 'quen_mat_khau'
+              AND DATE(created_at) = CURDATE()
+        """, (sdt,))
+        if cur.fetchone()["so_lan"] >= OTP_GIOI_HAN_NGAY:
+            raise HTTPException(429, "Đã vượt giới hạn gửi OTP trong ngày. Thử lại vào ngày mai.")
+
 
 def _lay_bai_xe(id_nguoi_dung: int, KetNoi) -> dict:
     with KetNoi.cursor(dictionary=True) as cur:
@@ -350,3 +386,130 @@ def dang_xuat(body: DangXuatBody, KetNoi=Depends(lay_ket_noi_CSDL)):
         cur.execute("DELETE FROM refresh_token WHERE token_hash = %s", (token_hash,))
     KetNoi.commit()
     return {"message": "Đã đăng xuất"}
+
+
+# ── 7. Quên mật khẩu — gửi OTP ─────────────────────────────────
+@router.post("/quen-mat-khau/")
+def quen_mat_khau(body: QuenMatKhauBody, KetNoi=Depends(lay_ket_noi_CSDL)):
+    _validate_sdt(body.sdt)
+
+    with KetNoi.cursor(dictionary=True) as cur:
+        cur.execute("SELECT id FROM nguoi_dung WHERE sdt = %s", (body.sdt,))
+        if not cur.fetchone():
+            # Không tiết lộ SĐT có tồn tại hay không
+            raise HTTPException(404, "Số điện thoại chưa được đăng ký")
+
+    _kiem_tra_cooldown_qmk(body.sdt, KetNoi)
+
+    ma_otp  = tao_otp()
+    bay_gio = bay_gio_vn().replace(tzinfo=None)
+    het_han = bay_gio + timedelta(minutes=OTP_TTL_PHUT)
+
+    with KetNoi.cursor() as cur:
+        cur.execute("""
+            UPDATE otp SET da_dung = 1
+            WHERE sdt = %s AND muc_dich = 'quen_mat_khau' AND da_dung = 0
+        """, (body.sdt,))
+        cur.execute("""
+            INSERT INTO otp (sdt, ma_otp, muc_dich, het_han_luc)
+            VALUES (%s, %s, 'quen_mat_khau', %s)
+        """, (body.sdt, ma_otp, het_han))
+    KetNoi.commit()
+
+    try:
+        gui_otp(body.sdt, ma_otp)
+    except Exception as e:
+        raise HTTPException(500, f"Không gửi được SMS: {e}")
+
+    import os
+    la_sandbox = int(os.getenv("ESMS_SANDBOX", "0")) == 1
+    return {
+        "message": "Mã OTP đã được gửi",
+        "het_han_sau_giay": OTP_TTL_PHUT * 60,
+        **({"otp_sandbox": ma_otp} if la_sandbox else {})
+    }
+
+
+# ── 8. Xác nhận OTP quên mật khẩu (chỉ kiểm tra, chưa đổi) ────
+@router.post("/xac-nhan-otp-qmk/")
+def xac_nhan_otp_qmk(body: XacNhanOTPQMKBody, KetNoi=Depends(lay_ket_noi_CSDL)):
+    _validate_sdt(body.sdt)
+    bay_gio = bay_gio_vn().replace(tzinfo=None)
+
+    with KetNoi.cursor(dictionary=True) as cur:
+        cur.execute("""
+            SELECT * FROM otp
+            WHERE sdt = %s AND muc_dich = 'quen_mat_khau' AND da_dung = 0
+            ORDER BY created_at DESC LIMIT 1
+        """, (body.sdt,))
+        otp_row = cur.fetchone()
+
+    if not otp_row:
+        raise HTTPException(400, "Không tìm thấy mã OTP. Vui lòng gửi lại.")
+    if otp_row["so_lan_thu"] >= 5:
+        raise HTTPException(400, "OTP đã bị hủy do nhập sai quá 5 lần. Vui lòng gửi lại.")
+    if otp_row["het_han_luc"] < bay_gio:
+        raise HTTPException(400, "Mã OTP đã hết hạn. Vui lòng gửi lại.")
+
+    if otp_row["ma_otp"] != body.ma_otp:
+        with KetNoi.cursor() as cur:
+            cur.execute(
+                "UPDATE otp SET so_lan_thu = so_lan_thu + 1 WHERE id = %s",
+                (otp_row["id"],)
+            )
+        KetNoi.commit()
+        con_lai = 5 - (otp_row["so_lan_thu"] + 1)
+        raise HTTPException(400, f"Mã OTP không đúng. Còn {con_lai} lần thử.")
+
+    return {"message": "OTP hợp lệ", "sdt": body.sdt}
+
+
+# ── 9. Đặt lại mật khẩu mới ────────────────────────────────────
+@router.post("/dat-lai-mat-khau/")
+def dat_lai_mat_khau(body: DatLaiMatKhauBody, KetNoi=Depends(lay_ket_noi_CSDL)):
+    _validate_sdt(body.sdt)
+    _validate_mat_khau(body.mat_khau)
+    bay_gio = bay_gio_vn().replace(tzinfo=None)
+
+    # Kiểm tra lại OTP lần cuối trước khi đổi mật khẩu
+    with KetNoi.cursor(dictionary=True) as cur:
+        cur.execute("""
+            SELECT * FROM otp
+            WHERE sdt = %s AND muc_dich = 'quen_mat_khau' AND da_dung = 0
+            ORDER BY created_at DESC LIMIT 1
+        """, (body.sdt,))
+        otp_row = cur.fetchone()
+
+    if not otp_row:
+        raise HTTPException(400, "Phiên đặt lại mật khẩu không hợp lệ. Vui lòng thử lại.")
+    if otp_row["ma_otp"] != body.ma_otp:
+        raise HTTPException(400, "Mã OTP không khớp. Vui lòng thử lại.")
+    if otp_row["het_han_luc"] < bay_gio:
+        raise HTTPException(400, "Mã OTP đã hết hạn. Vui lòng thử lại.")
+
+    try:
+        with KetNoi.cursor() as cur:
+            # Đánh dấu OTP đã dùng
+            cur.execute("UPDATE otp SET da_dung = 1 WHERE id = %s", (otp_row["id"],))
+            # Cập nhật mật khẩu mới
+            cur.execute("""
+                UPDATE nguoi_dung
+                SET mat_khau_hash = %s, so_lan_dang_nhap_sai = 0, khoa_den = NULL
+                WHERE sdt = %s
+            """, (hash_mat_khau(body.mat_khau), body.sdt))
+            # Hủy toàn bộ refresh token cũ (bảo mật)
+            cur.execute("""
+                DELETE rt FROM refresh_token rt
+                JOIN nguoi_dung nd ON rt.id_nguoi_dung = nd.id
+                WHERE nd.sdt = %s
+            """, (body.sdt,))
+        KetNoi.commit()
+    except mysql.connector.Error as err:
+        KetNoi.rollback()
+        raise HTTPException(500, f"Lỗi CSDL: {err}")
+    except Exception as err:
+        KetNoi.rollback()
+        import traceback; traceback.print_exc()
+        raise HTTPException(500, f"Lỗi không xác định: {err}")
+
+    return {"message": "Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại."}

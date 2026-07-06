@@ -123,4 +123,7 @@ export const authApi = {
   dangNhap:   (data) => request('/auth/dang-nhap/',    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
   refresh:    (data) => request('/auth/refresh/',      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
   dangXuat:   (data) => request('/auth/dang-xuat/',    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  quenMatKhau:    (data) => request('/auth/quen-mat-khau/',     { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  xacNhanOtpQmk:  (data) => request('/auth/xac-nhan-otp-qmk/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  datLaiMatKhau:  (data) => request('/auth/dat-lai-mat-khau/',  { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
 }
