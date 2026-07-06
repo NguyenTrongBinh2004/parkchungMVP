@@ -1,5 +1,7 @@
 // src/pages/Dashboard.jsx
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+
 function LogoParkchung({ size = 32 }) {
   return (
     <svg width={size} height={size} viewBox="0 10 105 90" xmlns="http://www.w3.org/2000/svg">
@@ -52,8 +54,8 @@ const TABS = [
 export default function Dashboard() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { dangXuat, tenBaiXe } = useAuth()
 
-  // Tab active: giữ lại lựa chọn theo hash, mặc định tab đầu tiên
   const hash = location.hash.replace('#', '') || TABS[0].id
   const activeTab = TABS.find(t => t.id === hash) || TABS[0]
 
@@ -101,6 +103,22 @@ export default function Dashboard() {
         }}>
           {activeTab.label}
         </p>
+
+        {/* Header tên bãi xe — chỉ hiện ở tab Người dùng */}
+        {activeTab.id === 'nguoi-dung' && tenBaiXe && (
+          <div style={{
+            background: 'var(--bg-secondary)', borderRadius: 14,
+            padding: '14px 16px', marginBottom: 12,
+            border: '1px solid var(--border)',
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}>
+            <span style={{ fontSize: '1.4rem' }}>🏢</span>
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Bãi xe</div>
+              <div style={{ fontWeight: 700, color: 'var(--text)' }}>{tenBaiXe}</div>
+            </div>
+          </div>
+        )}
 
         <div style={{
           display: 'grid',
@@ -152,6 +170,39 @@ export default function Dashboard() {
             </button>
           ))}
         </div>
+
+        {/* Nút đăng xuất — chỉ hiện ở tab Người dùng */}
+        {activeTab.id === 'nguoi-dung' && (
+          <button
+            onClick={async () => {
+              if (window.confirm('Bạn có chắc muốn đăng xuất?')) {
+                await dangXuat()
+              }
+            }}
+            style={{
+              marginTop: 16,
+              width: '100%',
+              background: 'rgba(239,68,68,0.1)',
+              border: '1.5px solid rgba(239,68,68,0.3)',
+              borderRadius: 14,
+              padding: '15px',
+              color: '#f87171',
+              fontSize: '0.95rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              transition: 'background 0.15s',
+            }}
+            onPointerDown={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.2)' }}
+            onPointerUp={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)' }}
+            onPointerLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)' }}
+          >
+            🚪 Đăng xuất
+          </button>
+        )}
       </div>
 
       {/* ── Bottom nav ── */}
