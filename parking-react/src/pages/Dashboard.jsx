@@ -34,11 +34,11 @@ const TABS = [
     label: 'QL Bãi xe',
     icon: '🚗',
     items: [
-      { label: 'Trong bãi',  icon: '🅿️', path: '/danh-sach',  color: '#3b82f6' },
-      { label: 'Đã ra',      icon: '✅', path: '/xe-da-ra',    color: '#6366f1' },
-      { label: 'Tìm xe',     icon: '🔍', path: '/tim-xe',      color: '#06b6d4' },
-      { label: 'Vé tháng',   icon: '🎫', path: '/ve-thang',    color: '#f97316' },
-      { label: 'Thống kê',   icon: '📊', path: '/thong-ke',    color: '#8b5cf6' },
+      { label: 'Trong bãi', icon: '🅿️', path: '/danh-sach', color: '#3b82f6' },
+      { label: 'Đã ra',     icon: '✅', path: '/xe-da-ra',   color: '#6366f1' },
+      { label: 'Tìm xe',    icon: '🔍', path: '/tim-xe',     color: '#06b6d4' },
+      { label: 'Vé tháng',  icon: '🎫', path: '/ve-thang',   color: '#f97316' },
+      { label: 'Thống kê',  icon: '📊', path: '/thong-ke',   color: '#8b5cf6' },
     ],
   },
   {
@@ -46,7 +46,8 @@ const TABS = [
     label: 'Người dùng',
     icon: '👤',
     items: [
-      { label: 'Cài đặt', icon: '⚙️', path: '/cai-dat', color: '#64748b' },
+      { label: 'Cài đặt',   icon: '⚙️', path: '/cai-dat',    color: '#64748b' },
+      { label: 'Đăng xuất', icon: '🚪', action: 'dang-xuat', color: '#ef4444' },
     ],
   },
 ]
@@ -61,6 +62,14 @@ export default function Dashboard() {
 
   function setTab(id) {
     navigate({ hash: id }, { replace: true })
+  }
+
+  function handleItemClick(item) {
+    if (item.action === 'dang-xuat') {
+      if (window.confirm('Bạn có chắc muốn đăng xuất?')) dangXuat()
+    } else {
+      navigate(item.path)
+    }
   }
 
   return (
@@ -104,7 +113,7 @@ export default function Dashboard() {
           {activeTab.label}
         </p>
 
-        {/* Header tên bãi xe — chỉ hiện ở tab Người dùng */}
+        {/* Tên bãi xe — chỉ hiện ở tab Người dùng */}
         {activeTab.id === 'nguoi-dung' && tenBaiXe && (
           <div style={{
             background: 'var(--bg-secondary)', borderRadius: 14,
@@ -127,8 +136,8 @@ export default function Dashboard() {
         }}>
           {activeTab.items.map(item => (
             <button
-              key={item.path}
-              onClick={() => navigate(item.path)}
+              key={item.path || item.action}
+              onClick={() => handleItemClick(item)}
               style={{
                 background: item.color,
                 border: 'none',
@@ -170,39 +179,6 @@ export default function Dashboard() {
             </button>
           ))}
         </div>
-
-        {/* Nút đăng xuất — chỉ hiện ở tab Người dùng */}
-        {activeTab.id === 'nguoi-dung' && (
-          <button
-            onClick={async () => {
-              if (window.confirm('Bạn có chắc muốn đăng xuất?')) {
-                await dangXuat()
-              }
-            }}
-            style={{
-              marginTop: 16,
-              width: '100%',
-              background: 'rgba(239,68,68,0.1)',
-              border: '1.5px solid rgba(239,68,68,0.3)',
-              borderRadius: 14,
-              padding: '15px',
-              color: '#f87171',
-              fontSize: '0.95rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              transition: 'background 0.15s',
-            }}
-            onPointerDown={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.2)' }}
-            onPointerUp={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)' }}
-            onPointerLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)' }}
-          >
-            🚪 Đăng xuất
-          </button>
-        )}
       </div>
 
       {/* ── Bottom nav ── */}
