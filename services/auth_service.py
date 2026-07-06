@@ -1,10 +1,8 @@
 import os, secrets, hashlib, random
+import bcrypt
 from datetime import timedelta
-from passlib.context import CryptContext
 from jose import jwt, JWTError
 from utils import bay_gio_vn
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 SECRET_KEY = os.getenv("SECRET_KEY", "change-me-please-use-a-long-random-string")
 ALGORITHM  = "HS256"
@@ -13,10 +11,13 @@ REFRESH_TOKEN_EXPIRE_DAYS   = 30
 
 
 def hash_mat_khau(mat_khau: str) -> str:
-    return pwd_context.hash(mat_khau)
+    return bcrypt.hashpw(mat_khau.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 def xac_minh_mat_khau(mat_khau: str, hash_luu: str) -> bool:
-    return pwd_context.verify(mat_khau, hash_luu)
+    try:
+        return bcrypt.checkpw(mat_khau.encode("utf-8"), hash_luu.encode("utf-8"))
+    except Exception:
+        return False
 
 def tao_otp() -> str:
     return f"{random.randint(0, 999999):06d}"
@@ -29,7 +30,6 @@ def tao_access_token(id_nguoi_dung: int, id_bai_xe: int) -> str:
     )
 
 def tao_refresh_token() -> tuple[str, str]:
-    """Trả về (token_goc, token_hash). Chỉ lưu hash vào DB."""
     raw    = secrets.token_urlsafe(48)
     hashed = hashlib.sha256(raw.encode()).hexdigest()
     return raw, hashed
