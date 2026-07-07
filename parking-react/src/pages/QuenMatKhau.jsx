@@ -149,7 +149,8 @@ export default function QuenMatKhau() {
       }}>
         <LogoParkchung size={40} />
       </div>
-      <span style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text)', letterSpacing: '0.05em' }}>
+      <span style={{ fontSize: '1.5rem', fontWeight: 800, color: '#13b47e', letterSpacing: '0.05em', textShadow: '0 0 8px rgba(19,180,126,0.4)' }}>
+        Parkchung
         Parkchung
       </span>
     </div>
