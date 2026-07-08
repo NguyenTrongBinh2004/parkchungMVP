@@ -29,6 +29,7 @@ ESMS_SECRET_KEY = os.getenv("ESMS_SECRET_KEY")
 ESMS_OAID       = os.getenv("ESMS_OAID")                      # Zalo OA ID
 ESMS_TEMP_VE_THANG = os.getenv("ESMS_TEMP_ID_VE_THANG", "540610")  # Template vé tháng
 ESMS_TEMP_XE_VAO   = os.getenv("ESMS_TEMP_ID_XE_VAO", "540646")    # Template xe vào thường
+ESMS_TEMP_OTP = os.getenv("ESMS_TEMP_ID_OTP", "540646")
 ESMS_BRANDNAME  = os.getenv("ESMS_BRANDNAME", "ParkingMVP")  # Brandname SMS
 ESMS_SANDBOX    = int(os.getenv("ESMS_SANDBOX", "1"))         # 1 = test, 0 = thật
 
@@ -167,29 +168,33 @@ def gui_thong_bao_xe_vao(sdt: str, bien_so: str, ma_phien: str):
     _gui_zalo_kem_sms(sdt_chuan, ESMS_TEMP_XE_VAO, params, sms_content, "ParkingMVP - Xe vao")
 
 def gui_otp(sdt: str, ma_otp: str):
-    sdt_chuan = _chuan_hoa_sdt(sdt)
-    if not _validate_sdt(sdt_chuan):
+    """
+    Gửi OTP qua Zalo ZNS (template 540646) + SMS fallback.
+    params = [ma_otp]
+    """
+    if not all([ESMS_API_KEY, ESMS_SECRET_KEY, ESMS_OAID, ESMS_TEMP_OTP]):
+        logger.warning("Chưa cấu hình đủ eSMS — bỏ qua gửi OTP.")
+        raise Exception("Chưa cấu hình eSMS")
+
+    if not sdt or len(sdt) < 9:
         raise Exception(f"SĐT không hợp lệ: {sdt}")
 
-    noi_dung = (
+    sdt_chuan = _chuan_hoa_sdt(sdt)
+    if not _validate_sdt(sdt_chuan):
+        raise Exception(f"SĐT sau chuẩn hóa không hợp lệ: {_mask_sdt(sdt_chuan)}")
+
+    params = [ma_otp]
+
+    sms_content = (
         f"Ma OTP ParkChung: {ma_otp}. "
         f"Kich hoat trong 5 phut. Khong chia se ma nay cho bat ky ai."
     )
-    payload = {
-        "ApiKey":    ESMS_API_KEY,
-        "SecretKey": ESMS_SECRET_KEY,
-        "Phone":     sdt_chuan,
-        "Content":   noi_dung,
-        "SmsType":   "8",        # ← OTP type, không cần brandname
-        "IsUnicode": "0",
-        "Sandbox":   ESMS_SANDBOX,
-    }
-    with httpx.Client(timeout=10) as client:
-        resp = client.post(
-            "https://rest.esms.vn/MainService.svc/json/SendMultipleMessage_V4_post_json/",
-            json=payload,
-        )
-    result = resp.json()
-    if result.get("CodeResult") != "100":
-        raise Exception(f"ESMS lỗi: {result.get('ErrorMessage', 'Không xác định')}")
+
+    ok = _gui_zalo_kem_sms(
+        sdt_chuan, ESMS_TEMP_OTP, params,
+        sms_content, "ParkChung-OTP"
+    )
+    if not ok:
+        raise Exception("Không gửi được OTP sau nhiều lần thử")
+
     logger.info(f"Gửi OTP thành công đến {_mask_sdt(sdt_chuan)}")
