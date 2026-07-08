@@ -2,10 +2,10 @@
 import { useState, useEffect, useMemo } from 'react'
 import { PageLayout, Spinner, Alert, Field, Modal } from '../components/UI'
 import { loaiXeApi } from '../services/api'
+import { useLoaiXe } from '../context/LoaiXeContext' // import context
 
 const NHOM_ICON = { 1: '🛵', 2: '🚗', 3: '🚛', 4: '🚲' }
 
-// ─── Danh sách tên gợi ý cố định cho Chọn nhanh ─────────────────
 const TEN_MAU = {
   1: ['Xe máy phổ thông (Số, ga)', 'Xe mô tô PKL / Xe tay côn'],
   2: ['Ô tô 4 - 7 chỗ', 'Ô tô 9 - 16 chỗ', 'Xe bán tải (Pick-up)'],
@@ -32,7 +32,7 @@ const KIEU_LABEL = { theo_luot: 'Lượt', theo_gio: 'Giờ', theo_ngay_dem: 'Ng
 
 // ─── Modal đồng giá cho cả nhóm ─────────────────────────────────────────
 function DongGiaModal({ nhom, onClose, onSuccess }) {
-  // ... giữ nguyên, không thay đổi ...
+  const { refetchLoaiXe } = useLoaiXe() // lấy refetch
   const [kieu, setKieu] = useState('theo_luot')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -64,6 +64,7 @@ function DongGiaModal({ nhom, onClose, onSuccess }) {
     if (form.gia_ve_thang) fd.append('gia_ve_thang', form.gia_ve_thang)
     try {
       await loaiXeApi.dongGia(fd)
+      await refetchLoaiXe(true) // làm mới danh sách loại xe toàn app
       onSuccess()
     } catch (err) { setError(err.message) } finally { setLoading(false) }
   }
@@ -120,8 +121,9 @@ function DongGiaModal({ nhom, onClose, onSuccess }) {
   )
 }
 
-// ─── Modal thêm loại xe (ĐÃ SỬA – dùng danh sách tên cố định) ──────────
+// ─── Modal thêm loại xe ─────────────────────────────────────────────
 function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
+  const { refetchLoaiXe } = useLoaiXe()
   const [kieu, setKieu] = useState('theo_luot')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -138,7 +140,6 @@ function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
 
   const upd = (f) => (e) => setForm(v => ({ ...v, [f]: e.target.value }))
 
-  // Danh sách tên gợi ý cố định, thay đổi theo nhóm được chọn
   const dsMau = TEN_MAU[form.nhom_xe_id] || []
 
   const themDong = () => { const last = bangGio[bangGio.length - 1]; setBangGio([...bangGio, { tuGio: last.denGio + 1, denGio: last.denGio + 2, gia: '' }]) }
@@ -165,7 +166,11 @@ function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
       fd.append('gia_ngay', form.gia_ngay || 0); fd.append('gia_dem', form.gia_dem || 0); fd.append('gia_ngay_dem', form.gia_ngay_dem || 0)
     }
     if (form.gia_ve_thang) fd.append('gia_ve_thang', form.gia_ve_thang)
-    try { await loaiXeApi.create(fd); onSuccess() } catch (err) { setError(err.message) } finally { setLoading(false) }
+    try {
+      await loaiXeApi.create(fd)
+      await refetchLoaiXe(true) // làm mới context
+      onSuccess()
+    } catch (err) { setError(err.message) } finally { setLoading(false) }
   }
 
   const handleDongGiaClick = () => {
@@ -276,7 +281,7 @@ function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
   )
 }
 
-// ─── Card loại xe (giữ nguyên) ──────────────────────────────────────
+// ─── Card loại xe ──────────────────────────────────────────────────
 function LoaiXeCard({ lx, onXoa }) {
   const giaVeThang = lx.gia_ve_thang ? `· Vé tháng ${Number(lx.gia_ve_thang).toLocaleString('vi-VN')}đ` : ''
   return (
@@ -297,7 +302,7 @@ function LoaiXeCard({ lx, onXoa }) {
   )
 }
 
-// ─── Card nhóm xe (giữ nguyên) ───────────────────────────────────
+// ─── Card nhóm xe ─────────────────────────────────────────────────
 function NhomXeCard({ nhom, loaiXeList, nhomGia, onXoa, onXoaDongGia, isOpen, onToggle }) {
   const loaiTrongNhom = loaiXeList.filter(lx => 
     lx.nhom_xe_id === nhom.id && lx.co_gia && 
@@ -350,8 +355,9 @@ function NhomXeCard({ nhom, loaiXeList, nhomGia, onXoa, onXoaDongGia, isOpen, on
   )
 }
 
-// ─── Component chính (đã bỏ truyền allLoaiXeList) ────────────────────
+// ─── Component chính ──────────────────────────────────────────────
 export default function LoaiXe() {
+  const { refetchLoaiXe } = useLoaiXe()
   const [nhomList, setNhomList] = useState([])
   const [list, setList] = useState([])
   const [nhomGiaMap, setNhomGiaMap] = useState({})
@@ -385,6 +391,7 @@ export default function LoaiXe() {
     try {
       await loaiXeApi.delete(id)
       setList(prev => prev.filter(lx => lx.id !== id))
+      await refetchLoaiXe(true) // cập nhật context
     } catch (err) {
       setError(err.message)
     }
@@ -394,8 +401,9 @@ export default function LoaiXe() {
     if (!window.confirm(`Bỏ đồng giá nhóm "${tenNhom}"?`)) return
     try {
       await loaiXeApi.xoaDongGia(nhomId)
+      await refetchLoaiXe(true) // cập nhật context trước
       await new Promise(r => setTimeout(r, 300))
-      load()
+      load() // load lại trang này
     } catch (err) {
       setError(err.message)
     }

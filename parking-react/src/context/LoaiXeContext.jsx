@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+// context/LoaiXeContext.jsx
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 import { loaiXeApi } from '../services/api'
 
 const LoaiXeContext = createContext(null)
@@ -72,9 +73,11 @@ export function LoaiXeProvider({ children }) {
   const [configuredLoaiXe, setConfigured]   = useState([])
   const [groupedLoaiXe, setGrouped]         = useState([])
   const [dataLoading, setDataLoading]       = useState(true)
+  const [error, setError]                   = useState(null)
 
-  const fetchData = async () => {
-    setDataLoading(true)
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) setDataLoading(true)
+    setError(null)
     try {
       const [all, configured, nhomGia] = await Promise.all([
         loaiXeApi.list(),
@@ -84,28 +87,35 @@ export function LoaiXeProvider({ children }) {
       setAllLoaiXe(all)
       setConfigured(configured)
       setGrouped(groupByNhomWithGia(configured, nhomGia, all))
+    } catch (err) {
+      setError(err)
     } finally {
-      setDataLoading(false)
+      if (!silent) setDataLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     fetchData()
-  }, []) // chỉ chạy 1 lần khi app khởi động
+  }, [fetchData])
+
+  const value = useMemo(() => ({
+    allLoaiXe,
+    configuredLoaiXe,
+    groupedLoaiXe,
+    dataLoading,
+    error,
+    refetchLoaiXe: fetchData
+  }), [allLoaiXe, configuredLoaiXe, groupedLoaiXe, dataLoading, error, fetchData])
 
   return (
-    <LoaiXeContext.Provider value={{ 
-      allLoaiXe, 
-      configuredLoaiXe, 
-      groupedLoaiXe, 
-      dataLoading,
-      refetchLoaiXe: fetchData 
-    }}>
+    <LoaiXeContext.Provider value={value}>
       {children}
     </LoaiXeContext.Provider>
   )
 }
 
 export function useLoaiXe() {
-  return useContext(LoaiXeContext)
+  const ctx = useContext(LoaiXeContext)
+  if (!ctx) throw new Error('useLoaiXe phải được dùng bên trong LoaiXeProvider')
+  return ctx
 }
