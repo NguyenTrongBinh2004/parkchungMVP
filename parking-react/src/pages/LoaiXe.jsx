@@ -1,8 +1,8 @@
 // src/pages/LoaiXe.jsx
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { PageLayout, Spinner, Alert, Field, Modal } from '../components/UI'
 import { loaiXeApi } from '../services/api'
-import { useLoaiXe } from '../context/LoaiXeContext' // import context
+import { useLoaiXe } from '../context/LoaiXeContext'
 
 const NHOM_ICON = { 1: '🛵', 2: '🚗', 3: '🚛', 4: '🚲' }
 
@@ -32,7 +32,7 @@ const KIEU_LABEL = { theo_luot: 'Lượt', theo_gio: 'Giờ', theo_ngay_dem: 'Ng
 
 // ─── Modal đồng giá cho cả nhóm ─────────────────────────────────────────
 function DongGiaModal({ nhom, onClose, onSuccess }) {
-  const { refetchLoaiXe } = useLoaiXe() // lấy refetch
+  const { refetchLoaiXe } = useLoaiXe()
   const [kieu, setKieu] = useState('theo_luot')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -64,7 +64,7 @@ function DongGiaModal({ nhom, onClose, onSuccess }) {
     if (form.gia_ve_thang) fd.append('gia_ve_thang', form.gia_ve_thang)
     try {
       await loaiXeApi.dongGia(fd)
-      await refetchLoaiXe(true) // làm mới danh sách loại xe toàn app
+      await refetchLoaiXe(true) // làm mới context, không set dataLoading toàn cục
       onSuccess()
     } catch (err) { setError(err.message) } finally { setLoading(false) }
   }
@@ -168,7 +168,7 @@ function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
     if (form.gia_ve_thang) fd.append('gia_ve_thang', form.gia_ve_thang)
     try {
       await loaiXeApi.create(fd)
-      await refetchLoaiXe(true) // làm mới context
+      await refetchLoaiXe(true) // cập nhật context (không bật loading toàn cục)
       onSuccess()
     } catch (err) { setError(err.message) } finally { setLoading(false) }
   }
@@ -281,7 +281,7 @@ function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
   )
 }
 
-// ─── Card loại xe ──────────────────────────────────────────────────
+// ─── Card loại xe (giữ nguyên) ────────────────────────────────────
 function LoaiXeCard({ lx, onXoa }) {
   const giaVeThang = lx.gia_ve_thang ? `· Vé tháng ${Number(lx.gia_ve_thang).toLocaleString('vi-VN')}đ` : ''
   return (
@@ -302,7 +302,7 @@ function LoaiXeCard({ lx, onXoa }) {
   )
 }
 
-// ─── Card nhóm xe ─────────────────────────────────────────────────
+// ─── Card nhóm xe (giữ nguyên) ───────────────────────────────────
 function NhomXeCard({ nhom, loaiXeList, nhomGia, onXoa, onXoaDongGia, isOpen, onToggle }) {
   const loaiTrongNhom = loaiXeList.filter(lx => 
     lx.nhom_xe_id === nhom.id && lx.co_gia && 
@@ -355,43 +355,43 @@ function NhomXeCard({ nhom, loaiXeList, nhomGia, onXoa, onXoaDongGia, isOpen, on
   )
 }
 
-// ─── Component chính ──────────────────────────────────────────────
+// ─── Component chính (ĐÃ SỬA: không gọi API riêng, dùng context) ────────
 export default function LoaiXe() {
-  const { refetchLoaiXe } = useLoaiXe()
-  const [nhomList, setNhomList] = useState([])
-  const [list, setList] = useState([])
-  const [nhomGiaMap, setNhomGiaMap] = useState({})
-  const [loading, setLoading] = useState(true)
+  const { allLoaiXe, groupedLoaiXe, dataLoading, refetchLoaiXe } = useLoaiXe()
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [openNhomId, setOpenNhomId] = useState(null)
   const [dongGiaNhom, setDongGiaNhom] = useState(null)
 
-  async function load() {
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await loaiXeApi.getToanBo()
-      setNhomList(data.nhom)
-      setList(data.loai_xe)
-      const map = {}
-      data.nhom_gia.forEach(ng => { map[ng.nhom_xe_id] = ng })
-      setNhomGiaMap(map)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Tạo danh sách nhóm từ groupedLoaiXe (chỉ nhóm có ít nhất 1 xe hoặc đồng giá)
+  const nhomList = useMemo(() => {
+    return groupedLoaiXe.map(g => ({ id: g.nhom_id, ten: g.ten_nhom, thu_tu: g.thu_tu }))
+  }, [groupedLoaiXe])
 
-  useEffect(() => { load() }, [])
+  // Tạo map đồng giá cho từng nhóm (từ item đặc biệt _la_dai_dien_dong_gia)
+  const nhomGiaMap = useMemo(() => {
+    const map = {}
+    groupedLoaiXe.forEach(g => {
+      const dongGiaItem = g.items.find(item => item._la_dai_dien_dong_gia)
+      if (dongGiaItem) {
+        map[g.nhom_id] = {
+          ...dongGiaItem,
+          nhom_xe_id: g.nhom_id,
+        }
+      }
+    })
+    return map
+  }, [groupedLoaiXe])
+
+  // Danh sách loại xe đã cấu hình (dùng allLoaiXe từ context)
+  const list = useMemo(() => allLoaiXe.filter(lx => lx.co_gia), [allLoaiXe])
 
   async function handleXoa(id, ten) {
     if (!window.confirm(`Ẩn loại xe "${ten}"?`)) return
     try {
       await loaiXeApi.delete(id)
-      setList(prev => prev.filter(lx => lx.id !== id))
-      await refetchLoaiXe(true) // cập nhật context
+      // Cập nhật context (sẽ làm giao diện tự động cập nhật)
+      await refetchLoaiXe(true)
     } catch (err) {
       setError(err.message)
     }
@@ -401,9 +401,7 @@ export default function LoaiXe() {
     if (!window.confirm(`Bỏ đồng giá nhóm "${tenNhom}"?`)) return
     try {
       await loaiXeApi.xoaDongGia(nhomId)
-      await refetchLoaiXe(true) // cập nhật context trước
-      await new Promise(r => setTimeout(r, 300))
-      load() // load lại trang này
+      await refetchLoaiXe(true) // cập nhật context
     } catch (err) {
       setError(err.message)
     }
@@ -411,7 +409,7 @@ export default function LoaiXe() {
 
   const toggleNhom = (id) => setOpenNhomId(prev => prev === id ? null : id)
 
-  const filteredList = useMemo(() => list.filter(lx => lx.co_gia), [list])
+  const filteredList = useMemo(() => list, [list])
   const stats = useMemo(() => {
     const totalXe = filteredList.length
     const totalNhomCoXe = nhomList.filter(n => filteredList.some(lx => lx.nhom_xe_id === n.id) || nhomGiaMap[n.id]).length
@@ -423,14 +421,14 @@ export default function LoaiXe() {
 
   return (
     <PageLayout title="🏷️ Loại xe" backTo="/">
-      {!loading && stats.totalXe > 0 && (
+      {!dataLoading && stats.totalXe > 0 && (
         <div style={{ display: 'flex', gap: 12, marginBottom: 14, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
           <span>📦 {stats.totalNhomCoXe} nhóm</span>
           <span>🏷️ {stats.totalXe} loại xe đã cấu hình</span>
           <span>⚙️ {stats.customCount} tùy chỉnh</span>
         </div>
       )}
-      {loading && <Spinner />}
+      {dataLoading && <Spinner />}
       {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
       {nhomList.map(nhom => (
         <NhomXeCard
@@ -444,12 +442,12 @@ export default function LoaiXe() {
           onToggle={() => toggleNhom(nhom.id)}
         />
       ))}
-      {!loading && filteredList.length === 0 && Object.keys(nhomGiaMap).length === 0 && (
+      {!dataLoading && filteredList.length === 0 && Object.keys(nhomGiaMap).length === 0 && (
         <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem' }}>
           Chưa có loại xe nào được cấu hình giá...
         </p>
       )}
-      <button className="btn btn-accent" style={{ marginTop: '0.75rem' }} onClick={() => setShowModal(true)} disabled={nhomList.length === 0 || loading}>
+      <button className="btn btn-accent" style={{ marginTop: '0.75rem' }} onClick={() => setShowModal(true)} disabled={nhomList.length === 0 || dataLoading}>
         + Thêm loại xe tùy chỉnh
       </button>
       <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.6rem' }}>
@@ -459,7 +457,7 @@ export default function LoaiXe() {
         <ThemLoaiXeModal
           nhomList={nhomList}
           onClose={() => setShowModal(false)}
-          onSuccess={() => { setShowModal(false); load() }}
+          onSuccess={() => { setShowModal(false); /* context đã được refetch bên trong modal */ }}
           onDongGia={handleDongGia}
         />
       )}
@@ -468,7 +466,7 @@ export default function LoaiXe() {
         <DongGiaModal
           nhom={dongGiaNhom}
           onClose={() => setDongGiaNhom(null)}
-          onSuccess={() => { setDongGiaNhom(null); load() }}
+          onSuccess={() => { setDongGiaNhom(null); /* context đã refetch */ }}
         />
       )}
     </PageLayout>
