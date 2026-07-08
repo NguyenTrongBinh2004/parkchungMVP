@@ -1,0 +1,101 @@
+import { createContext, useContext, useState, useEffect } from 'react'
+import { loaiXeApi } from '../services/api'
+
+const LoaiXeContext = createContext(null)
+
+function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
+  const nhomGiaMap = {}
+  nhomGiaList.forEach(ng => { nhomGiaMap[ng.nhom_xe_id] = ng })
+
+  const coGiaRieng = (lx) => {
+    if (lx.kieu_tinh_gia === 'theo_luot') return Number(lx.gia_luot || 0) > 0
+    if (lx.kieu_tinh_gia === 'theo_gio') {
+      let cfg = lx.cau_hinh_theo_gio
+      if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg) } catch { return false } }
+      if (Array.isArray(cfg) && cfg.length) return cfg.some(b => (b.gia && b.gia > 0) || (b.moi_gio_tiep && b.moi_gio_tiep > 0))
+      return false
+    }
+    if (lx.kieu_tinh_gia === 'theo_ngay_dem') return (Number(lx.gia_ngay || 0) > 0) || (Number(lx.gia_dem || 0) > 0) || (Number(lx.gia_ngay_dem || 0) > 0)
+    return false
+  }
+
+  const map = {}
+  configuredData.forEach(lx => {
+    if (!map[lx.nhom_xe_id]) {
+      map[lx.nhom_xe_id] = { nhom_id: lx.nhom_xe_id, ten_nhom: lx.ten_nhom, thu_tu: lx.thu_tu_nhom, items: [] }
+    }
+    // Chỉ thêm vào danh sách riêng lẻ nếu KHÔNG phải xe mồi
+    if (!lx.ten || !lx.ten.includes('(đồng giá)')) {
+      map[lx.nhom_xe_id].items.push(lx)
+    }
+  })
+
+  nhomGiaList.forEach(ng => {
+    if (!map[ng.nhom_xe_id]) {
+      map[ng.nhom_xe_id] = { nhom_id: ng.nhom_xe_id, ten_nhom: ng.ten_nhom || '', thu_tu: 0, items: [] }
+    }
+  })
+
+  return Object.values(map)
+    .sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0))
+    .map(group => {
+      let danhSachXeRieng = [...group.items]
+      const nhomGia = nhomGiaMap[group.nhom_id]
+
+      if (!nhomGia) {
+        return { ...group, items: danhSachXeRieng }
+      }
+
+      // Kiểm tra xem trong tất cả xe đang hoạt động của nhóm, có xe nào chưa có giá riêng không
+      const coXeChuaCoGiaRieng = allLoaiXe.some(lx => lx.nhom_xe_id === group.nhom_id && !coGiaRieng(lx))
+
+      if (coXeChuaCoGiaRieng) {
+        // Tìm xe đại diện: ưu tiên xe mặc định chưa có giá riêng
+        let xeDaiDien = allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default && !coGiaRieng(lx))
+                     || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && !coGiaRieng(lx))
+
+        if (xeDaiDien) {
+          // Thêm dòng đồng giá vào đầu danh sách
+          danhSachXeRieng.unshift({
+            ...xeDaiDien,
+            ...nhomGia,
+            id: xeDaiDien.id,            // dùng ID của xe đại diện (chưa có giá riêng)
+            ten: group.ten_nhom,
+            _la_dai_dien_dong_gia: true,
+          })
+        }
+      }
+
+      return { ...group, items: danhSachXeRieng }
+    })
+    .filter(g => g.items.length > 0)
+}
+
+export function LoaiXeProvider({ children }) {
+  const [allLoaiXe, setAllLoaiXe]           = useState([])
+  const [configuredLoaiXe, setConfigured]   = useState([])
+  const [groupedLoaiXe, setGrouped]         = useState([])
+  const [dataLoading, setDataLoading]       = useState(true)
+
+  useEffect(() => {
+    Promise.all([
+      loaiXeApi.list(),
+      loaiXeApi.list({ da_cau_hinh: true }),
+      loaiXeApi.listNhomGia().catch(() => [])
+    ]).then(([all, configured, nhomGia]) => {
+      setAllLoaiXe(all)
+      setConfigured(configured)
+      setGrouped(groupByNhomWithGia(configured, nhomGia, all))
+    }).finally(() => setDataLoading(false))
+  }, []) // chỉ chạy 1 lần khi app khởi động
+
+  return (
+    <LoaiXeContext.Provider value={{ allLoaiXe, configuredLoaiXe, groupedLoaiXe, dataLoading }}>
+      {children}
+    </LoaiXeContext.Provider>
+  )
+}
+
+export function useLoaiXe() {
+  return useContext(LoaiXeContext)
+}

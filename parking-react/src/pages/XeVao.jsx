@@ -1,9 +1,10 @@
 // parking-react/src/XeVao.jsx
 import { useState, useEffect, useRef } from 'react'
 import { PageLayout, Spinner, Alert, Field, Modal, fmtDt } from '../components/UI'
-import { xeVaoApi, loaiXeApi } from '../services/api'
+import { xeVaoApi } from '../services/api'   // không import loaiXeApi nữa
 import imageCompression from 'browser-image-compression'
 import { chuanHoaBienSo, isValidBienSo, isMaTuSinhXeDap } from '../utils'
+import { useLoaiXe } from '../context/LoaiXeContext'   // import context mới
 
 // ── Tiện ích ──────────────────────────────────────────────────────
 async function compressImage(file) {
@@ -111,97 +112,6 @@ function VeThangCard({ result, onXacNhan, loading }) {
   )
 }
 
-// ── groupByNhomWithGia ─────────────────────────────────────────────
-function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
-  const nhomGiaMap = {}
-  nhomGiaList.forEach(ng => { nhomGiaMap[ng.nhom_xe_id] = ng })
-
-  const coGiaRieng = (lx) => {
-    if (lx.kieu_tinh_gia === 'theo_luot') return Number(lx.gia_luot || 0) > 0
-    if (lx.kieu_tinh_gia === 'theo_gio') {
-      let cfg = lx.cau_hinh_theo_gio
-      if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg) } catch { return false } }
-      if (Array.isArray(cfg) && cfg.length) return cfg.some(b => (b.gia && b.gia > 0) || (b.moi_gio_tiep && b.moi_gio_tiep > 0))
-      return false
-    }
-    if (lx.kieu_tinh_gia === 'theo_ngay_dem') return (Number(lx.gia_ngay || 0) > 0) || (Number(lx.gia_dem || 0) > 0) || (Number(lx.gia_ngay_dem || 0) > 0)
-    return false
-  }
-
-  const map = {}
-  configuredData.forEach(lx => {
-    if (!map[lx.nhom_xe_id]) {
-      map[lx.nhom_xe_id] = { nhom_id: lx.nhom_xe_id, ten_nhom: lx.ten_nhom, thu_tu: lx.thu_tu_nhom, items: [] }
-    }
-    // Chỉ thêm vào danh sách riêng lẻ nếu KHÔNG phải xe mồi
-    if (!lx.ten || !lx.ten.includes('(đồng giá)')) {
-      map[lx.nhom_xe_id].items.push(lx)
-    }
-  })
-
-  nhomGiaList.forEach(ng => {
-    if (!map[ng.nhom_xe_id]) {
-      map[ng.nhom_xe_id] = { nhom_id: ng.nhom_xe_id, ten_nhom: ng.ten_nhom || '', thu_tu: 0, items: [] }
-    }
-  })
-
-  return Object.values(map)
-    .sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0))
-    .map(group => {
-      let danhSachXeRieng = [...group.items]
-      const nhomGia = nhomGiaMap[group.nhom_id]
-
-      if (!nhomGia) {
-        return { ...group, items: danhSachXeRieng }
-      }
-
-      // Kiểm tra xem trong tất cả xe đang hoạt động của nhóm, có xe nào chưa có giá riêng không
-      const coXeChuaCoGiaRieng = allLoaiXe.some(lx => lx.nhom_xe_id === group.nhom_id && !coGiaRieng(lx))
-
-      if (coXeChuaCoGiaRieng) {
-        // Tìm xe đại diện: ưu tiên xe mặc định chưa có giá riêng
-        let xeDaiDien = allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default && !coGiaRieng(lx))
-                     || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && !coGiaRieng(lx))
-
-        if (xeDaiDien) {
-          // Thêm dòng đồng giá vào đầu danh sách
-          danhSachXeRieng.unshift({
-            ...xeDaiDien,
-            ...nhomGia,
-            id: xeDaiDien.id,            // dùng ID của xe đại diện (chưa có giá riêng)
-            ten: group.ten_nhom,
-            _la_dai_dien_dong_gia: true,
-          })
-        }
-      }
-
-      return { ...group, items: danhSachXeRieng }
-    })
-    .filter(g => g.items.length > 0)
-}
-
-// ── useLoaiXeData — hook dùng chung, chỉ gọi API 1 lần ───────────
-function useLoaiXeData() {
-  const [allLoaiXe, setAllLoaiXe] = useState([])
-  const [configuredLoaiXe, setConfiguredLoaiXe] = useState([])
-  const [groupedLoaiXe, setGroupedLoaiXe] = useState([])
-  const [dataLoading, setDataLoading] = useState(true)
-
-  useEffect(() => {
-    Promise.all([
-      loaiXeApi.list(),
-      loaiXeApi.list({ da_cau_hinh: true }),
-      loaiXeApi.listNhomGia().catch(() => [])
-    ]).then(([allData, configuredData, nhomGia]) => {
-      setAllLoaiXe(allData)
-      setConfiguredLoaiXe(configuredData)
-      setGroupedLoaiXe(groupByNhomWithGia(configuredData, nhomGia, allData))
-    }).catch(() => {}).finally(() => setDataLoading(false))
-  }, [])
-
-  return { allLoaiXe, configuredLoaiXe, groupedLoaiXe, dataLoading }
-}
-
 // ── Helper: chọn loại xe mặc định từ groupedLoaiXe ────────────────
 function pickDefaultLoaiXe(groupedLoaiXe) {
   const flatItems = groupedLoaiXe.flatMap(g => g.items)
@@ -212,8 +122,9 @@ function pickDefaultLoaiXe(groupedLoaiXe) {
 }
 
 // ── SmartPanel ─────────────────────────────────────────────────────
-function SmartPanel({ loaiXeData }) {
-  const { allLoaiXe, configuredLoaiXe, groupedLoaiXe, dataLoading } = loaiXeData
+function SmartPanel() {
+  // Lấy dữ liệu từ context thay vì props
+  const { allLoaiXe, configuredLoaiXe, groupedLoaiXe, dataLoading } = useLoaiXe()
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -258,7 +169,7 @@ function SmartPanel({ loaiXeData }) {
     finally { setLoading(false) }
   }
 
-async function kiemTraBienSo() {
+  async function kiemTraBienSo() {
     const raw = bienSoText.trim()
     if (!raw) {
       const xeDap = configuredLoaiXe.find(lx => lx.ten.toLowerCase().includes('đạp'))
@@ -270,8 +181,6 @@ async function kiemTraBienSo() {
       setError('Loại "Xe đạp" chưa được cấu hình giá.'); return
     }
     const cleaned = chuanHoaBienSo(raw)
-    // Mã tự sinh cho xe đạp (XD + số) luôn được chấp nhận, không phụ thuộc
-    // vào loại xe đang chọn trong formThuong (vì lúc này người dùng chưa kịp chọn).
     if (!isMaTuSinhXeDap(cleaned) && !isValidBienSo(cleaned)) {
       setError('Biển số không đúng định dạng (VD: 51F-123.45)')
       return
@@ -446,14 +355,15 @@ async function kiemTraBienSo() {
 }
 
 // ── BienSoPanel ────────────────────────────────────────────────────
-function BienSoPanel({ loaiXeData }) {
-  const { configuredLoaiXe, groupedLoaiXe, dataLoading } = loaiXeData
+function BienSoPanel() {
+  // Lấy dữ liệu từ context thay vì props
+  const { configuredLoaiXe, groupedLoaiXe, dataLoading } = useLoaiXe()
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [ticket, setTicket] = useState(null)
   const [bienSo, setBienSo] = useState('')
-  const [result, setResult] = useState(null) // chỉ dùng để giữ thông tin khi phát hiện vé tháng
+  const [result, setResult] = useState(null)
   const [coChupAnh, setCoChupAnh] = useState(false)
   const [fileBienSo, setFileBienSo] = useState(null)
   const [fileNguoiLai, setFileNguoiLai] = useState(null)
@@ -501,7 +411,6 @@ function BienSoPanel({ loaiXeData }) {
     finally { setLoading(false) }
   }
 
-  // Xác nhận xe thường: gửi thẳng dữ liệu lên backend
   async function guiXacNhanThuong(bienSoFinal) {
     const fd = new FormData()
     fd.append('id_loai_xe', formThuong.loaiXe)
@@ -522,7 +431,6 @@ function BienSoPanel({ loaiXeData }) {
     finally { setLoading(false) }
   }
 
-  // Nút duy nhất: vừa kiểm tra (phát hiện vé tháng / đang trong bãi), vừa xác nhận luôn nếu là xe thường
   async function handleXacNhan() {
     setError(null)
     if (!formThuong.loaiXe) { setError('Vui lòng chọn loại xe'); return }
@@ -547,7 +455,6 @@ function BienSoPanel({ loaiXeData }) {
     setBienSo(bienSoFinal)
     setLoading(true)
 
-    // Chỉ kiểm tra vé tháng / đang trong bãi khi có biển số thật (bỏ qua mã XD tự sinh cho xe đạp)
     if (bienSoFinal && !isMaTuSinhXeDap(bienSoFinal)) {
       try {
         const fd = new FormData(); fd.append('bien_so', bienSoFinal)
@@ -555,7 +462,7 @@ function BienSoPanel({ loaiXeData }) {
         if (data.loai === 've_thang') {
           setResult(data)
           setLoading(false)
-          return // dừng lại, hiện thẻ vé tháng để xác nhận riêng
+          return
         }
       } catch (err) {
         setError(err.message)
@@ -666,10 +573,11 @@ function BienSoPanel({ loaiXeData }) {
     </div>
   )
 }
+
 // ── Trang chính ────────────────────────────────────────────────────
 export default function XeVao() {
   const [tab, setTab] = useState('smart')
-  const loaiXeData = useLoaiXeData()
+  // Không cần gọi useLoaiXeData nữa, các panel tự lấy từ context
 
   const tabs = [
     { id: 'smart', label: '📷 Chụp ảnh' },
@@ -683,8 +591,8 @@ export default function XeVao() {
           <button key={t.id} className={`tab-btn ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>{t.label}</button>
         ))}
       </div>
-      {tab === 'smart' && <SmartPanel loaiXeData={loaiXeData} />}
-      {tab === 'bien'  && <BienSoPanel loaiXeData={loaiXeData} />}
+      {tab === 'smart' && <SmartPanel />}
+      {tab === 'bien'  && <BienSoPanel />}
     </PageLayout>
   )
 }

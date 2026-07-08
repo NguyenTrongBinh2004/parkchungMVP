@@ -5,13 +5,16 @@ import App from './App.jsx'
 import './index.css'
 import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
+import { LoaiXeProvider } from './context/LoaiXeContext'  // thêm dòng này
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
-          <App />
+          <LoaiXeProvider>       {/* ← thêm dòng này */}
+            <App />
+          </LoaiXeProvider>      {/* ← và đóng lại */}
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
