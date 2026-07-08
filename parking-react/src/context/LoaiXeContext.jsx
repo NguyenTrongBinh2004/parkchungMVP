@@ -24,7 +24,6 @@ function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
     if (!map[lx.nhom_xe_id]) {
       map[lx.nhom_xe_id] = { nhom_id: lx.nhom_xe_id, ten_nhom: lx.ten_nhom, thu_tu: lx.thu_tu_nhom, items: [] }
     }
-    // Chỉ thêm vào danh sách riêng lẻ nếu KHÔNG phải xe mồi
     if (!lx.ten || !lx.ten.includes('(đồng giá)')) {
       map[lx.nhom_xe_id].items.push(lx)
     }
@@ -46,20 +45,17 @@ function groupByNhomWithGia(configuredData, nhomGiaList, allLoaiXe) {
         return { ...group, items: danhSachXeRieng }
       }
 
-      // Kiểm tra xem trong tất cả xe đang hoạt động của nhóm, có xe nào chưa có giá riêng không
       const coXeChuaCoGiaRieng = allLoaiXe.some(lx => lx.nhom_xe_id === group.nhom_id && !coGiaRieng(lx))
 
       if (coXeChuaCoGiaRieng) {
-        // Tìm xe đại diện: ưu tiên xe mặc định chưa có giá riêng
         let xeDaiDien = allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && lx.is_default && !coGiaRieng(lx))
                      || allLoaiXe.find(lx => lx.nhom_xe_id === group.nhom_id && !coGiaRieng(lx))
 
         if (xeDaiDien) {
-          // Thêm dòng đồng giá vào đầu danh sách
           danhSachXeRieng.unshift({
             ...xeDaiDien,
             ...nhomGia,
-            id: xeDaiDien.id,            // dùng ID của xe đại diện (chưa có giá riêng)
+            id: xeDaiDien.id,
             ten: group.ten_nhom,
             _la_dai_dien_dong_gia: true,
           })
@@ -77,20 +73,34 @@ export function LoaiXeProvider({ children }) {
   const [groupedLoaiXe, setGrouped]         = useState([])
   const [dataLoading, setDataLoading]       = useState(true)
 
-  useEffect(() => {
-    Promise.all([
-      loaiXeApi.list(),
-      loaiXeApi.list({ da_cau_hinh: true }),
-      loaiXeApi.listNhomGia().catch(() => [])
-    ]).then(([all, configured, nhomGia]) => {
+  const fetchData = async () => {
+    setDataLoading(true)
+    try {
+      const [all, configured, nhomGia] = await Promise.all([
+        loaiXeApi.list(),
+        loaiXeApi.list({ da_cau_hinh: true }),
+        loaiXeApi.listNhomGia().catch(() => [])
+      ])
       setAllLoaiXe(all)
       setConfigured(configured)
       setGrouped(groupByNhomWithGia(configured, nhomGia, all))
-    }).finally(() => setDataLoading(false))
+    } finally {
+      setDataLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchData()
   }, []) // chỉ chạy 1 lần khi app khởi động
 
   return (
-    <LoaiXeContext.Provider value={{ allLoaiXe, configuredLoaiXe, groupedLoaiXe, dataLoading }}>
+    <LoaiXeContext.Provider value={{ 
+      allLoaiXe, 
+      configuredLoaiXe, 
+      groupedLoaiXe, 
+      dataLoading,
+      refetchLoaiXe: fetchData 
+    }}>
       {children}
     </LoaiXeContext.Provider>
   )
