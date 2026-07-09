@@ -63,7 +63,7 @@ export default function VeThang() {
   useEffect(() => { load() }, [])
 
   return (
-    <PageLayout title="🎫 Vé tháng" backTo="/">
+    <PageLayout title="🎫 Vé tháng" backTo="/#bai-xe">
       <button className="btn btn-accent" style={{ marginBottom: '1rem' }} onClick={() => navigate('/dang-ky-ve-thang')}>
         + Đăng ký vé tháng mới
       </button>

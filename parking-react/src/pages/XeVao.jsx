@@ -585,7 +585,7 @@ export default function XeVao() {
   ]
 
   return (
-    <PageLayout title="📸 Xe vào" backTo="/">
+    <PageLayout title="📸 Xe vào" backTo="/#ban-gui-xe">
       <div className="tabs">
         {tabs.map(t => (
           <button key={t.id} className={`tab-btn ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>{t.label}</button>

@@ -29,7 +29,7 @@ export default function XeDaRa() {
   }, [ngay])
 
   return (
-    <PageLayout title="📋 Xe đã ra" backTo="/">
+    <PageLayout title="📋 Xe đã ra" backTo="/#bai-xe">
       {/* Bộ lọc ngày – thiết kế gọn, đẹp */}
       <div style={{
         display: 'flex', gap: 12, marginBottom: 24, alignItems: 'flex-end',

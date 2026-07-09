@@ -133,7 +133,7 @@ export default function CaiDat() {
   const [showDoiMatKhau, setShowDoiMatKhau] = useState(false)
 
   return (
-    <PageLayout title="⚙️ Cài đặt" backTo="/">
+    <PageLayout title="⚙️ Cài đặt" backTo="/#nguoi-dung">
       <div className="card" style={{ padding: '1.25rem' }}>
         <SettingRow
           icon={isDark ? '🌙' : '☀️'}

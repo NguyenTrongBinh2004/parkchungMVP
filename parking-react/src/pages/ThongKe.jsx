@@ -40,7 +40,7 @@ export default function ThongKe() {
   }, [loai])
 
   return (
-    <PageLayout title="📊 Thống kê" backTo="/">
+    <PageLayout title="📊 Thống kê" backTo="/#bai-xe">
       {/* Nút chọn chế độ */}
       <div style={{
         display: 'flex', justifyContent: 'center', gap: 10, marginBottom: 28,

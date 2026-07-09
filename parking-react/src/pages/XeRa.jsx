@@ -406,7 +406,7 @@ export default function XeRa() {
   ]
 
   return (
-    <PageLayout title="📤 Xe ra" backTo="/">
+    <PageLayout title="📤 Xe ra" backTo="/#ban-gui-xe">
       <div className="tabs">
         {tabs.map(t => (
           <button

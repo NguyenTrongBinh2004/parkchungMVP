@@ -75,7 +75,7 @@ export default function DanhSach() {
   }, [])
 
   return (
-    <PageLayout title="🚗 Xe đang trong bãi" backTo="/">
+    <PageLayout title="🚗 Xe đang trong bãi" backTo="/#bai-xe">
       <button
         className="btn btn-outline btn-sm"
         onClick={fetchData}

@@ -420,7 +420,7 @@ export default function LoaiXe() {
   const handleDongGia = (nhom) => { setShowModal(false); setDongGiaNhom(nhom) }
 
   return (
-    <PageLayout title="🏷️ Loại xe" backTo="/">
+    <PageLayout title="🏷️ Loại xe" backTo="/#quan-ly">
       {!dataLoading && stats.totalXe > 0 && (
         <div style={{ display: 'flex', gap: 12, marginBottom: 14, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
           <span>📦 {stats.totalNhomCoXe} nhóm</span>

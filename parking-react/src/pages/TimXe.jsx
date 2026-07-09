@@ -142,7 +142,7 @@ export default function TimXe() {
   const conThem = items.length < total
 
   return (
-    <PageLayout title="🔍 Tìm xe" backTo="/">
+    <PageLayout title="🔍 Tìm xe" backTo="/#bai-xe">
       <div className="card" style={{ marginBottom: '0.75rem' }}>
         <Field label="Nhập biển số (đầy đủ hoặc một phần)">
           <input
