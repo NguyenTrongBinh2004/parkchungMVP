@@ -1,6 +1,97 @@
 // src/pages/CaiDat.jsx
-import { PageLayout } from '../components/UI'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { PageLayout, Field, Alert } from '../components/UI'
 import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '../context/AuthContext'
+import { authApi } from '../services/api'
+
+function DoiMatKhauCard() {
+  const { dangXuat } = useAuth()
+  const navigate = useNavigate()
+
+  const [form, setForm] = useState({ hienTai: '', moi: '', xacNhan: '' })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [thanhCong, setThanhCong] = useState(false)
+
+  const upd = (f) => (e) => setForm(v => ({ ...v, [f]: e.target.value }))
+
+  async function submit(e) {
+    e.preventDefault()
+    setError(null)
+
+    if (form.moi.length < 8) {
+      setError('Mật khẩu mới phải có ít nhất 8 ký tự.')
+      return
+    }
+    if (!/[a-zA-Z]/.test(form.moi) || !/[0-9]/.test(form.moi)) {
+      setError('Mật khẩu mới phải có ít nhất 1 chữ cái và 1 chữ số.')
+      return
+    }
+    if (form.moi !== form.xacNhan) {
+      setError('Xác nhận mật khẩu mới không khớp.')
+      return
+    }
+
+    setLoading(true)
+    try {
+      await authApi.doiMatKhau({
+        mat_khau_hien_tai: form.hienTai,
+        mat_khau_moi: form.moi,
+      })
+      setThanhCong(true)
+      // Backend đã thu hồi mọi refresh token — đăng xuất phía client rồi chuyển về trang đăng nhập
+      setTimeout(async () => {
+        await dangXuat()
+        navigate('/dang-nhap')
+      }, 1500)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (thanhCong) {
+    return (
+      <div className="card" style={{ padding: '1.25rem', marginTop: 14 }}>
+        <Alert type="success">
+          Đổi mật khẩu thành công. Đang chuyển về trang đăng nhập...
+        </Alert>
+      </div>
+    )
+  }
+
+  return (
+    <div className="card" style={{ padding: '1.25rem', marginTop: 14 }}>
+      <div style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text)', marginBottom: 4 }}>
+        🔒 Đổi mật khẩu
+      </div>
+      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 14 }}>
+        Sau khi đổi, bạn sẽ cần đăng nhập lại trên mọi thiết bị.
+      </div>
+
+      <form onSubmit={submit}>
+        <Field label="Mật khẩu hiện tại" required>
+          <input type="password" value={form.hienTai} onChange={upd('hienTai')} required autoComplete="current-password" />
+        </Field>
+        <Field label="Mật khẩu mới" required>
+          <input type="password" value={form.moi} onChange={upd('moi')} required autoComplete="new-password" minLength={8} />
+        </Field>
+        <Field label="Xác nhận mật khẩu mới" required>
+          <input type="password" value={form.xacNhan} onChange={upd('xacNhan')} required autoComplete="new-password" minLength={8} />
+        </Field>
+
+        {error && <Alert type="danger">{error}</Alert>}
+
+        <button type="submit" className="btn btn-accent" style={{ marginTop: '0.5rem' }} disabled={loading}>
+          {loading ? 'Đang lưu...' : '✓ Đổi mật khẩu'}
+        </button>
+      </form>
+    </div>
+  )
+}
 
 export default function CaiDat() {
   const { theme, toggleTheme } = useTheme()
@@ -32,7 +123,6 @@ export default function CaiDat() {
             </div>
           </div>
 
-          {/* Toggle switch */}
           <div
             onClick={toggleTheme}
             style={{
@@ -54,6 +144,8 @@ export default function CaiDat() {
           </div>
         </div>
       </div>
+
+      <DoiMatKhauCard />
     </PageLayout>
   )
 }

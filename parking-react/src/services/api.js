@@ -39,6 +39,11 @@ async function request(url, options = {}) {
   return JSON.parse(text);
 }
 
+function authHeader() {
+  const token = localStorage.getItem('access_token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 // ─── Loại xe ───
 export const loaiXeApi = {
   list: (params) => {
@@ -126,4 +131,9 @@ export const authApi = {
   quenMatKhau:    (data) => request('/auth/quen-mat-khau/',     { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
   xacNhanOtpQmk:  (data) => request('/auth/xac-nhan-otp-qmk/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
   datLaiMatKhau:  (data) => request('/auth/dat-lai-mat-khau/',  { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+    doiMatKhau: (data) => request('/auth/doi-mat-khau/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify(data)
+  }),
 }

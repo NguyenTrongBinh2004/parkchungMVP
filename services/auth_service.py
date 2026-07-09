@@ -3,12 +3,14 @@ import bcrypt
 from datetime import timedelta
 from jose import jwt, JWTError
 from utils import bay_gio_vn
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 SECRET_KEY = os.getenv("SECRET_KEY", "change-me-please-use-a-long-random-string")
 ALGORITHM  = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 REFRESH_TOKEN_EXPIRE_DAYS   = 30
-
+bearer_scheme = HTTPBearer(auto_error=False)
 
 def hash_mat_khau(mat_khau: str) -> str:
     return bcrypt.hashpw(mat_khau.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
@@ -39,3 +41,17 @@ def giai_ma_access_token(token: str) -> dict | None:
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         return None
+
+def lay_nguoi_dung_hien_tai(
+    creds: HTTPAuthorizationCredentials = Depends(bearer_scheme)
+) -> int:
+    """Dependency dùng cho các endpoint cần đăng nhập. Trả về id_nguoi_dung."""
+    if creds is None:
+        raise HTTPException(401, "Thiếu access token")
+    payload = giai_ma_access_token(creds.credentials)
+    if payload is None:
+        raise HTTPException(401, "Access token không hợp lệ hoặc đã hết hạn")
+    try:
+        return int(payload["sub"])
+    except (KeyError, ValueError, TypeError):
+        raise HTTPException(401, "Access token không hợp lệ")

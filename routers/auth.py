@@ -6,7 +6,8 @@ from pydantic import BaseModel, Field
 from database import lay_ket_noi_CSDL
 from services.auth_service import (
     hash_mat_khau, xac_minh_mat_khau, tao_otp,
-    tao_access_token, tao_refresh_token
+    tao_access_token, tao_refresh_token,
+    lay_nguoi_dung_hien_tai
 )
 from services.sms_service import gui_otp
 from utils import bay_gio_vn
@@ -59,6 +60,10 @@ class DatLaiMatKhauBody(BaseModel):
     sdt:        str
     ma_otp:     str = Field(..., min_length=6, max_length=6)
     mat_khau:   str = Field(..., min_length=8)
+
+class DoiMatKhauBody(BaseModel):
+    mat_khau_hien_tai: str
+    mat_khau_moi:      str = Field(..., min_length=8)
 
 # ── Helpers ─────────────────────────────────────────────────────
 def _validate_sdt(sdt: str):
@@ -513,3 +518,41 @@ def dat_lai_mat_khau(body: DatLaiMatKhauBody, KetNoi=Depends(lay_ket_noi_CSDL)):
         raise HTTPException(500, f"Lỗi không xác định: {err}")
 
     return {"message": "Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại."}
+
+
+# ── 10. Đổi mật khẩu (khi đang đăng nhập) ──────────────────────
+@router.post("/doi-mat-khau/")
+def doi_mat_khau(
+    body: DoiMatKhauBody,
+    id_nguoi_dung: int = Depends(lay_nguoi_dung_hien_tai),
+    KetNoi=Depends(lay_ket_noi_CSDL)
+):
+    _validate_mat_khau(body.mat_khau_moi)
+
+    if body.mat_khau_hien_tai == body.mat_khau_moi:
+        raise HTTPException(422, "Mật khẩu mới phải khác mật khẩu hiện tại")
+
+    with KetNoi.cursor(dictionary=True) as cur:
+        cur.execute("SELECT id, mat_khau_hash FROM nguoi_dung WHERE id = %s", (id_nguoi_dung,))
+        nd = cur.fetchone()
+
+    if not nd:
+        raise HTTPException(404, "Không tìm thấy người dùng")
+
+    if not xac_minh_mat_khau(body.mat_khau_hien_tai, nd["mat_khau_hash"]):
+        raise HTTPException(401, "Mật khẩu hiện tại không đúng")
+
+    try:
+        with KetNoi.cursor() as cur:
+            cur.execute(
+                "UPDATE nguoi_dung SET mat_khau_hash = %s WHERE id = %s",
+                (hash_mat_khau(body.mat_khau_moi), id_nguoi_dung)
+            )
+            # Thu hồi toàn bộ refresh token — buộc đăng nhập lại trên mọi thiết bị (bảo mật)
+            cur.execute("DELETE FROM refresh_token WHERE id_nguoi_dung = %s", (id_nguoi_dung,))
+        KetNoi.commit()
+    except mysql.connector.Error as err:
+        KetNoi.rollback()
+        raise HTTPException(500, f"Lỗi CSDL: {err}")
+
+    return {"message": "Đổi mật khẩu thành công. Vui lòng đăng nhập lại."}
