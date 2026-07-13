@@ -21,6 +21,9 @@
   --font-body: 'Inter', sans-serif;
   --radius: 12px;
   --radius-sm: 8px;
+  --btn-secondary-bg: #444;
+  --btn-secondary-hover: #555;
+  --btn-secondary-color: #ffffff;
 }
 
 /* ── Light theme ── */
@@ -34,6 +37,9 @@
   --border-focus: #13b47e;
   --text:       #111827;
   --text-muted: #6b7280;
+  --btn-secondary-bg: #e2e8f0;   /* xám nhạt */
+  --btn-secondary-hover: #cbd5e1; /* đậm hơn khi hover */
+  --btn-secondary-color: #1a202c; /* chữ tối */
 }
 
 /* ── Reset & base ── */
@@ -130,11 +136,11 @@ textarea:focus {
 }
 
 .btn-secondary {
-  background: #444;
-  color: var(--text);
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-color);
 }
 .btn-secondary:hover {
-  background: #555;
+  background: var(--btn-secondary-hover);
 }
 
 .btn-danger {
