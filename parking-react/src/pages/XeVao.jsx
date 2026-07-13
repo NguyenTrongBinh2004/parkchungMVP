@@ -489,11 +489,35 @@ function BienSoPanel() {
           style={{ textTransform: 'uppercase' }} onKeyDown={e => e.key === 'Enter' && handleXacNhan()} />
       </Field>
 
-      <div style={{ margin: '0.5rem 0' }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.88rem' }}>
-          <input type="checkbox" checked={coChupAnh} onChange={e => setCoChupAnh(e.target.checked)} style={{ width: 'auto', accentColor: 'var(--accent)' }} />
-          <span>📷 Chụp ảnh biển số & người lái</span>
-        </label>
+      <div
+        onClick={() => setCoChupAnh(v => !v)}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: 12, padding: '0.7rem 0.85rem', margin: '0.6rem 0',
+          background: 'var(--bg-input, rgba(255,255,255,0.03))',
+          border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: 8, flexShrink: 0,
+            background: 'rgba(255,193,7,0.12)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', fontSize: '1rem',
+          }}>📷</div>
+          <div>
+            <div style={{ fontSize: '0.88rem', fontWeight: 500 }}>Chụp ảnh biển số & người lái</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Lưu bằng chứng đối chiếu khi xe ra</div>
+          </div>
+        </div>
+        <div style={{
+          width: 40, height: 24, borderRadius: 12, flexShrink: 0, position: 'relative',
+          background: coChupAnh ? 'var(--accent)' : 'var(--border)', transition: 'background 0.15s',
+        }}>
+          <div style={{
+            width: 18, height: 18, borderRadius: '50%', background: '#000',
+            position: 'absolute', top: 3, left: coChupAnh ? 19 : 3, transition: 'left 0.15s',
+          }} />
+        </div>
       </div>
 
       {coChupAnh && (
