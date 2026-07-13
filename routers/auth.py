@@ -131,7 +131,7 @@ def _kiem_tra_cooldown_qmk(sdt: str, KetNoi):
 def _lay_bai_xe(id_nguoi_dung: int, KetNoi) -> dict:
     with KetNoi.cursor(dictionary=True) as cur:
         cur.execute(
-            "SELECT id, ten, so_cho FROM bai_xe WHERE id_chu_bai = %s LIMIT 1",
+            "SELECT id, ten FROM bai_xe WHERE id_chu_bai = %s LIMIT 1",
             (id_nguoi_dung,)
         )
         bai_xe = cur.fetchone()
