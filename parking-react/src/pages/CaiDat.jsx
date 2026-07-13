@@ -6,7 +6,7 @@ import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 import { authApi } from '../services/api'
 
-// ─── Hàng cài đặt dùng chung (giống style hàng "Giao diện") ───────
+// ─── Hàng cài đặt dùng chung ─────────────────────────────────
 function SettingRow({ icon, title, subtitle, right, onClick }) {
   return (
     <div
@@ -40,7 +40,26 @@ function SettingRow({ icon, title, subtitle, right, onClick }) {
   )
 }
 
-// ─── Modal đổi mật khẩu ────────────────────────────────────────
+// ─── Hiển thị điều kiện mật khẩu, tự cập nhật theo input ──────
+function DieuKienMatKhau({ matKhau }) {
+  const dieuKien = [
+    { dat: matKhau.length >= 8, label: 'Tối thiểu 8 ký tự' },
+    { dat: /[a-zA-Z]/.test(matKhau), label: 'Có ít nhất 1 chữ cái' },
+    { dat: /[0-9]/.test(matKhau), label: 'Có ít nhất 1 chữ số' },
+  ]
+  return (
+    <div style={{ margin: '-0.4rem 0 0.9rem', display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {dieuKien.map((dk, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.76rem', color: dk.dat ? '#13b47e' : 'var(--text-muted)' }}>
+          <span>{dk.dat ? '✓' : '○'}</span>
+          <span>{dk.label}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── Modal đổi mật khẩu ──────────────────────────────────────
 function DoiMatKhauModal({ onClose }) {
   const { dangXuat } = useAuth()
   const navigate = useNavigate()
@@ -56,6 +75,7 @@ function DoiMatKhauModal({ onClose }) {
     e.preventDefault()
     setError(null)
 
+    // Kiểm tra đồng bộ với backend: ít nhất 8 ký tự, có chữ cái và chữ số
     if (form.moi.length < 8) {
       setError('Mật khẩu mới phải có ít nhất 8 ký tự.')
       return
@@ -111,6 +131,7 @@ function DoiMatKhauModal({ onClose }) {
           <Field label="Mật khẩu mới" required>
             <input type="password" value={form.moi} onChange={upd('moi')} required autoComplete="new-password" minLength={8} />
           </Field>
+          <DieuKienMatKhau matKhau={form.moi} />
           <Field label="Xác nhận mật khẩu mới" required>
             <input type="password" value={form.xacNhan} onChange={upd('xacNhan')} required autoComplete="new-password" minLength={8} />
           </Field>
@@ -126,7 +147,7 @@ function DoiMatKhauModal({ onClose }) {
   )
 }
 
-// ─── Trang Cài đặt ─────────────────────────────────────────────
+// ─── Trang Cài đặt ───────────────────────────────────────────
 export default function CaiDat() {
   const { theme, toggleTheme } = useTheme()
   const isDark = theme === 'dark'
