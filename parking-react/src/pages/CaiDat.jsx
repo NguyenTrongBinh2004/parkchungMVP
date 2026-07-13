@@ -129,11 +129,29 @@ function DoiMatKhauModal({ onClose }) {
             <input type="password" value={form.hienTai} onChange={upd('hienTai')} required autoComplete="current-password" autoFocus />
           </Field>
           <Field label="Mật khẩu mới" required>
-            <input type="password" value={form.moi} onChange={upd('moi')} required autoComplete="new-password" minLength={8} />
+            <input
+              type="password"
+              value={form.moi}
+              onChange={upd('moi')}
+              required
+              autoComplete="off"
+              data-lpignore="true"
+              data-1p-ignore
+              minLength={8}
+            />
           </Field>
           <DieuKienMatKhau matKhau={form.moi} />
           <Field label="Xác nhận mật khẩu mới" required>
-            <input type="password" value={form.xacNhan} onChange={upd('xacNhan')} required autoComplete="new-password" minLength={8} />
+            <input
+              type="password"
+              value={form.xacNhan}
+              onChange={upd('xacNhan')}
+              required
+              autoComplete="off"
+              data-lpignore="true"
+              data-1p-ignore
+              minLength={8}
+            />
           </Field>
 
           {error && <Alert type="danger">{error}</Alert>}
