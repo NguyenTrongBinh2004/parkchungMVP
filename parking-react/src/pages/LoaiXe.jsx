@@ -64,7 +64,7 @@ function DongGiaModal({ nhom, onClose, onSuccess }) {
     if (form.gia_ve_thang) fd.append('gia_ve_thang', form.gia_ve_thang)
     try {
       await loaiXeApi.dongGia(fd)
-      await refetchLoaiXe(true) // làm mới context, không set dataLoading toàn cục
+      await refetchLoaiXe(true)
       onSuccess()
     } catch (err) { setError(err.message) } finally { setLoading(false) }
   }
@@ -168,7 +168,7 @@ function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
     if (form.gia_ve_thang) fd.append('gia_ve_thang', form.gia_ve_thang)
     try {
       await loaiXeApi.create(fd)
-      await refetchLoaiXe(true) // cập nhật context (không bật loading toàn cục)
+      await refetchLoaiXe(true)
       onSuccess()
     } catch (err) { setError(err.message) } finally { setLoading(false) }
   }
@@ -281,7 +281,7 @@ function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
   )
 }
 
-// ─── Card loại xe (giữ nguyên) ────────────────────────────────────
+// ─── Card loại xe ──────────────────────────────────────────────────
 function LoaiXeCard({ lx, onXoa }) {
   const giaVeThang = lx.gia_ve_thang ? `· Vé tháng ${Number(lx.gia_ve_thang).toLocaleString('vi-VN')}đ` : ''
   return (
@@ -302,7 +302,7 @@ function LoaiXeCard({ lx, onXoa }) {
   )
 }
 
-// ─── Card nhóm xe (giữ nguyên) ───────────────────────────────────
+// ─── Card nhóm xe ─────────────────────────────────────────────────
 function NhomXeCard({ nhom, loaiXeList, nhomGia, onXoa, onXoaDongGia, isOpen, onToggle }) {
   const loaiTrongNhom = loaiXeList.filter(lx => 
     lx.nhom_xe_id === nhom.id && lx.co_gia && 
@@ -355,7 +355,7 @@ function NhomXeCard({ nhom, loaiXeList, nhomGia, onXoa, onXoaDongGia, isOpen, on
   )
 }
 
-// ─── Component chính (ĐÃ SỬA: không gọi API riêng, dùng context) ────────
+// ─── Component chính ──────────────────────────────────────────────
 export default function LoaiXe() {
   const { allLoaiXe, groupedLoaiXe, dataLoading, refetchLoaiXe } = useLoaiXe()
   const [error, setError] = useState(null)
@@ -363,10 +363,21 @@ export default function LoaiXe() {
   const [openNhomId, setOpenNhomId] = useState(null)
   const [dongGiaNhom, setDongGiaNhom] = useState(null)
 
-  // Tạo danh sách nhóm từ groupedLoaiXe (chỉ nhóm có ít nhất 1 xe hoặc đồng giá)
+  // Danh sách nhóm ĐÃ CÓ cấu hình (dùng cho danh sách hiển thị)
   const nhomList = useMemo(() => {
     return groupedLoaiXe.map(g => ({ id: g.nhom_id, ten: g.ten_nhom, thu_tu: g.thu_tu }))
   }, [groupedLoaiXe])
+
+  // Danh sách TẤT CẢ nhóm (từ allLoaiXe, không cần cấu hình) – dùng cho modal thêm loại xe
+  const allNhomList = useMemo(() => {
+    const map = {}
+    allLoaiXe.forEach(lx => {
+      if (!map[lx.nhom_xe_id]) {
+        map[lx.nhom_xe_id] = { id: lx.nhom_xe_id, ten: lx.ten_nhom, thu_tu: lx.thu_tu_nhom }
+      }
+    })
+    return Object.values(map).sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0))
+  }, [allLoaiXe])
 
   // Tạo map đồng giá cho từng nhóm (từ item đặc biệt _la_dai_dien_dong_gia)
   const nhomGiaMap = useMemo(() => {
@@ -390,7 +401,6 @@ export default function LoaiXe() {
     if (!window.confirm(`Ẩn loại xe "${ten}"?`)) return
     try {
       await loaiXeApi.delete(id)
-      // Cập nhật context (sẽ làm giao diện tự động cập nhật)
       await refetchLoaiXe(true)
     } catch (err) {
       setError(err.message)
@@ -401,7 +411,7 @@ export default function LoaiXe() {
     if (!window.confirm(`Bỏ đồng giá nhóm "${tenNhom}"?`)) return
     try {
       await loaiXeApi.xoaDongGia(nhomId)
-      await refetchLoaiXe(true) // cập nhật context
+      await refetchLoaiXe(true)
     } catch (err) {
       setError(err.message)
     }
@@ -447,15 +457,15 @@ export default function LoaiXe() {
           Chưa có loại xe nào được cấu hình giá...
         </p>
       )}
-      <button className="btn btn-accent" style={{ marginTop: '0.75rem' }} onClick={() => setShowModal(true)} disabled={nhomList.length === 0 || dataLoading}>
+      <button className="btn btn-accent" style={{ marginTop: '0.75rem' }} onClick={() => setShowModal(true)} disabled={allNhomList.length === 0 || dataLoading}>
         + Thêm loại xe tùy chỉnh
       </button>
       <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.6rem' }}>
         💡 Chỉ những loại xe đã được thiết lập giá mới hiển thị bên trên...
       </p>
-      {showModal && nhomList.length > 0 && (
+      {showModal && allNhomList.length > 0 && (
         <ThemLoaiXeModal
-          nhomList={nhomList}
+          nhomList={allNhomList}
           onClose={() => setShowModal(false)}
           onSuccess={() => { setShowModal(false); /* context đã được refetch bên trong modal */ }}
           onDongGia={handleDongGia}
