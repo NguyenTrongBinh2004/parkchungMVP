@@ -155,7 +155,8 @@ export default function DangKy() {
   const [loading, setLoading]         = useState(false)
   const [error, setError]             = useState(null)
   const [hienMatKhau, setHienMatKhau] = useState(false)
-  const [form, setForm] = useState({ sdt: '', mat_khau: '', ten_bai_xe: '', so_cho: '' })
+  // Bỏ trường so_cho khỏi state
+  const [form, setForm] = useState({ sdt: '', mat_khau: '', ten_bai_xe: '' })
   const [otp, setOtp]                 = useState('')
   const otpTimer = useCountdown()
   const cooldown = useCountdown()
@@ -166,7 +167,8 @@ export default function DangKy() {
   async function guiOTP() {
     setLoading(true); setError(null)
     try {
-      await authApi.dangKy({ ...form, so_cho: Number(form.so_cho) })
+      // Không gửi so_cho nữa
+      await authApi.dangKy(form)
       setBuoc(2); otpTimer.batDau(300); cooldown.batDau(60)
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
@@ -187,7 +189,8 @@ export default function DangKy() {
     try {
       const data = await authApi.xacNhanOtp({
         sdt: form.sdt, ma_otp: otp,
-        mat_khau: form.mat_khau, ten_bai_xe: form.ten_bai_xe, so_cho: Number(form.so_cho),
+        mat_khau: form.mat_khau, ten_bai_xe: form.ten_bai_xe,
+        // không gửi so_cho
       })
       dangNhapThanhCong(data)
       navigate('/', { replace: true })
@@ -222,7 +225,7 @@ export default function DangKy() {
     </div>
   )
 
-  // Bước 1: Form đăng ký
+  // Bước 1: Form đăng ký (đã bỏ ô số chỗ)
   if (buoc === 1) return (
     <div style={pageStyle}>
       <div style={wrapStyle}>
@@ -263,9 +266,7 @@ export default function DangKy() {
             placeholder="Tên bãi xe (VD: Bãi xe Minh Tuấn)"
             value={form.ten_bai_xe} onChange={setField('ten_bai_xe')} />
 
-          <InputField icon="🔢" type="number" inputMode="numeric"
-            placeholder="Số chỗ để xe (VD: 50)"
-            value={form.so_cho} onChange={setField('so_cho')} />
+          {/* Đã xóa InputField so_cho */}
 
           {loading && <div style={{ textAlign: 'center' }}><Spinner /></div>}
 
@@ -287,7 +288,7 @@ export default function DangKy() {
     </div>
   )
 
-  // Bước 2: Nhập OTP
+  // Bước 2: Nhập OTP (giữ nguyên)
   return (
     <div style={pageStyle}>
       <div style={wrapStyle}>

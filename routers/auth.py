@@ -27,14 +27,12 @@ class DangKyBody(BaseModel):
     sdt:        str
     mat_khau:   str  = Field(..., min_length=8, max_length=20)
     ten_bai_xe: str  = Field(..., min_length=2, max_length=100)
-    so_cho:     int  = Field(..., gt=0)
 
 class XacNhanOTPBody(BaseModel):
     sdt:        str
     ma_otp:     str  = Field(..., min_length=6, max_length=6)
     mat_khau:   str
     ten_bai_xe: str
-    so_cho:     int
 
 class GuiLaiOTPBody(BaseModel):
     sdt: str
@@ -230,8 +228,8 @@ def xac_nhan_otp(body: XacNhanOTPBody, KetNoi=Depends(lay_ket_noi_CSDL)):
             )
             id_nguoi_dung = cur.lastrowid
             cur.execute(
-                "INSERT INTO bai_xe (id_chu_bai, ten, so_cho) VALUES (%s, %s, %s)",
-                (id_nguoi_dung, body.ten_bai_xe, body.so_cho)
+                "INSERT INTO bai_xe (id_chu_bai, ten) VALUES (%s, %s)",
+                (id_nguoi_dung, body.ten_bai_xe)
             )
             id_bai_xe = cur.lastrowid
 

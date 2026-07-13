@@ -1,10 +1,10 @@
 // src/pages/CaiDat.jsx
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageLayout, Field, Alert, Modal } from '../components/UI'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
-import { authApi } from '../services/api'
+import { authApi, baiXeApi } from '../services/api'
 
 // ─── Hàng cài đặt dùng chung ─────────────────────────────────
 function SettingRow({ icon, title, subtitle, right, onClick }) {
@@ -40,7 +40,7 @@ function SettingRow({ icon, title, subtitle, right, onClick }) {
   )
 }
 
-// ─── Hiển thị điều kiện mật khẩu, tự cập nhật theo input ──────
+// ─── Hiển thị điều kiện mật khẩu ────────────────────────────
 function DieuKienMatKhau({ matKhau }) {
   const dieuKien = [
     { dat: matKhau.length >= 8 && matKhau.length <= 20, label: 'Từ 8 đến 20 ký tự' },
@@ -76,7 +76,6 @@ function DoiMatKhauModal({ onClose }) {
     e.preventDefault()
     setError(null)
 
-    // Kiểm tra đồng bộ với backend: 8-20 ký tự, có chữ cái, chữ hoa, chữ số
     if (form.moi.length < 8 || form.moi.length > 20) {
       setError('Mật khẩu mới phải từ 8 đến 20 ký tự.')
       return
@@ -172,14 +171,186 @@ function DoiMatKhauModal({ onClose }) {
   )
 }
 
+// ─── Modal thông tin bãi xe (đã bỏ trường so_cho) ─────────────
+function ThongTinBaiXeModal({ onClose }) {
+  const [form, setForm] = useState({
+    ten: '', dia_chi: '', mo_ta: '',
+    gio_mo_cua: '', gio_dong_cua: '',
+    cac_ngay_hoat_dong: [],
+    tien_ich: [],
+  })
+  const [tienIchList, setTienIchList] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [success, setSuccess] = useState(false)
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [data, tienIchData] = await Promise.all([
+          baiXeApi.layThongTin(),
+          baiXeApi.layTienIchKhaDung(),
+        ])
+        setForm({
+          ten: data.ten || '',
+          // so_cho đã bị xóa khỏi API, không cần set
+          dia_chi: data.dia_chi || '',
+          mo_ta: data.mo_ta || '',
+          gio_mo_cua: data.gio_mo_cua || '',
+          gio_dong_cua: data.gio_dong_cua || '',
+          cac_ngay_hoat_dong: data.cac_ngay_hoat_dong || [],
+          tien_ich: data.tien_ich || [],
+        })
+        setTienIchList(tienIchData.tien_ich || [])
+      } catch (err) {
+        setError('Không thể tải thông tin bãi xe.')
+      }
+    })()
+  }, [])
+
+  const upd = (field) => (e) => setForm(f => ({ ...f, [field]: e.target.value }))
+
+  const toggleNgay = (ngay) => {
+    setForm(f => {
+      const daChon = f.cac_ngay_hoat_dong.includes(ngay)
+      return {
+        ...f,
+        cac_ngay_hoat_dong: daChon
+          ? f.cac_ngay_hoat_dong.filter(n => n !== ngay)
+          : [...f.cac_ngay_hoat_dong, ngay].sort(),
+      }
+    })
+  }
+
+  const toggleTienIch = (key) => {
+    setForm(f => {
+      const co = f.tien_ich.includes(key)
+      return {
+        ...f,
+        tien_ich: co ? f.tien_ich.filter(t => t !== key) : [...f.tien_ich, key],
+      }
+    })
+  }
+
+  const labelNgay = (n) => ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'CN'][n-1]
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setError(null)
+    if (!form.ten.trim()) { setError('Tên bãi xe không được để trống.'); return }
+    // Bỏ kiểm tra so_cho
+    setLoading(true)
+    try {
+      await baiXeApi.capNhat({
+        ten: form.ten.trim(),
+        // so_cho không gửi nữa
+        dia_chi: form.dia_chi.trim(),
+        mo_ta: form.mo_ta.trim(),
+        gio_mo_cua: form.gio_mo_cua || null,
+        gio_dong_cua: form.gio_dong_cua || null,
+        cac_ngay_hoat_dong: form.cac_ngay_hoat_dong.length > 0 ? form.cac_ngay_hoat_dong : null,
+        tien_ich: form.tien_ich.length > 0 ? form.tien_ich : null,
+      })
+      setSuccess(true)
+      setTimeout(() => {
+        setSuccess(false)
+        onClose()
+      }, 1500)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Modal onClose={onClose} title="🏢 Thông tin bãi xe">
+      {success ? (
+        <div style={{
+          padding: '0.75rem 1rem',
+          borderRadius: 8,
+          background: 'rgba(19, 180, 126, 0.12)',
+          border: '1px solid rgba(19, 180, 126, 0.35)',
+          color: '#13b47e',
+          fontSize: '0.88rem',
+        }}>
+          ✓ Cập nhật thành công.
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit}>
+          <Field label="Tên bãi xe" required>
+            <input value={form.ten} onChange={upd('ten')} required maxLength={100} />
+          </Field>
+          {/* Đã xóa ô Số chỗ để xe */}
+          <Field label="Địa chỉ">
+            <input value={form.dia_chi} onChange={upd('dia_chi')} maxLength={255} />
+          </Field>
+          <Field label="Mô tả">
+            <textarea rows={3} value={form.mo_ta} onChange={upd('mo_ta')} style={{ resize: 'vertical' }} />
+          </Field>
+
+          <Field label="Giờ mở cửa">
+            <input type="time" value={form.gio_mo_cua} onChange={upd('gio_mo_cua')} />
+          </Field>
+          <Field label="Giờ đóng cửa">
+            <input type="time" value={form.gio_dong_cua} onChange={upd('gio_dong_cua')} />
+          </Field>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label className="form-label">Ngày hoạt động</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {[1,2,3,4,5,6,7].map(ngay => (
+                <label key={ngay} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.85rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={form.cac_ngay_hoat_dong.includes(ngay)}
+                    onChange={() => toggleNgay(ngay)}
+                    style={{ width: 'auto', accentColor: 'var(--accent)' }}
+                  />
+                  {labelNgay(ngay)}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label className="form-label">Tiện ích</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {tienIchList.map(key => (
+                <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.85rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={form.tien_ich.includes(key)}
+                    onChange={() => toggleTienIch(key)}
+                    style={{ width: 'auto', accentColor: 'var(--accent)' }}
+                  />
+                  {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {error && <Alert type="danger">{error}</Alert>}
+
+          <button type="submit" className="btn btn-accent" style={{ marginTop: '0.5rem' }} disabled={loading}>
+            {loading ? 'Đang lưu...' : '✓ Lưu thay đổi'}
+          </button>
+        </form>
+      )}
+    </Modal>
+  )
+}
+
 // ─── Trang Cài đặt ───────────────────────────────────────────
 export default function CaiDat() {
   const { theme, toggleTheme } = useTheme()
   const isDark = theme === 'dark'
   const [showDoiMatKhau, setShowDoiMatKhau] = useState(false)
+  const [showThongTin, setShowThongTin] = useState(false)
 
   return (
     <PageLayout title="⚙️ Cài đặt" backTo="/#nguoi-dung">
+      {/* Giao diện */}
       <div className="card" style={{ padding: '1.25rem' }}>
         <SettingRow
           icon={isDark ? '🌙' : '☀️'}
@@ -209,6 +380,18 @@ export default function CaiDat() {
         />
       </div>
 
+      {/* Thông tin bãi xe */}
+      <div className="card" style={{ padding: '1.25rem', marginTop: 14 }}>
+        <SettingRow
+          icon="🏢"
+          title="Thông tin bãi xe"
+          subtitle="Tên bãi, địa chỉ, giờ mở cửa, tiện ích..."
+          onClick={() => setShowThongTin(true)}
+          right={<span style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>›</span>}
+        />
+      </div>
+
+      {/* Đổi mật khẩu */}
       <div className="card" style={{ padding: '1.25rem', marginTop: 14 }}>
         <SettingRow
           icon="🔒"
@@ -221,6 +404,9 @@ export default function CaiDat() {
 
       {showDoiMatKhau && (
         <DoiMatKhauModal onClose={() => setShowDoiMatKhau(false)} />
+      )}
+      {showThongTin && (
+        <ThongTinBaiXeModal onClose={() => setShowThongTin(false)} />
       )}
     </PageLayout>
   )

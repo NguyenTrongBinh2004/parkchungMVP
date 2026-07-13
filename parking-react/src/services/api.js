@@ -137,3 +137,12 @@ export const authApi = {
     body: JSON.stringify(data)
   }),
 }
+export const baiXeApi = {
+  layThongTin: () => request('/bai-xe/thong-tin/'),
+  capNhat: (data) => request('/bai-xe/thong-tin/', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }),
+  layTienIchKhaDung: () => request('/bai-xe/tien-ich-kha-dung/'),
+};
