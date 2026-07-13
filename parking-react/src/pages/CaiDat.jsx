@@ -43,8 +43,9 @@ function SettingRow({ icon, title, subtitle, right, onClick }) {
 // ─── Hiển thị điều kiện mật khẩu, tự cập nhật theo input ──────
 function DieuKienMatKhau({ matKhau }) {
   const dieuKien = [
-    { dat: matKhau.length >= 8, label: 'Tối thiểu 8 ký tự' },
+    { dat: matKhau.length >= 8 && matKhau.length <= 20, label: 'Từ 8 đến 20 ký tự' },
     { dat: /[a-zA-Z]/.test(matKhau), label: 'Có ít nhất 1 chữ cái' },
+    { dat: /[A-Z]/.test(matKhau), label: 'Có ít nhất 1 chữ hoa' },
     { dat: /[0-9]/.test(matKhau), label: 'Có ít nhất 1 chữ số' },
   ]
   return (
@@ -75,13 +76,17 @@ function DoiMatKhauModal({ onClose }) {
     e.preventDefault()
     setError(null)
 
-    // Kiểm tra đồng bộ với backend: ít nhất 8 ký tự, có chữ cái và chữ số
-    if (form.moi.length < 8) {
-      setError('Mật khẩu mới phải có ít nhất 8 ký tự.')
+    // Kiểm tra đồng bộ với backend: 8-20 ký tự, có chữ cái, chữ hoa, chữ số
+    if (form.moi.length < 8 || form.moi.length > 20) {
+      setError('Mật khẩu mới phải từ 8 đến 20 ký tự.')
       return
     }
     if (!/[a-zA-Z]/.test(form.moi) || !/[0-9]/.test(form.moi)) {
       setError('Mật khẩu mới phải có ít nhất 1 chữ cái và 1 chữ số.')
+      return
+    }
+    if (!/[A-Z]/.test(form.moi)) {
+      setError('Mật khẩu mới phải có ít nhất 1 chữ hoa.')
       return
     }
     if (form.moi !== form.xacNhan) {
@@ -138,6 +143,7 @@ function DoiMatKhauModal({ onClose }) {
               data-lpignore="true"
               data-1p-ignore
               minLength={8}
+              maxLength={20}
             />
           </Field>
           <DieuKienMatKhau matKhau={form.moi} />
@@ -151,6 +157,7 @@ function DoiMatKhauModal({ onClose }) {
               data-lpignore="true"
               data-1p-ignore
               minLength={8}
+              maxLength={20}
             />
           </Field>
 

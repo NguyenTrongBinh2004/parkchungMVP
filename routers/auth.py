@@ -25,7 +25,7 @@ DANG_NHAP_KHOA_PHUT = 15
 # ── Models ──────────────────────────────────────────────────────
 class DangKyBody(BaseModel):
     sdt:        str
-    mat_khau:   str  = Field(..., min_length=8)
+    mat_khau:   str  = Field(..., min_length=8, max_length=20)
     ten_bai_xe: str  = Field(..., min_length=2, max_length=100)
     so_cho:     int  = Field(..., gt=0)
 
@@ -59,11 +59,11 @@ class XacNhanOTPQMKBody(BaseModel):
 class DatLaiMatKhauBody(BaseModel):
     sdt:        str
     ma_otp:     str = Field(..., min_length=6, max_length=6)
-    mat_khau:   str = Field(..., min_length=8)
+    mat_khau:   str = Field(..., min_length=8, max_length=20)
 
 class DoiMatKhauBody(BaseModel):
     mat_khau_hien_tai: str
-    mat_khau_moi:      str = Field(..., min_length=8)
+    mat_khau_moi:      str = Field(..., min_length=8, max_length=20)
 
 # ── Helpers ─────────────────────────────────────────────────────
 def _validate_sdt(sdt: str):
@@ -73,8 +73,12 @@ def _validate_sdt(sdt: str):
 def _validate_mat_khau(mat_khau: str):
     if len(mat_khau) < 8:
         raise HTTPException(422, "Mật khẩu phải có ít nhất 8 ký tự")
+    if len(mat_khau) > 20:
+        raise HTTPException(422, "Mật khẩu không được vượt quá 20 ký tự")
     if not re.search(r'[a-zA-Z]', mat_khau) or not re.search(r'[0-9]', mat_khau):
         raise HTTPException(422, "Mật khẩu phải có ít nhất 1 chữ cái và 1 chữ số")
+    if not re.search(r'[A-Z]', mat_khau):
+        raise HTTPException(422, "Mật khẩu phải có ít nhất 1 chữ hoa")
 
 def _kiem_tra_cooldown(sdt: str, KetNoi):
     bay_gio = bay_gio_vn().replace(tzinfo=None)
