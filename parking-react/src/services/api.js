@@ -138,10 +138,10 @@ export const authApi = {
   }),
 }
 export const baiXeApi = {
-  layThongTin: () => request('/bai-xe/thong-tin/'),
+  layThongTin: () => request('/bai-xe/thong-tin/', { headers: authHeader() }),
   capNhat: (data) => request('/bai-xe/thong-tin/', {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
     body: JSON.stringify(data),
   }),
   layTienIchKhaDung: () => request('/bai-xe/tien-ich-kha-dung/'),
