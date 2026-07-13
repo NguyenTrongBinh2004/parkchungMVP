@@ -171,7 +171,65 @@ function DoiMatKhauModal({ onClose }) {
   )
 }
 
-// ─── Modal thông tin bãi xe (đã bỏ trường so_cho) ─────────────
+// ─── Nhãn tiếng Việt cho tiện ích (khớp key backend) ──────────
+const TIEN_ICH_LABEL = {
+  mai_che: 'Mái che',
+  camera_an_ninh: 'Camera an ninh',
+  bao_ve_24_7: 'Bảo vệ 24/7',
+  rua_xe: 'Rửa xe',
+  sac_xe_dien: 'Sạc xe điện',
+  wifi_mien_phi: 'Wifi miễn phí',
+  nha_ve_sinh: 'Nhà vệ sinh',
+  cho_ngoi_cho: 'Chỗ ngồi chờ',
+}
+
+// ─── Chọn giờ đơn giản: dropdown 24h, không AM/PM ─────────────
+function ChonGio({ value, onChange }) {
+  const [gio, phut] = (value || '').split(':')
+  const updGio = (e) => onChange(`${e.target.value.padStart(2, '0')}:${phut || '00'}`)
+  const updPhut = (e) => onChange(`${gio || '00'}:${e.target.value.padStart(2, '0')}`)
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+      <select value={gio || ''} onChange={updGio} style={{ flex: 1 }}>
+        <option value="" disabled>Giờ</option>
+        {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')).map(h => (
+          <option key={h} value={h}>{h} giờ</option>
+        ))}
+      </select>
+      <select value={phut || ''} onChange={updPhut} style={{ flex: 1 }}>
+        <option value="" disabled>Phút</option>
+        {['00', '15', '30', '45'].map(m => (
+          <option key={m} value={m}>{m} phút</option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+// ─── Nút chọn nhanh khung giờ hoạt động ───────────────────────
+function ChonNhanhKhungGio({ form, setForm }) {
+  const dat24_7 = form.gio_mo_cua === '00:00' && form.gio_dong_cua === '23:59'
+  const datGioHanhChinh = form.gio_mo_cua === '06:00' && form.gio_dong_cua === '22:00'
+
+  const chon247 = () => setForm(f => ({ ...f, gio_mo_cua: '00:00', gio_dong_cua: '23:59' }))
+  const chonHanhChinh = () => setForm(f => ({ ...f, gio_mo_cua: '06:00', gio_dong_cua: '22:00' }))
+
+  const btnStyle = (active) => ({
+    padding: '0.4rem 0.8rem', borderRadius: 8, fontSize: '0.8rem', cursor: 'pointer',
+    border: active ? '1px solid var(--accent)' : '1px solid var(--border)',
+    background: active ? 'rgba(255,215,0,0.12)' : 'transparent',
+    color: active ? 'var(--accent)' : 'var(--text)',
+  })
+
+  return (
+    <div style={{ display: 'flex', gap: 8, marginBottom: '0.6rem' }}>
+      <button type="button" style={btnStyle(datGioHanhChinh)} onClick={chonHanhChinh}>6:00 - 22:00</button>
+      <button type="button" style={btnStyle(dat24_7)} onClick={chon247}>Mở 24/7</button>
+    </div>
+  )
+}
+
+// ─── Modal thông tin bãi xe ──────────────────────────────────
 function ThongTinBaiXeModal({ onClose }) {
   const [form, setForm] = useState({
     ten: '', dia_chi: '', mo_ta: '',
@@ -193,7 +251,6 @@ function ThongTinBaiXeModal({ onClose }) {
         ])
         setForm({
           ten: data.ten || '',
-          // so_cho đã bị xóa khỏi API, không cần set
           dia_chi: data.dia_chi || '',
           mo_ta: data.mo_ta || '',
           gio_mo_cua: data.gio_mo_cua || '',
@@ -238,12 +295,10 @@ function ThongTinBaiXeModal({ onClose }) {
     e.preventDefault()
     setError(null)
     if (!form.ten.trim()) { setError('Tên bãi xe không được để trống.'); return }
-    // Bỏ kiểm tra so_cho
     setLoading(true)
     try {
       await baiXeApi.capNhat({
         ten: form.ten.trim(),
-        // so_cho không gửi nữa
         dia_chi: form.dia_chi.trim(),
         mo_ta: form.mo_ta.trim(),
         gio_mo_cua: form.gio_mo_cua || null,
@@ -281,7 +336,6 @@ function ThongTinBaiXeModal({ onClose }) {
           <Field label="Tên bãi xe" required>
             <input value={form.ten} onChange={upd('ten')} required maxLength={100} />
           </Field>
-          {/* Đã xóa ô Số chỗ để xe */}
           <Field label="Địa chỉ">
             <input value={form.dia_chi} onChange={upd('dia_chi')} maxLength={255} />
           </Field>
@@ -289,12 +343,20 @@ function ThongTinBaiXeModal({ onClose }) {
             <textarea rows={3} value={form.mo_ta} onChange={upd('mo_ta')} style={{ resize: 'vertical' }} />
           </Field>
 
-          <Field label="Giờ mở cửa">
-            <input type="time" value={form.gio_mo_cua} onChange={upd('gio_mo_cua')} />
-          </Field>
-          <Field label="Giờ đóng cửa">
-            <input type="time" value={form.gio_dong_cua} onChange={upd('gio_dong_cua')} />
-          </Field>
+          <div style={{ marginBottom: '1rem' }}>
+            <label className="form-label">Khung giờ hoạt động</label>
+            <ChonNhanhKhungGio form={form} setForm={setForm} />
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 4 }}>Mở cửa lúc</div>
+                <ChonGio value={form.gio_mo_cua} onChange={(v) => setForm(f => ({ ...f, gio_mo_cua: v }))} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 4 }}>Đóng cửa lúc</div>
+                <ChonGio value={form.gio_dong_cua} onChange={(v) => setForm(f => ({ ...f, gio_dong_cua: v }))} />
+              </div>
+            </div>
+          </div>
 
           <div style={{ marginBottom: '1rem' }}>
             <label className="form-label">Ngày hoạt động</label>
@@ -324,7 +386,7 @@ function ThongTinBaiXeModal({ onClose }) {
                     onChange={() => toggleTienIch(key)}
                     style={{ width: 'auto', accentColor: 'var(--accent)' }}
                   />
-                  {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                  {TIEN_ICH_LABEL[key] || key}
                 </label>
               ))}
             </div>
