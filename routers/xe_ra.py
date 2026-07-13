@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Form, UploadFile, File
 from database import lay_ket_noi_CSDL
 from services.qr_service import doc_ma_qr
 from services.billing_service import BillingService, _co_gia_rieng
-from utils import bay_gio_vn, build_url, chuan_hoa_bien_so, is_valid_bien_so
+from utils import bay_gio_vn, build_url, chuan_hoa_bien_so, is_valid_bien_so, la_ma_xe_khong_bien_so
 
 router = APIRouter(prefix="/xe-ra", tags=["Quản lý Xe Ra"])
 
@@ -141,6 +141,10 @@ def kiem_tra_xe_ra_bien_so(
     bien_so_sach = chuan_hoa_bien_so(bien_so)
     if not bien_so_sach:
         raise HTTPException(status_code=400, detail="Vui lòng nhập biển số")
+
+    # Cho phép mã XD... (xe không biển số) bỏ qua kiểm tra định dạng biển số thông thường
+    if not la_ma_xe_khong_bien_so(bien_so_sach) and not is_valid_bien_so(bien_so_sach):
+        raise HTTPException(status_code=400, detail="Biển số không đúng định dạng")
 
     try:
         with KetNoi.cursor(dictionary=True) as cur:

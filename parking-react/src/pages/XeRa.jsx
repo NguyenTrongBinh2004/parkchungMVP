@@ -3,7 +3,7 @@ import { PageLayout, Spinner, Alert, Field, HinhThucSelect, fmtDt, fmtTien } fro
 import { xeRaApi, thanhToanApi } from '../services/api'
 import { PLACEHOLDER } from '../components/UI'
 import imageCompression from 'browser-image-compression'
-import { chuanHoaBienSo, isValidBienSo } from '../utils'
+import { chuanHoaBienSo, isValidBienSo, isMaTuSinhXeDap } from '../utils'
 
 async function compressImage(file) {
   const options = {
@@ -190,12 +190,13 @@ function xacNhanBienSo() {
   }
 
   const cleaned = chuanHoaBienSo(raw)
-  if (!isValidBienSo(cleaned)) {
+  // Cho phép mã XD... (xe không biển số) bỏ qua kiểm tra định dạng biển số thông thường
+  if (!isMaTuSinhXeDap(cleaned) && !isValidBienSo(cleaned)) {
     setError('Biển số không đúng định dạng (VD: 51F-123.45)')
     return
   }
 
-  setBienSoText(cleaned) // hiển thị lại biển số đẹp
+  setBienSoText(cleaned) // hiển thị lại biển số đã chuẩn hóa
   onChuyenTabBienSo(cleaned) // chuyển sang tab Biển số với biển đã chuẩn hóa
 }
   return (
@@ -273,7 +274,8 @@ function BienSoPanel({ bienSoMacDinh }) {
     if (!raw) return
 
     const cleaned = chuanHoaBienSo(raw)
-    if (!isValidBienSo(cleaned)) {
+    // Cho phép mã XD... (xe không biển số) bỏ qua kiểm tra định dạng biển số
+    if (!isMaTuSinhXeDap(cleaned) && !isValidBienSo(cleaned)) {
       setError('Biển số không đúng định dạng (VD: 51F-123.45)')
       return
     }
