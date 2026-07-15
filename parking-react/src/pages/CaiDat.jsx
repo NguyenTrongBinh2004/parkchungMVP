@@ -6,6 +6,16 @@ import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 import { authApi, baiXeApi } from '../services/api'
 
+// ── Hàm chuẩn hóa giờ phút (đảm bảo định dạng HH:MM) ──────────
+function chuanHoaGio(v) {
+  if (!v) return null
+  const match = v.match(/^(\d{1,2}):(\d{1,2})/)
+  if (!match) return null
+  const gio = match[1].padStart(2, '0')
+  const phut = match[2].padStart(2, '0')
+  return `${gio}:${phut}`
+}
+
 // ─── Hàng cài đặt dùng chung ─────────────────────────────────
 function SettingRow({ icon, title, subtitle, right, onClick }) {
   return (
@@ -301,8 +311,8 @@ function ThongTinBaiXeModal({ onClose }) {
         ten: form.ten.trim(),
         dia_chi: form.dia_chi.trim(),
         mo_ta: form.mo_ta.trim(),
-        gio_mo_cua: form.gio_mo_cua || null,
-        gio_dong_cua: form.gio_dong_cua || null,
+        gio_mo_cua: chuanHoaGio(form.gio_mo_cua),
+        gio_dong_cua: chuanHoaGio(form.gio_dong_cua),
         cac_ngay_hoat_dong: form.cac_ngay_hoat_dong.length > 0 ? form.cac_ngay_hoat_dong : null,
         tien_ich: form.tien_ich.length > 0 ? form.tien_ich : null,
       })

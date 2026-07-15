@@ -1,5 +1,6 @@
 # routers/bai_xe.py
 import json
+import re
 import mysql.connector
 from typing import Optional, List
 
@@ -16,6 +17,46 @@ TIEN_ICH_HOP_LE = {
     "mai_che", "camera_an_ninh", "bao_ve_24_7", "rua_xe",
     "sac_xe_dien", "wifi_mien_phi", "nha_ve_sinh", "cho_ngoi_cho",
 }
+
+# ── Regex kiểm tra giờ HH:MM ──────────────────────────────────
+REGEX_GIO = re.compile(r'^([01]\d|2[0-3]):([0-5]\d)$')
+
+
+# ── Helper ──────────────────────────────────────────────────────
+def _chuan_hoa_gio(gio: Optional[str]) -> Optional[str]:
+    """Chuẩn hóa giờ từ HH:MM thành HH:MM:SS để lưu vào TIME column."""
+    if gio is None or gio == "":
+        return None
+    gio = gio.strip()
+    if not REGEX_GIO.match(gio):
+        raise HTTPException(422, f"Định dạng giờ không hợp lệ: '{gio}' (cần dạng HH:MM)")
+    return gio + ":00"
+
+
+def _lay_bai_xe_hien_tai(id_nguoi_dung: int, KetNoi) -> dict:
+    with KetNoi.cursor(dictionary=True) as cur:
+        cur.execute("SELECT * FROM bai_xe WHERE id_chu_bai = %s LIMIT 1", (id_nguoi_dung,))
+        bai_xe = cur.fetchone()
+    if not bai_xe:
+        raise HTTPException(404, "Không tìm thấy bãi xe")
+
+    # Parse các cột JSON (driver có thể trả về string)
+    for field in ("cac_ngay_hoat_dong", "tien_ich"):
+        val = bai_xe.get(field)
+        if isinstance(val, str):
+            try:
+                bai_xe[field] = json.loads(val)
+            except (json.JSONDecodeError, TypeError):
+                bai_xe[field] = []
+        elif val is None:
+            bai_xe[field] = []
+
+    for field in ("gio_mo_cua", "gio_dong_cua"):
+        val = bai_xe.get(field)
+        if val is not None:
+            bai_xe[field] = str(val)[:5]  # "HH:MM:SS" -> "HH:MM"
+
+    return bai_xe
 
 
 # ── Models ──────────────────────────────────────────────────────
@@ -46,33 +87,6 @@ class CapNhatThongTinBody(BaseModel):
         return v
 
 
-# ── Helper ──────────────────────────────────────────────────────
-def _lay_bai_xe_hien_tai(id_nguoi_dung: int, KetNoi) -> dict:
-    with KetNoi.cursor(dictionary=True) as cur:
-        cur.execute("SELECT * FROM bai_xe WHERE id_chu_bai = %s LIMIT 1", (id_nguoi_dung,))
-        bai_xe = cur.fetchone()
-    if not bai_xe:
-        raise HTTPException(404, "Không tìm thấy bãi xe")
-
-    # Parse các cột JSON (driver có thể trả về string)
-    for field in ("cac_ngay_hoat_dong", "tien_ich"):
-        val = bai_xe.get(field)
-        if isinstance(val, str):
-            try:
-                bai_xe[field] = json.loads(val)
-            except (json.JSONDecodeError, TypeError):
-                bai_xe[field] = []
-        elif val is None:
-            bai_xe[field] = []
-
-    for field in ("gio_mo_cua", "gio_dong_cua"):
-        val = bai_xe.get(field)
-        if val is not None:
-            bai_xe[field] = str(val)[:5]  # "HH:MM:SS" -> "HH:MM"
-
-    return bai_xe
-
-
 # ── 1. Lấy thông tin bãi xe hiện tại ────────────────────────────
 @router.get("/thong-tin/")
 def lay_thong_tin(
@@ -94,6 +108,12 @@ def cap_nhat_thong_tin(
     du_lieu = body.model_dump(exclude_unset=True)
     if not du_lieu:
         raise HTTPException(422, "Không có dữ liệu để cập nhật")
+
+    # Chuẩn hóa giờ mở/đóng cửa nếu có
+    if "gio_mo_cua" in du_lieu:
+        du_lieu["gio_mo_cua"] = _chuan_hoa_gio(du_lieu["gio_mo_cua"])
+    if "gio_dong_cua" in du_lieu:
+        du_lieu["gio_dong_cua"] = _chuan_hoa_gio(du_lieu["gio_dong_cua"])
 
     set_clauses = []
     values = []
