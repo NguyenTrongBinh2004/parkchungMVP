@@ -239,6 +239,68 @@ function ChonNhanhKhungGio({ form, setForm }) {
   )
 }
 
+// ─── Modal xem thông tin bãi xe (chỉ đọc) ─────────────────────
+function ThongTinBaiXeViewModal({ onClose, onEdit }) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await baiXeApi.layThongTin()
+        setData(res)
+      } catch (err) {
+        setError('Không thể tải thông tin bãi xe.')
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [])
+
+  const labelNgay = (n) => ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'CN'][n - 1]
+
+  const Dong = ({ label, value }) => (
+    <div style={{ marginBottom: '0.9rem' }}>
+      <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: '0.92rem', color: value ? 'var(--text)' : 'var(--text-muted)' }}>
+        {value || 'Chưa cập nhật'}
+      </div>
+    </div>
+  )
+
+  return (
+    <Modal onClose={onClose} title="🏢 Thông tin bãi xe">
+      {loading && <div style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>Đang tải...</div>}
+      {error && <Alert type="danger">{error}</Alert>}
+
+      {data && (
+        <>
+          <Dong label="Tên bãi xe" value={data.ten} />
+          <Dong label="Địa chỉ" value={data.dia_chi} />
+          <Dong label="Mô tả" value={data.mo_ta} />
+          <Dong
+            label="Khung giờ hoạt động"
+            value={data.gio_mo_cua && data.gio_dong_cua ? `${data.gio_mo_cua} - ${data.gio_dong_cua}` : null}
+          />
+          <Dong
+            label="Ngày hoạt động"
+            value={data.cac_ngay_hoat_dong?.length ? data.cac_ngay_hoat_dong.map(labelNgay).join(', ') : null}
+          />
+          <Dong
+            label="Tiện ích"
+            value={data.tien_ich?.length ? data.tien_ich.map(k => TIEN_ICH_LABEL[k] || k).join(', ') : null}
+          />
+
+          <button className="btn btn-accent" style={{ marginTop: '0.5rem' }} onClick={onEdit}>
+            ✏️ Chỉnh sửa
+          </button>
+        </>
+      )}
+    </Modal>
+  )
+}
+
 // ─── Modal thông tin bãi xe ──────────────────────────────────
 function ThongTinBaiXeModal({ onClose }) {
   const [form, setForm] = useState({
@@ -418,7 +480,8 @@ export default function CaiDat() {
   const { theme, toggleTheme } = useTheme()
   const isDark = theme === 'dark'
   const [showDoiMatKhau, setShowDoiMatKhau] = useState(false)
-  const [showThongTin, setShowThongTin] = useState(false)
+  const [showThongTinView, setShowThongTinView] = useState(false)
+  const [showThongTinEdit, setShowThongTinEdit] = useState(false)
 
   return (
     <PageLayout title="⚙️ Cài đặt" backTo="/#nguoi-dung">
@@ -458,7 +521,7 @@ export default function CaiDat() {
           icon="🏢"
           title="Thông tin bãi xe"
           subtitle="Tên bãi, địa chỉ, giờ mở cửa, tiện ích..."
-          onClick={() => setShowThongTin(true)}
+          onClick={() => setShowThongTinView(true)}
           right={<span style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>›</span>}
         />
       </div>
@@ -477,8 +540,16 @@ export default function CaiDat() {
       {showDoiMatKhau && (
         <DoiMatKhauModal onClose={() => setShowDoiMatKhau(false)} />
       )}
-      {showThongTin && (
-        <ThongTinBaiXeModal onClose={() => setShowThongTin(false)} />
+      {showThongTinView && (
+        <ThongTinBaiXeViewModal
+          onClose={() => setShowThongTinView(false)}
+          onEdit={() => { setShowThongTinView(false); setShowThongTinEdit(true) }}
+        />
+      )}
+      {showThongTinEdit && (
+        <ThongTinBaiXeModal
+          onClose={() => { setShowThongTinEdit(false); setShowThongTinView(true) }}
+        />
       )}
     </PageLayout>
   )
