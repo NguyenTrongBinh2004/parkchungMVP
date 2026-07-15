@@ -1,5 +1,5 @@
 // src/pages/LoaiXe.jsx
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { PageLayout, Spinner, Alert, Field, Modal } from '../components/UI'
 import { loaiXeApi } from '../services/api'
 import { useLoaiXe } from '../context/LoaiXeContext'
@@ -355,6 +355,48 @@ function NhomXeCard({ nhom, loaiXeList, nhomGia, onXoa, onXoaDongGia, isOpen, on
   )
 }
 
+// ─── Hàng sức chứa 1 nhóm (nhập/sửa số chỗ) ────────────────────
+function SucChuaRow({ nhom, data, onSave, saving }) {
+  const [value, setValue] = useState(data?.so_cho ?? '')
+  const [dirty, setDirty] = useState(false)
+
+  const daDung = data?.da_dung ?? 0
+  const soCho = data?.so_cho
+  const conTrong = data?.con_trong
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.6rem 0', borderBottom: '1px solid var(--border)' }}>
+      <span style={{ fontSize: '1.1rem' }}>{NHOM_ICON[nhom.id] || '🚘'}</span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{nhom.ten}</div>
+        <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+          {soCho != null
+            ? `Đang dùng ${daDung}/${soCho} · Còn trống ${conTrong}`
+            : `Đang có ${daDung} xe · Chưa giới hạn sức chứa`}
+        </div>
+      </div>
+      <input
+        type="number"
+        min="0"
+        placeholder="Số chỗ"
+        value={value}
+        onChange={e => { setValue(e.target.value); setDirty(true) }}
+        style={{ width: 90 }}
+      />
+      {dirty && (
+        <button
+          className="btn btn-accent btn-sm"
+          disabled={saving}
+          onClick={() => { onSave(nhom.id, value === '' ? null : Number(value)); setDirty(false) }}
+          style={{ width: 'auto', whiteSpace: 'nowrap' }}
+        >
+          Lưu
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ─── Component chính ──────────────────────────────────────────────
 export default function LoaiXe() {
   const { allLoaiXe, groupedLoaiXe, dataLoading, refetchLoaiXe } = useLoaiXe()
@@ -363,12 +405,46 @@ export default function LoaiXe() {
   const [openNhomId, setOpenNhomId] = useState(null)
   const [dongGiaNhom, setDongGiaNhom] = useState(null)
 
-  // Danh sách nhóm ĐÃ CÓ cấu hình (dùng cho danh sách hiển thị)
+  // State & logic cho sức chứa
+  const [sucChuaList, setSucChuaList] = useState([])
+  const [savingSoCho, setSavingSoCho] = useState(false)
+
+  const fetchSucChua = async () => {
+    try {
+      const data = await loaiXeApi.laySucChuaTheoNhom()
+      setSucChuaList(data)
+    } catch (err) {
+      console.warn('Không tải được sức chứa:', err.message)
+    }
+  }
+
+  useEffect(() => { fetchSucChua() }, [])
+
+  const sucChuaMap = useMemo(() => {
+    const map = {}
+    sucChuaList.forEach(item => { map[item.nhom_xe_id] = item })
+    return map
+  }, [sucChuaList])
+
+  async function handleLuuSoCho(nhomId, soCho) {
+    setSavingSoCho(true)
+    try {
+      const fd = new FormData()
+      if (soCho !== null) fd.append('so_cho', soCho)
+      await loaiXeApi.capNhatSoChoNhom(nhomId, fd)
+      await fetchSucChua()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSavingSoCho(false)
+    }
+  }
+
+  // Các danh sách nhóm & map giá (giữ nguyên logic)
   const nhomList = useMemo(() => {
     return groupedLoaiXe.map(g => ({ id: g.nhom_id, ten: g.ten_nhom, thu_tu: g.thu_tu }))
   }, [groupedLoaiXe])
 
-  // Danh sách TẤT CẢ nhóm (từ allLoaiXe, không cần cấu hình) – dùng cho modal thêm loại xe
   const allNhomList = useMemo(() => {
     const map = {}
     allLoaiXe.forEach(lx => {
@@ -379,7 +455,6 @@ export default function LoaiXe() {
     return Object.values(map).sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0))
   }, [allLoaiXe])
 
-  // Tạo map đồng giá cho từng nhóm (từ item đặc biệt _la_dai_dien_dong_gia)
   const nhomGiaMap = useMemo(() => {
     const map = {}
     groupedLoaiXe.forEach(g => {
@@ -394,7 +469,6 @@ export default function LoaiXe() {
     return map
   }, [groupedLoaiXe])
 
-  // Danh sách loại xe đã cấu hình (dùng allLoaiXe từ context)
   const list = useMemo(() => allLoaiXe.filter(lx => lx.co_gia), [allLoaiXe])
 
   async function handleXoa(id, ten) {
@@ -440,6 +514,23 @@ export default function LoaiXe() {
       )}
       {dataLoading && <Spinner />}
       {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
+
+      {/* Khối sức chứa bãi xe */}
+      {allNhomList.length > 0 && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <h5 style={{ marginBottom: 8 }}>🅿️ Sức chứa bãi xe</h5>
+          {allNhomList.map(nhom => (
+            <SucChuaRow
+              key={nhom.id}
+              nhom={nhom}
+              data={sucChuaMap[nhom.id]}
+              onSave={handleLuuSoCho}
+              saving={savingSoCho}
+            />
+          ))}
+        </div>
+      )}
+
       {nhomList.map(nhom => (
         <NhomXeCard
           key={nhom.id}
@@ -467,7 +558,7 @@ export default function LoaiXe() {
         <ThemLoaiXeModal
           nhomList={allNhomList}
           onClose={() => setShowModal(false)}
-          onSuccess={() => { setShowModal(false); /* context đã được refetch bên trong modal */ }}
+          onSuccess={() => { setShowModal(false); }}
           onDongGia={handleDongGia}
         />
       )}
@@ -476,7 +567,7 @@ export default function LoaiXe() {
         <DongGiaModal
           nhom={dongGiaNhom}
           onClose={() => setDongGiaNhom(null)}
-          onSuccess={() => { setDongGiaNhom(null); /* context đã refetch */ }}
+          onSuccess={() => { setDongGiaNhom(null); }}
         />
       )}
     </PageLayout>

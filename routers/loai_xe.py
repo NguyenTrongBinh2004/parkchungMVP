@@ -98,6 +98,60 @@ def lay_danh_sach_nhom(KetNoi=Depends(lay_ket_noi_CSDL)):
         return cur.fetchall()
 
 
+# ── 2b. Cập nhật số chỗ cho 1 nhóm xe ──────────────────────────
+@router.put("/nhom/{nhom_xe_id}/so-cho", status_code=200)
+def cap_nhat_so_cho_nhom(
+    nhom_xe_id: int,
+    so_cho: Optional[int] = Form(None),
+    KetNoi=Depends(lay_ket_noi_CSDL)
+):
+    if so_cho is not None and so_cho < 0:
+        raise HTTPException(status_code=422, detail="Số chỗ phải >= 0.")
+
+    with KetNoi.cursor(dictionary=True) as cur:
+        cur.execute("SELECT id FROM nhom_xe WHERE id = %s", (nhom_xe_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Không tìm thấy nhóm xe.")
+
+        cur.execute(
+            "UPDATE nhom_xe SET so_cho = %s WHERE id = %s",
+            (so_cho, nhom_xe_id)
+        )
+        KetNoi.commit()
+
+    return {"nhom_xe_id": nhom_xe_id, "so_cho": so_cho, "ghi_chu": "Đã cập nhật số chỗ."}
+
+
+# ── 2c. Sức chứa hiện tại theo từng nhóm ───────────────────────
+@router.get("/nhom/suc-chua")
+def lay_suc_chua_theo_nhom(KetNoi=Depends(lay_ket_noi_CSDL)):
+    with KetNoi.cursor(dictionary=True) as cur:
+        cur.execute("SELECT id, ten, so_cho FROM nhom_xe ORDER BY thu_tu")
+        nhom_list = cur.fetchall()
+
+        cur.execute("""
+            SELECT l.nhom_xe_id, COUNT(*) AS da_dung
+            FROM phien_gui_xe p
+            JOIN loai_xe l ON p.id_loai_xe = l.id
+            WHERE p.is_in_bai = 1
+            GROUP BY l.nhom_xe_id
+        """)
+        da_dung_map = {row["nhom_xe_id"]: row["da_dung"] for row in cur.fetchall()}
+
+    ket_qua = []
+    for nhom in nhom_list:
+        da_dung = da_dung_map.get(nhom["id"], 0)
+        so_cho = nhom["so_cho"]
+        ket_qua.append({
+            "nhom_xe_id": nhom["id"],
+            "ten": nhom["ten"],
+            "so_cho": so_cho,
+            "da_dung": da_dung,
+            "con_trong": (so_cho - da_dung) if so_cho is not None else None,
+        })
+    return ket_qua
+
+
 # ── 3. Danh sách loại xe (có bộ lọc) ────────────────────────────
 @router.get("/")
 def lay_danh_sach_loai_xe(

@@ -58,6 +58,8 @@ export const loaiXeApi = {
   xoaDongGia: (nhomId) => request(`/loai-xe/dong-gia/${nhomId}`, { method: 'DELETE' }),
   update: (id, formData) => request(`/loai-xe/${id}`, { method: 'PUT', body: formData }),
   delete: (id) => request(`/loai-xe/${id}`, { method: 'DELETE' }),
+  capNhatSoChoNhom: (nhomId, formData) => request(`/loai-xe/nhom/${nhomId}/so-cho`, { method: 'PUT', body: formData }),
+  laySucChuaTheoNhom: () => request('/loai-xe/nhom/suc-chua'),
 }
 
 // ─── Xe vào ───
