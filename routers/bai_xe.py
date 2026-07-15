@@ -1,6 +1,7 @@
 # routers/bai_xe.py
 import json
 import re
+import datetime  # <-- thêm import này
 import mysql.connector
 from typing import Optional, List
 
@@ -22,7 +23,7 @@ TIEN_ICH_HOP_LE = {
 REGEX_GIO = re.compile(r'^([01]\d|2[0-3]):([0-5]\d)$')
 
 
-# ── Helper ──────────────────────────────────────────────────────
+# ── Helpers ─────────────────────────────────────────────────────
 def _chuan_hoa_gio(gio: Optional[str]) -> Optional[str]:
     """Chuẩn hóa giờ từ HH:MM thành HH:MM:SS để lưu vào TIME column."""
     if gio is None or gio == "":
@@ -31,6 +32,25 @@ def _chuan_hoa_gio(gio: Optional[str]) -> Optional[str]:
     if not REGEX_GIO.match(gio):
         raise HTTPException(422, f"Định dạng giờ không hợp lệ: '{gio}' (cần dạng HH:MM)")
     return gio + ":00"
+
+
+def _format_gio_tra_ve(val) -> Optional[str]:
+    """Chuẩn hóa giá trị giờ đọc từ MySQL (timedelta hoặc string) về đúng 'HH:MM'."""
+    if val is None:
+        return None
+    if isinstance(val, datetime.timedelta):
+        tong_giay = int(val.total_seconds())
+        gio = (tong_giay // 3600) % 24
+        phut = (tong_giay % 3600) // 60
+        return f"{gio:02d}:{phut:02d}"
+    # Trường hợp driver trả về string (phòng hờ)
+    parts = str(val).split(':')
+    if len(parts) >= 2:
+        try:
+            return f"{int(parts[0]):02d}:{int(parts[1]):02d}"
+        except ValueError:
+            return None
+    return None
 
 
 def _lay_bai_xe_hien_tai(id_nguoi_dung: int, KetNoi) -> dict:
@@ -51,10 +71,9 @@ def _lay_bai_xe_hien_tai(id_nguoi_dung: int, KetNoi) -> dict:
         elif val is None:
             bai_xe[field] = []
 
+    # Chuẩn hóa giờ mở/đóng cửa sang định dạng HH:MM
     for field in ("gio_mo_cua", "gio_dong_cua"):
-        val = bai_xe.get(field)
-        if val is not None:
-            bai_xe[field] = str(val)[:5]  # "HH:MM:SS" -> "HH:MM"
+        bai_xe[field] = _format_gio_tra_ve(bai_xe.get(field))
 
     return bai_xe
 
