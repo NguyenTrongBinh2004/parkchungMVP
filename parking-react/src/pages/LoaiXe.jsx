@@ -303,11 +303,16 @@ function LoaiXeCard({ lx, onXoa }) {
 }
 
 // ─── Card nhóm xe ─────────────────────────────────────────────────
-function NhomXeCard({ nhom, loaiXeList, nhomGia, onXoa, onXoaDongGia, isOpen, onToggle }) {
+function NhomXeCard({ nhom, loaiXeList, nhomGia, sucChua, onXoa, onXoaDongGia, onLuuSoCho, isOpen, onToggle }) {
   const loaiTrongNhom = loaiXeList.filter(lx => 
     lx.nhom_xe_id === nhom.id && lx.co_gia && 
     !(lx.gia_luot === 0 && lx.ten && lx.ten.includes('(đồng giá)'))
   )
+
+  const [soChoInput, setSoChoInput] = useState(sucChua?.so_cho ?? '')
+  const [dirty, setDirty] = useState(false)
+  const daDung = sucChua?.da_dung ?? 0
+  const soCho = sucChua?.so_cho
 
   if (!nhomGia && loaiTrongNhom.length === 0) return null
 
@@ -316,16 +321,38 @@ function NhomXeCard({ nhom, loaiXeList, nhomGia, onXoa, onXoaDongGia, isOpen, on
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: isOpen ? 8 : 0, borderBottom: isOpen ? '1px solid var(--border)' : 'none', cursor: 'pointer' }} onClick={onToggle}>
         <span style={{ fontSize: '1.1rem' }}>{NHOM_ICON[nhom.id] || '🚘'}</span>
         <strong style={{ flex: 1 }}>{nhom.ten}</strong>
-        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-          {nhomGia ? '⚖️ đồng giá' : ''}
-          {nhomGia && loaiTrongNhom.length > 0 ? ' · ' : ''}
-          {loaiTrongNhom.length > 0 ? `${loaiTrongNhom.length} riêng` : ''}
+        <span style={{
+          fontSize: '0.68rem', padding: '2px 8px', borderRadius: 20,
+          background: soCho != null ? 'rgba(255,215,0,0.12)' : 'transparent',
+          color: soCho != null ? 'var(--accent)' : 'var(--text-muted)',
+          border: soCho != null ? 'none' : '1px solid var(--border)',
+        }}>
+          {soCho != null ? `${daDung}/${soCho} chỗ` : 'Chưa giới hạn'}
         </span>
         <span>{isOpen ? '▴' : '▾'}</span>
       </div>
 
       {isOpen && (
         <div style={{ marginTop: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.6rem 0', borderBottom: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', flex: 1 }}>Sức chứa nhóm này</span>
+            <input
+              type="number" min="0" placeholder="Không giới hạn"
+              value={soChoInput}
+              onChange={e => { setSoChoInput(e.target.value); setDirty(true) }}
+              style={{ width: 110, fontSize: '0.85rem' }}
+            />
+            {dirty && (
+              <button
+                className="btn btn-accent btn-sm"
+                onClick={() => { onLuuSoCho(nhom.id, soChoInput === '' ? null : Number(soChoInput)); setDirty(false) }}
+                style={{ width: 'auto', whiteSpace: 'nowrap' }}
+              >
+                Lưu
+              </button>
+            )}
+          </div>
+
           {nhomGia && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.6rem 0', borderBottom: '1px solid var(--border)' }}>
               <span>⚖️</span>
@@ -515,30 +542,16 @@ export default function LoaiXe() {
       {dataLoading && <Spinner />}
       {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
 
-      {/* Khối sức chứa bãi xe */}
-      {allNhomList.length > 0 && (
-        <div className="card" style={{ marginBottom: 14 }}>
-          <h5 style={{ marginBottom: 8 }}>🅿️ Sức chứa bãi xe</h5>
-          {allNhomList.map(nhom => (
-            <SucChuaRow
-              key={nhom.id}
-              nhom={nhom}
-              data={sucChuaMap[nhom.id]}
-              onSave={handleLuuSoCho}
-              saving={savingSoCho}
-            />
-          ))}
-        </div>
-      )}
-
-      {nhomList.map(nhom => (
+      {allNhomList.map(nhom => (
         <NhomXeCard
           key={nhom.id}
           nhom={nhom}
           loaiXeList={list}
           nhomGia={nhomGiaMap[nhom.id] || null}
+          sucChua={sucChuaMap[nhom.id]}
           onXoa={handleXoa}
           onXoaDongGia={handleXoaDongGia}
+          onLuuSoCho={handleLuuSoCho}
           isOpen={openNhomId === nhom.id}
           onToggle={() => toggleNhom(nhom.id)}
         />
