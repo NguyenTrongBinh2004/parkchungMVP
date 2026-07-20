@@ -1,10 +1,12 @@
 // context/BaiXeContext.jsx
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 import { baiXeApi } from '../services/api'
+import { useAuth } from './AuthContext'
 
 const BaiXeContext = createContext(null)
 
 export function BaiXeProvider({ children }) {
+  const { daDangNhap } = useAuth()
   const [thongTin, setThongTin] = useState(null)
   const [dataLoading, setDataLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -23,8 +25,14 @@ export function BaiXeProvider({ children }) {
   }, [])
 
   useEffect(() => {
-    fetchData()
-  }, [fetchData])
+    if (daDangNhap) {
+      fetchData()
+    } else {
+      // Chưa đăng nhập → không fetch, xóa dữ liệu cũ (nếu vừa đăng xuất)
+      setThongTin(null)
+      setDataLoading(false)
+    }
+  }, [daDangNhap, fetchData])
 
   const value = useMemo(() => ({
     thongTin,
