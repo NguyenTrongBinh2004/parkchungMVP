@@ -1,8 +1,7 @@
 // src/pages/Dashboard.jsx
-import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { baiXeApi } from '../services/api'
+import { useBaiXe } from '../context/BaiXeContext'
 
 function LogoParkchung({ size = 32 }) {
   return (
@@ -30,20 +29,9 @@ function gomChuoiNgay(dsNgay) {
   return nhoms.join(', ')
 }
 
-// ─── Thẻ thông tin bãi xe (địa chỉ, giờ, ngày hoạt động) ───────
+// ─── Thẻ thông tin bãi xe (đọc từ context, không tự fetch) ─────
 function ThongTinBaiXeCard() {
-  const [data, setData] = useState(null)
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await baiXeApi.layThongTin()
-        setData(res)
-      } catch {
-        // im lặng bỏ qua lỗi, không ảnh hưởng đến dashboard
-      }
-    })()
-  }, [])
+  const { thongTin: data } = useBaiXe()
 
   if (!data) return null
 

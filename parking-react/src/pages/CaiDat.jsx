@@ -1,12 +1,13 @@
 // src/pages/CaiDat.jsx
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageLayout, Field, Alert, Modal } from '../components/UI'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 import { authApi, baiXeApi } from '../services/api'
+import { useBaiXe } from '../context/BaiXeContext'   // thêm import
 
-// ── Hàm chuẩn hóa giờ phút (đảm bảo định dạng HH:MM) ──────────
+// ── Hàm chuẩn hóa giờ phút ─────────────────────────────────
 function chuanHoaGio(v) {
   if (!v) return null
   const match = v.match(/^(\d{1,2}):(\d{1,2})/)
@@ -181,7 +182,7 @@ function DoiMatKhauModal({ onClose }) {
   )
 }
 
-// ─── Nhãn tiếng Việt cho tiện ích (khớp key backend) ──────────
+// ─── Nhãn tiếng Việt cho tiện ích ──────────────────────────
 const TIEN_ICH_LABEL = {
   mai_che: 'Mái che',
   camera_an_ninh: 'Camera an ninh',
@@ -193,7 +194,7 @@ const TIEN_ICH_LABEL = {
   cho_ngoi_cho: 'Chỗ ngồi chờ',
 }
 
-// ─── Chọn giờ đơn giản: dropdown 24h, không AM/PM ─────────────
+// ─── Chọn giờ đơn giản ──────────────────────────────────────
 function ChonGio({ value, onChange }) {
   const [gio, phut] = (value || '').split(':')
   const updGio = (e) => onChange(`${e.target.value.padStart(2, '0')}:${phut || '00'}`)
@@ -216,7 +217,7 @@ function ChonGio({ value, onChange }) {
   )
 }
 
-// ─── Nút chọn nhanh khung giờ hoạt động ───────────────────────
+// ─── Nút chọn nhanh khung giờ hoạt động ─────────────────────
 function ChonNhanhKhungGio({ form, setForm }) {
   const dat24_7 = form.gio_mo_cua === '00:00' && form.gio_dong_cua === '23:59'
   const datGioHanhChinh = form.gio_mo_cua === '06:00' && form.gio_dong_cua === '22:00'
@@ -239,24 +240,9 @@ function ChonNhanhKhungGio({ form, setForm }) {
   )
 }
 
-// ─── Modal xem thông tin bãi xe (chỉ đọc) ─────────────────────
+// ─── Modal xem thông tin bãi xe (chỉ đọc, dùng context) ─────
 function ThongTinBaiXeViewModal({ onClose, onEdit }) {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await baiXeApi.layThongTin()
-        setData(res)
-      } catch (err) {
-        setError('Không thể tải thông tin bãi xe.')
-      } finally {
-        setLoading(false)
-      }
-    })()
-  }, [])
+  const { thongTin: data, loading, error } = useBaiXe()
 
   const labelNgay = (n) => ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'CN'][n - 1]
 
@@ -272,7 +258,7 @@ function ThongTinBaiXeViewModal({ onClose, onEdit }) {
   return (
     <Modal onClose={onClose} title="🏢 Thông tin bãi xe">
       {loading && <div style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>Đang tải...</div>}
-      {error && <Alert type="danger">{error}</Alert>}
+      {error && <Alert type="danger">Không thể tải thông tin bãi xe.</Alert>}
 
       {data && (
         <>
@@ -301,8 +287,9 @@ function ThongTinBaiXeViewModal({ onClose, onEdit }) {
   )
 }
 
-// ─── Modal thông tin bãi xe ──────────────────────────────────
+// ─── Modal chỉnh sửa thông tin bãi xe ──────────────────────
 function ThongTinBaiXeModal({ onClose }) {
+  const { thongTin, refetchBaiXe } = useBaiXe()
   const [form, setForm] = useState({
     ten: '', dia_chi: '', mo_ta: '',
     gio_mo_cua: '', gio_dong_cua: '',
@@ -314,28 +301,32 @@ function ThongTinBaiXeModal({ onClose }) {
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(false)
 
+  // Lấy danh sách tiện ích hợp lệ
   useEffect(() => {
     (async () => {
       try {
-        const [data, tienIchData] = await Promise.all([
-          baiXeApi.layThongTin(),
-          baiXeApi.layTienIchKhaDung(),
-        ])
-        setForm({
-          ten: data.ten || '',
-          dia_chi: data.dia_chi || '',
-          mo_ta: data.mo_ta || '',
-          gio_mo_cua: data.gio_mo_cua || '',
-          gio_dong_cua: data.gio_dong_cua || '',
-          cac_ngay_hoat_dong: data.cac_ngay_hoat_dong || [],
-          tien_ich: data.tien_ich || [],
-        })
-        setTienIchList(tienIchData.tien_ich || [])
-      } catch (err) {
-        setError('Không thể tải thông tin bãi xe.')
+        const data = await baiXeApi.layTienIchKhaDung()
+        setTienIchList(data.tien_ich || [])
+      } catch {
+        // bỏ qua lỗi
       }
     })()
   }, [])
+
+  // Điền dữ liệu từ context vào form khi thongTin có sẵn
+  useEffect(() => {
+    if (thongTin) {
+      setForm({
+        ten: thongTin.ten || '',
+        dia_chi: thongTin.dia_chi || '',
+        mo_ta: thongTin.mo_ta || '',
+        gio_mo_cua: thongTin.gio_mo_cua || '',
+        gio_dong_cua: thongTin.gio_dong_cua || '',
+        cac_ngay_hoat_dong: thongTin.cac_ngay_hoat_dong || [],
+        tien_ich: thongTin.tien_ich || [],
+      })
+    }
+  }, [thongTin])
 
   const upd = (field) => (e) => setForm(f => ({ ...f, [field]: e.target.value }))
 
@@ -378,6 +369,7 @@ function ThongTinBaiXeModal({ onClose }) {
         cac_ngay_hoat_dong: form.cac_ngay_hoat_dong.length > 0 ? form.cac_ngay_hoat_dong : null,
         tien_ich: form.tien_ich.length > 0 ? form.tien_ich : null,
       })
+      await refetchBaiXe(true)   // cập nhật context ngầm, không hiện loading toàn app
       setSuccess(true)
       setTimeout(() => {
         setSuccess(false)
