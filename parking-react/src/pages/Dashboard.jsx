@@ -29,7 +29,33 @@ function gomChuoiNgay(dsNgay) {
   return nhoms.join(', ')
 }
 
-// ─── Thẻ thông tin bãi xe (đọc từ context, không tự fetch) ─────
+// ── Icon SVG outline đơn sắc (thay cho emoji) ──────────────────
+function IconGhim() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>
+  )
+}
+function IconDongHo() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 6v6l4 2" />
+    </svg>
+  )
+}
+function IconLich() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
+    </svg>
+  )
+}
+
+// ─── Thẻ thông tin bãi xe (layout gọn, icon outline) ──────────
 function ThongTinBaiXeCard() {
   const { thongTin: data } = useBaiXe()
 
@@ -42,27 +68,36 @@ function ThongTinBaiXeCard() {
 
   return (
     <div style={{
-      background: 'var(--bg-secondary)', borderRadius: 14,
-      padding: '12px 16px', marginBottom: 16,
-      border: '1px solid var(--border)',
-      display: 'flex', flexDirection: 'column', gap: 6,
+      padding: '2px 2px 14px',
+      marginBottom: 16,
+      borderBottom: '1px solid var(--border)',
     }}>
       {data.dia_chi && (
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: '0.82rem', color: 'var(--text)' }}>
-          <span>📍</span>
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: 6,
+          fontSize: '0.85rem', color: 'var(--text)', fontWeight: 500,
+          lineHeight: 1.4,
+        }}>
+          <span style={{ color: 'var(--text-muted)', marginTop: 2, flexShrink: 0 }}><IconGhim /></span>
           <span>{data.dia_chi}</span>
         </div>
       )}
-      {khungGio && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', color: 'var(--text)' }}>
-          <span>🕐</span>
-          <span>{khungGio}</span>
-        </div>
-      )}
-      {ngayHoatDong && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', color: 'var(--text)' }}>
-          <span>📅</span>
-          <span>{ngayHoatDong}</span>
+      {(khungGio || ngayHoatDong) && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 14,
+          marginTop: 6, fontSize: '0.76rem', color: 'var(--text-muted)',
+        }}>
+          {khungGio && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <IconDongHo />{khungGio}
+            </span>
+          )}
+          {khungGio && ngayHoatDong && <span style={{ opacity: 0.5 }}>·</span>}
+          {ngayHoatDong && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <IconLich />{ngayHoatDong}
+            </span>
+          )}
         </div>
       )}
     </div>
