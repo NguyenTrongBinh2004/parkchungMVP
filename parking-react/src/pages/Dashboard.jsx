@@ -1,6 +1,8 @@
 // src/pages/Dashboard.jsx
+import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { baiXeApi } from '../services/api'
 
 function LogoParkchung({ size = 32 }) {
   return (
@@ -8,6 +10,74 @@ function LogoParkchung({ size = 32 }) {
       <path transform="matrix(1,0,0,-1,60.9868,45.0564)" d="M0 0C1.669 1.669 1.669 4.374 0 6.043-1.669 7.712-4.374 7.712-6.043 6.043-7.712 4.374-7.712 1.669-6.043 0-4.374-1.669-1.669-1.669 0 0" fill="#13b47e"/>
       <path transform="matrix(1,0,0,-1,48.9003,32.969903)" d="M0 0C5.006 5.006 13.123 5.006 18.13 0 23.136-5.006 23.136-13.123 18.13-18.13L9.064-27.195 0-18.13C-5.006-13.123-5.006-5.006 0 0M36.259 18.129C21.241 33.149-3.11 33.149-18.129 18.129L-39.281-3.022-45.324-9.064-39.281-15.108 9.064-63.454 15.107-57.411-33.238-9.064-12.086 12.086C-.405 23.768 18.535 23.768 30.216 12.086 41.897 .405 41.897-18.535 30.216-30.216L21.152-39.281 15.107-33.238 24.173-24.173C32.517-15.83 32.517-2.301 24.173 6.043 15.83 14.387 2.301 14.387-6.043 6.043-14.203-2.115-14.382-15.232-6.584-23.61L-6.595-23.621 15.107-45.324 21.152-51.367 27.195-45.324 36.259-36.259C51.278-21.241 51.278 3.11 36.259 18.129" fill="#13b47e"/>
     </svg>
+  )
+}
+
+const LABEL_NGAY = { 1: 'T2', 2: 'T3', 3: 'T4', 4: 'T5', 5: 'T6', 6: 'T7', 7: 'CN' }
+
+function gomChuoiNgay(dsNgay) {
+  if (!dsNgay || dsNgay.length === 0) return null
+  if (dsNgay.length === 7) return 'Tất cả các ngày'
+  const sorted = [...dsNgay].sort((a, b) => a - b)
+  const nhoms = []
+  let start = sorted[0], prev = sorted[0]
+  for (let i = 1; i <= sorted.length; i++) {
+    const cur = sorted[i]
+    if (cur === prev + 1) { prev = cur; continue }
+    nhoms.push(start === prev ? LABEL_NGAY[start] : `${LABEL_NGAY[start]} - ${LABEL_NGAY[prev]}`)
+    start = cur; prev = cur
+  }
+  return nhoms.join(', ')
+}
+
+// ─── Thẻ thông tin bãi xe (địa chỉ, giờ, ngày hoạt động) ───────
+function ThongTinBaiXeCard() {
+  const [data, setData] = useState(null)
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await baiXeApi.layThongTin()
+        setData(res)
+      } catch {
+        // im lặng bỏ qua lỗi, không ảnh hưởng đến dashboard
+      }
+    })()
+  }, [])
+
+  if (!data) return null
+
+  const khungGio = data.gio_mo_cua && data.gio_dong_cua ? `${data.gio_mo_cua} - ${data.gio_dong_cua}` : null
+  const ngayHoatDong = gomChuoiNgay(data.cac_ngay_hoat_dong)
+
+  if (!data.dia_chi && !khungGio && !ngayHoatDong) return null
+
+  return (
+    <div style={{
+      background: 'var(--bg-secondary)', borderRadius: 14,
+      padding: '12px 16px', marginBottom: 16,
+      border: '1px solid var(--border)',
+      display: 'flex', flexDirection: 'column', gap: 6,
+    }}>
+      {data.dia_chi && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: '0.82rem', color: 'var(--text)' }}>
+          <span>📍</span>
+          <span>{data.dia_chi}</span>
+        </div>
+      )}
+      {khungGio && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', color: 'var(--text)' }}>
+          <span>🕐</span>
+          <span>{khungGio}</span>
+        </div>
+      )}
+      {ngayHoatDong && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', color: 'var(--text)' }}>
+          <span>📅</span>
+          <span>{ngayHoatDong}</span>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -112,6 +182,9 @@ export default function Dashboard() {
         }}>
           {activeTab.label}
         </p>
+
+        {/* Thông tin bãi xe — chỉ hiện ở tab Bảng giữ xe */}
+        {activeTab.id === 'ban-gui-xe' && <ThongTinBaiXeCard />}
 
         {/* Tên bãi xe — chỉ hiện ở tab Người dùng */}
         {activeTab.id === 'nguoi-dung' && tenBaiXe && (

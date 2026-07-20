@@ -93,6 +93,7 @@ class PhanHoiXeVao(BaseModel):
     ma_qr: Optional[str]
     ghi_chu: Optional[str] = None
     qr_image_url: Optional[str] = None
+    canh_bao_het_cho: Optional[str] = None
 
 class PhanHoiXeRa(BaseModel):
     id: int
