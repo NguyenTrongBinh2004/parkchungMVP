@@ -148,3 +148,16 @@ export const baiXeApi = {
   }),
   layTienIchKhaDung: () => request('/bai-xe/tien-ich-kha-dung/'),
 };
+
+export const nhanVienApi = {
+  list: () => request('/auth/nhan-vien/', { headers: authHeader() }),
+  create: (data) => request('/auth/nhan-vien/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify(data),
+  }),
+  xoa: (id) => request(`/auth/nhan-vien/${id}/`, {
+    method: 'DELETE',
+    headers: authHeader(),
+  }),
+}

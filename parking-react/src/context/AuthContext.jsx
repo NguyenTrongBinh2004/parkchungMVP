@@ -5,8 +5,9 @@ const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [daDangNhap, setDaDangNhap] = useState(false)
-  const [dangTai, setDangTai]       = useState(true)  // kiểm tra token khi khởi động
+  const [dangTai, setDangTai]       = useState(true)
   const [tenBaiXe, setTenBaiXe]     = useState('')
+  const [vaiTro, setVaiTro]         = useState('admin')   // thêm state vaiTro
 
   // Kiểm tra refresh token khi mở app
   useEffect(() => {
@@ -17,6 +18,7 @@ export function AuthProvider({ children }) {
         const data = await authApi.refresh({ refresh_token: rt })
         localStorage.setItem('access_token', data.access_token)
         setTenBaiXe(data.ten_bai_xe)
+        setVaiTro(data.vai_tro || 'admin')     // lưu vai trò từ response
         setDaDangNhap(true)
       } catch {
         // Refresh token hết hạn → xóa, về màn đăng nhập
@@ -33,6 +35,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem('access_token', data.access_token)
     localStorage.setItem('refresh_token', data.refresh_token)
     setTenBaiXe(data.ten_bai_xe)
+    setVaiTro(data.vai_tro || 'admin')          // lưu vai trò
     setDaDangNhap(true)
   }, [])
 
@@ -45,10 +48,13 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('refresh_token')
     setDaDangNhap(false)
     setTenBaiXe('')
+    setVaiTro('admin')                          // reset về mặc định
   }, [])
 
+  const laAdmin = vaiTro === 'admin'            // tiện ích cho UI
+
   return (
-    <AuthContext.Provider value={{ daDangNhap, dangTai, tenBaiXe, dangNhapThanhCong, dangXuat }}>
+    <AuthContext.Provider value={{ daDangNhap, dangTai, tenBaiXe, vaiTro, laAdmin, dangNhapThanhCong, dangXuat }}>
       {children}
     </AuthContext.Provider>
   )

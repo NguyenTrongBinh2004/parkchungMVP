@@ -18,6 +18,7 @@ import XeDaRa from './pages/XeDaRa'
 import DangKy from './pages/DangKy'
 import DangNhap from './pages/DangNhap'
 import QuenMatKhau from './pages/QuenMatKhau' 
+import NhanVien from './pages/NhanVien'
 
 function LogoParkchung({ size = 32 }) {
   return (
@@ -143,6 +144,7 @@ export default function App() {
             <Route path="/ve-thang" element={<VeThang />} />
             <Route path="/dang-ky-ve-thang" element={<DangKyVeThang />} />
             <Route path="/loai-xe" element={<LoaiXe />} />
+            <Route path="/nhan-vien" element={<NhanVien />} />
             <Route path="/thong-ke" element={<ThongKe />} />
             <Route path="/tim-xe" element={<TimXe />} />
             <Route path="/cai-dat" element={<CaiDat />} />

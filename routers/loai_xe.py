@@ -7,6 +7,7 @@ import time
 import threading
 import copy
 from database import lay_ket_noi_CSDL
+from services.auth_service import yeu_cau_admin   # <-- thêm import
 import logging
 
 logger = logging.getLogger("uvicorn")
@@ -103,6 +104,7 @@ def lay_danh_sach_nhom(KetNoi=Depends(lay_ket_noi_CSDL)):
 def cap_nhat_so_cho_nhom(
     nhom_xe_id: int,
     so_cho: Optional[int] = Form(None),
+    _: str = Depends(yeu_cau_admin),   # <-- chỉ admin
     KetNoi=Depends(lay_ket_noi_CSDL)
 ):
     if so_cho is not None and so_cho < 0:
@@ -219,6 +221,7 @@ def tao_loai_xe(
     gia_ngay_dem: Optional[float] = Form(None),
     gia_ve_thang: Optional[float] = Form(None),
     cau_hinh_theo_gio: Optional[str] = Form(None),
+    _: str = Depends(yeu_cau_admin),   # <-- chỉ admin
     KetNoi=Depends(lay_ket_noi_CSDL)
 ):
     # ── Validate chung ──
@@ -307,6 +310,7 @@ def tao_dong_gia(
     gia_ngay_dem: Optional[float] = Form(None),
     gia_ve_thang: Optional[float] = Form(None),
     cau_hinh_theo_gio: Optional[str] = Form(None),
+    _: str = Depends(yeu_cau_admin),   # <-- chỉ admin
     KetNoi=Depends(lay_ket_noi_CSDL)
 ):
     allowed = ["theo_luot", "theo_gio", "theo_ngay_dem"]
@@ -350,7 +354,11 @@ def tao_dong_gia(
 
 # ── 6. Xóa đồng giá nhóm (có cảnh báo xe chưa có giá riêng) ────
 @router.delete("/dong-gia/{nhom_xe_id}", status_code=200)
-def xoa_dong_gia(nhom_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
+def xoa_dong_gia(
+    nhom_xe_id: int,
+    _: str = Depends(yeu_cau_admin),   # <-- chỉ admin
+    KetNoi=Depends(lay_ket_noi_CSDL)
+):
     try:
         with KetNoi.cursor(dictionary=True) as cur:
             # Kiểm tra xe đang trong bãi không có giá riêng
@@ -397,7 +405,11 @@ def lay_nhom_xe_gia(KetNoi=Depends(lay_ket_noi_CSDL)):
 
 # ── 8. Xóa loại xe (soft-delete) ─────────────────────────────────
 @router.delete("/{loai_xe_id}")
-def xoa_loai_xe(loai_xe_id: int, KetNoi=Depends(lay_ket_noi_CSDL)):
+def xoa_loai_xe(
+    loai_xe_id: int,
+    _: str = Depends(yeu_cau_admin),   # <-- chỉ admin
+    KetNoi=Depends(lay_ket_noi_CSDL)
+):
     with KetNoi.cursor(dictionary=True) as cur:
         # Lấy thêm tên để kiểm tra xe mồi
         cur.execute("SELECT id, is_default, ten FROM loai_xe WHERE id=%s AND deleted_at IS NULL", (loai_xe_id,))
@@ -437,6 +449,7 @@ def cap_nhat_loai_xe(
     gia_ngay_dem: Optional[float] = Form(None),
     gia_ve_thang: Optional[float] = Form(None),
     cau_hinh_theo_gio: Optional[str] = Form(None),
+    _: str = Depends(yeu_cau_admin),   # <-- chỉ admin
     KetNoi=Depends(lay_ket_noi_CSDL)
 ):
     json_gio = None

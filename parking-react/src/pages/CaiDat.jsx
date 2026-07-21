@@ -1,11 +1,11 @@
 // src/pages/CaiDat.jsx
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageLayout, Field, Alert, Modal } from '../components/UI'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 import { authApi, baiXeApi } from '../services/api'
-import { useBaiXe } from '../context/BaiXeContext'   // thêm import
+import { useBaiXe } from '../context/BaiXeContext'
 
 // ── Hàm chuẩn hóa giờ phút ─────────────────────────────────
 function chuanHoaGio(v) {
@@ -243,6 +243,7 @@ function ChonNhanhKhungGio({ form, setForm }) {
 // ─── Modal xem thông tin bãi xe (chỉ đọc, dùng context) ─────
 function ThongTinBaiXeViewModal({ onClose, onEdit }) {
   const { thongTin: data, loading, error } = useBaiXe()
+  const { laAdmin } = useAuth()   // <-- lấy quyền admin
 
   const labelNgay = (n) => ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'CN'][n - 1]
 
@@ -278,9 +279,11 @@ function ThongTinBaiXeViewModal({ onClose, onEdit }) {
             value={data.tien_ich?.length ? data.tien_ich.map(k => TIEN_ICH_LABEL[k] || k).join(', ') : null}
           />
 
-          <button className="btn btn-accent" style={{ marginTop: '0.5rem' }} onClick={onEdit}>
-            ✏️ Chỉnh sửa
-          </button>
+          {laAdmin && (   // <-- chỉ admin mới thấy nút chỉnh sửa
+            <button className="btn btn-accent" style={{ marginTop: '0.5rem' }} onClick={onEdit}>
+              ✏️ Chỉnh sửa
+            </button>
+          )}
         </>
       )}
     </Modal>
@@ -301,7 +304,6 @@ function ThongTinBaiXeModal({ onClose }) {
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(false)
 
-  // Lấy danh sách tiện ích hợp lệ
   useEffect(() => {
     (async () => {
       try {
@@ -313,7 +315,6 @@ function ThongTinBaiXeModal({ onClose }) {
     })()
   }, [])
 
-  // Điền dữ liệu từ context vào form khi thongTin có sẵn
   useEffect(() => {
     if (thongTin) {
       setForm({
@@ -369,7 +370,7 @@ function ThongTinBaiXeModal({ onClose }) {
         cac_ngay_hoat_dong: form.cac_ngay_hoat_dong.length > 0 ? form.cac_ngay_hoat_dong : null,
         tien_ich: form.tien_ich.length > 0 ? form.tien_ich : null,
       })
-      await refetchBaiXe(true)   // cập nhật context ngầm, không hiện loading toàn app
+      await refetchBaiXe(true)
       setSuccess(true)
       setTimeout(() => {
         setSuccess(false)

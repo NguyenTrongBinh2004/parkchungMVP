@@ -104,6 +104,7 @@ function ThongTinBaiXeCard() {
   )
 }
 
+// Định nghĩa TABS với quyền admin
 const TABS = [
   {
     id: 'ban-gui-xe',
@@ -119,7 +120,8 @@ const TABS = [
     label: 'Quản lý',
     icon: '🏷️',
     items: [
-      { label: 'Loại xe & giá', icon: '🏷️', path: '/loai-xe', color: '#f59e0b' },
+      { label: 'Loại xe & giá', icon: '🏷️', path: '/loai-xe', color: '#f59e0b', adminOnly: true },          // <-- thêm adminOnly
+       { label: 'Quản lý nhân viên', icon: '👥', path: '/nhan-vien', color: '#0ea5e9', adminOnly: true }, 
     ],
   },
   {
@@ -148,10 +150,18 @@ const TABS = [
 export default function Dashboard() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { dangXuat, tenBaiXe } = useAuth()
+  const { dangXuat, tenBaiXe, laAdmin } = useAuth()   // lấy thêm laAdmin
 
-  const hash = location.hash.replace('#', '') || TABS[0].id
-  const activeTab = TABS.find(t => t.id === hash) || TABS[0]
+  // Lọc tab theo quyền: bỏ item adminOnly nếu không phải admin, sau đó ẩn cả tab nếu không còn item nào
+  const tabsHienThi = TABS
+    .map(tab => ({
+      ...tab,
+      items: tab.items.filter(item => !item.adminOnly || laAdmin),
+    }))
+    .filter(tab => tab.items.length > 0)
+
+  const hash = location.hash.replace('#', '') || tabsHienThi[0].id
+  const activeTab = tabsHienThi.find(t => t.id === hash) || tabsHienThi[0]
 
   function setTab(id) {
     navigate({ hash: id }, { replace: true })
@@ -287,7 +297,7 @@ export default function Dashboard() {
         bottom: 0,
         zIndex: 100,
       }}>
-        {TABS.map(tab => {
+        {tabsHienThi.map(tab => {   {/* dùng tabsHienThi thay vì TABS */}
           const isActive = tab.id === activeTab.id
           return (
             <button

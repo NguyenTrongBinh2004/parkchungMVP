@@ -1,7 +1,7 @@
 # routers/bai_xe.py
 import json
 import re
-import datetime  # <-- thêm import này
+import datetime
 import mysql.connector
 from typing import Optional, List
 
@@ -9,7 +9,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
 from database import lay_ket_noi_CSDL
-from services.auth_service import lay_nguoi_dung_hien_tai
+from services.auth_service import (
+    lay_nguoi_dung_hien_tai,
+    lay_id_bai_xe_hien_tai,      # <-- dùng dependency mới
+    yeu_cau_admin                # <-- chặn nhân viên
+)
 
 router = APIRouter(prefix="/bai-xe", tags=["Bãi xe"])
 
@@ -53,9 +57,10 @@ def _format_gio_tra_ve(val) -> Optional[str]:
     return None
 
 
-def _lay_bai_xe_hien_tai(id_nguoi_dung: int, KetNoi) -> dict:
+def _lay_bai_xe_hien_tai(id_bai_xe: int, KetNoi) -> dict:
+    """Lấy thông tin bãi xe theo id (được lấy từ token, không cần id_nguoi_dung)."""
     with KetNoi.cursor(dictionary=True) as cur:
-        cur.execute("SELECT * FROM bai_xe WHERE id_chu_bai = %s LIMIT 1", (id_nguoi_dung,))
+        cur.execute("SELECT * FROM bai_xe WHERE id = %s LIMIT 1", (id_bai_xe,))
         bai_xe = cur.fetchone()
     if not bai_xe:
         raise HTTPException(404, "Không tìm thấy bãi xe")
@@ -109,20 +114,21 @@ class CapNhatThongTinBody(BaseModel):
 # ── 1. Lấy thông tin bãi xe hiện tại ────────────────────────────
 @router.get("/thong-tin/")
 def lay_thong_tin(
-    id_nguoi_dung: int = Depends(lay_nguoi_dung_hien_tai),
+    id_bai_xe: int = Depends(lay_id_bai_xe_hien_tai),   # <-- đổi dependency
     KetNoi=Depends(lay_ket_noi_CSDL),
 ):
-    return _lay_bai_xe_hien_tai(id_nguoi_dung, KetNoi)
+    return _lay_bai_xe_hien_tai(id_bai_xe, KetNoi)
 
 
 # ── 2. Cập nhật thông tin bãi xe ────────────────────────────────
 @router.put("/thong-tin/")
 def cap_nhat_thong_tin(
     body: CapNhatThongTinBody,
-    id_nguoi_dung: int = Depends(lay_nguoi_dung_hien_tai),
+    id_bai_xe: int = Depends(lay_id_bai_xe_hien_tai),   # <-- đổi dependency
+    _: str = Depends(yeu_cau_admin),                     # <-- chỉ admin mới được sửa
     KetNoi=Depends(lay_ket_noi_CSDL),
 ):
-    bai_xe = _lay_bai_xe_hien_tai(id_nguoi_dung, KetNoi)
+    bai_xe = _lay_bai_xe_hien_tai(id_bai_xe, KetNoi)
 
     du_lieu = body.model_dump(exclude_unset=True)
     if not du_lieu:
@@ -142,7 +148,7 @@ def cap_nhat_thong_tin(
         set_clauses.append(f"{key} = %s")
         values.append(val)
 
-    values.append(bai_xe["id"])
+    values.append(id_bai_xe)   # dùng trực tiếp id_bai_xe từ token
 
     try:
         with KetNoi.cursor() as cur:
@@ -155,7 +161,7 @@ def cap_nhat_thong_tin(
         KetNoi.rollback()
         raise HTTPException(500, f"Lỗi CSDL: {err}")
 
-    return _lay_bai_xe_hien_tai(id_nguoi_dung, KetNoi)
+    return _lay_bai_xe_hien_tai(id_bai_xe, KetNoi)
 
 
 # ── 3. Lấy danh sách tiện ích hợp lệ (để frontend render checklist) ──

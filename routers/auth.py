@@ -7,7 +7,8 @@ from database import lay_ket_noi_CSDL
 from services.auth_service import (
     hash_mat_khau, xac_minh_mat_khau, tao_otp,
     tao_access_token, tao_refresh_token,
-    lay_nguoi_dung_hien_tai
+    lay_nguoi_dung_hien_tai,
+    yeu_cau_admin                # <-- thêm import
 )
 from services.sms_service import gui_otp
 from utils import bay_gio_vn
@@ -63,6 +64,11 @@ class DoiMatKhauBody(BaseModel):
     mat_khau_hien_tai: str
     mat_khau_moi:      str = Field(..., min_length=8, max_length=20)
 
+class TaoNhanVienBody(BaseModel):          # <-- thêm model
+    sdt:      str
+    mat_khau: str = Field(..., min_length=8, max_length=20)
+
+
 # ── Helpers ─────────────────────────────────────────────────────
 def _validate_sdt(sdt: str):
     if not REGEX_SDT.match(sdt):
@@ -81,7 +87,6 @@ def _validate_mat_khau(mat_khau: str):
 def _kiem_tra_cooldown(sdt: str, KetNoi):
     bay_gio = bay_gio_vn().replace(tzinfo=None)
     with KetNoi.cursor(dictionary=True) as cur:
-        # Cooldown 60 giây giữa 2 lần gửi
         cur.execute("""
             SELECT created_at FROM otp
             WHERE sdt = %s AND muc_dich = 'dang_ky'
@@ -94,7 +99,6 @@ def _kiem_tra_cooldown(sdt: str, KetNoi):
                 con_lai = int(OTP_COOLDOWN_GIAY - delta)
                 raise HTTPException(429, f"Vui lòng chờ {con_lai} giây trước khi gửi lại")
 
-        # Tối đa 5 OTP/ngày/SĐT
         cur.execute("""
             SELECT COUNT(*) AS so_lan FROM otp
             WHERE sdt = %s AND muc_dich = 'dang_ky'
@@ -102,7 +106,7 @@ def _kiem_tra_cooldown(sdt: str, KetNoi):
         """, (sdt,))
         if cur.fetchone()["so_lan"] >= OTP_GIOI_HAN_NGAY:
             raise HTTPException(429, "Đã vượt giới hạn gửi OTP trong ngày. Thử lại vào ngày mai.")
-        
+
 
 def _kiem_tra_cooldown_qmk(sdt: str, KetNoi):
     bay_gio = bay_gio_vn().replace(tzinfo=None)
@@ -128,11 +132,13 @@ def _kiem_tra_cooldown_qmk(sdt: str, KetNoi):
             raise HTTPException(429, "Đã vượt giới hạn gửi OTP trong ngày. Thử lại vào ngày mai.")
 
 
-def _lay_bai_xe(id_nguoi_dung: int, KetNoi) -> dict:
+def _lay_bai_xe(nd: dict, KetNoi) -> dict:   # <-- sửa: nhận dict nd
+    """nd: dict đầy đủ của nguoi_dung (có id, vai_tro, nguoi_tao_id)"""
+    id_chu = nd["nguoi_tao_id"] if nd.get("vai_tro") == "nhan_vien" else nd["id"]
     with KetNoi.cursor(dictionary=True) as cur:
         cur.execute(
             "SELECT id, ten FROM bai_xe WHERE id_chu_bai = %s LIMIT 1",
-            (id_nguoi_dung,)
+            (id_chu,)
         )
         bai_xe = cur.fetchone()
     if not bai_xe:
@@ -158,7 +164,6 @@ def dang_ky(body: DangKyBody, KetNoi=Depends(lay_ket_noi_CSDL)):
     het_han = bay_gio + timedelta(minutes=OTP_TTL_PHUT)
 
     with KetNoi.cursor() as cur:
-        # Hủy OTP cũ chưa dùng
         cur.execute("""
             UPDATE otp SET da_dung = 1
             WHERE sdt = %s AND muc_dich = 'dang_ky' AND da_dung = 0
@@ -177,7 +182,7 @@ def dang_ky(body: DangKyBody, KetNoi=Depends(lay_ket_noi_CSDL)):
     return {"message": "Mã OTP đã được gửi", "het_han_sau_giay": OTP_TTL_PHUT * 60}
 
 
-# ── 2. Xác nhận OTP → tạo tài khoản ────────────────────────────
+# ── 2. Xác nhận OTP → tạo tài khoản (admin) ────────────────────
 @router.post("/xac-nhan-otp/")
 def xac_nhan_otp(body: XacNhanOTPBody, KetNoi=Depends(lay_ket_noi_CSDL)):
     _validate_sdt(body.sdt)
@@ -208,12 +213,10 @@ def xac_nhan_otp(body: XacNhanOTPBody, KetNoi=Depends(lay_ket_noi_CSDL)):
         con_lai = 5 - (otp_row["so_lan_thu"] + 1)
         raise HTTPException(400, f"Mã OTP không đúng. Còn {con_lai} lần thử.")
 
-    # Đánh dấu OTP đã dùng
     with KetNoi.cursor() as cur:
         cur.execute("UPDATE otp SET da_dung = 1 WHERE id = %s", (otp_row["id"],))
     KetNoi.commit()
 
-    # Kiểm tra race condition
     with KetNoi.cursor(dictionary=True) as cur:
         cur.execute("SELECT id FROM nguoi_dung WHERE sdt = %s", (body.sdt,))
         if cur.fetchone():
@@ -223,7 +226,7 @@ def xac_nhan_otp(body: XacNhanOTPBody, KetNoi=Depends(lay_ket_noi_CSDL)):
     try:
         with KetNoi.cursor(dictionary=True) as cur:
             cur.execute(
-                "INSERT INTO nguoi_dung (sdt, mat_khau_hash) VALUES (%s, %s)",
+                "INSERT INTO nguoi_dung (sdt, mat_khau_hash, vai_tro) VALUES (%s, %s, 'admin')",
                 (body.sdt, hash_mat_khau(body.mat_khau))
             )
             id_nguoi_dung = cur.lastrowid
@@ -243,10 +246,11 @@ def xac_nhan_otp(body: XacNhanOTPBody, KetNoi=Depends(lay_ket_noi_CSDL)):
         KetNoi.commit()
 
         return {
-            "access_token":  tao_access_token(id_nguoi_dung, id_bai_xe),
+            "access_token":  tao_access_token(id_nguoi_dung, id_bai_xe, "admin"),   # <-- thêm vai_tro
             "refresh_token": raw_refresh,
             "ten_bai_xe":    body.ten_bai_xe,
             "id_bai_xe":     id_bai_xe,
+            "vai_tro":       "admin",    # <-- thêm dòng này
         }
     except mysql.connector.Error as err:
         KetNoi.rollback()
@@ -308,8 +312,7 @@ def dang_nhap(body: DangNhapBody, KetNoi=Depends(lay_ket_noi_CSDL)):
     if not nd:
         raise HTTPException(401, "Số điện thoại hoặc mật khẩu không đúng")
 
-    # Kiểm tra khóa tài khoản
-    if nd["khoa_den"] and nd["khoa_den"] > bay_gio:
+    if nd.get("khoa_den") and nd["khoa_den"] > bay_gio:
         con_lai = int((nd["khoa_den"] - bay_gio).total_seconds() / 60)
         raise HTTPException(403, f"Tài khoản bị khóa tạm thời. Thử lại sau {con_lai} phút.")
 
@@ -334,13 +337,12 @@ def dang_nhap(body: DangNhapBody, KetNoi=Depends(lay_ket_noi_CSDL)):
             con_lai = DANG_NHAP_KHOA_SAU - so_lan_moi
             raise HTTPException(401, f"Mật khẩu không đúng. Còn {con_lai} lần thử.")
 
-    # Reset counter khi đăng nhập đúng
     with KetNoi.cursor() as cur:
         cur.execute("""
             UPDATE nguoi_dung SET so_lan_dang_nhap_sai = 0, khoa_den = NULL WHERE id = %s
         """, (nd["id"],))
 
-    bai_xe = _lay_bai_xe(nd["id"], KetNoi)
+    bai_xe = _lay_bai_xe(nd, KetNoi)   # <-- sửa: truyền dict nd
 
     raw_refresh, hash_refresh = tao_refresh_token()
     het_han_rt = bay_gio + timedelta(days=30)
@@ -352,10 +354,11 @@ def dang_nhap(body: DangNhapBody, KetNoi=Depends(lay_ket_noi_CSDL)):
     KetNoi.commit()
 
     return {
-        "access_token":  tao_access_token(nd["id"], bai_xe["id"]),
+        "access_token":  tao_access_token(nd["id"], bai_xe["id"], nd.get("vai_tro", "admin")),
         "refresh_token": raw_refresh,
         "ten_bai_xe":    bai_xe["ten"],
         "id_bai_xe":     bai_xe["id"],
+        "vai_tro":       nd.get("vai_tro", "admin"),   # <-- thêm
     }
 
 
@@ -367,7 +370,8 @@ def refresh(body: RefreshBody, KetNoi=Depends(lay_ket_noi_CSDL)):
 
     with KetNoi.cursor(dictionary=True) as cur:
         cur.execute("""
-            SELECT rt.*, nd.sdt FROM refresh_token rt
+            SELECT rt.*, nd.id AS nd_id, nd.vai_tro, nd.nguoi_tao_id
+            FROM refresh_token rt
             JOIN nguoi_dung nd ON rt.id_nguoi_dung = nd.id
             WHERE rt.token_hash = %s AND rt.het_han_luc > %s
         """, (token_hash, bay_gio))
@@ -376,12 +380,14 @@ def refresh(body: RefreshBody, KetNoi=Depends(lay_ket_noi_CSDL)):
     if not rt:
         raise HTTPException(401, "Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.")
 
-    bai_xe = _lay_bai_xe(rt["id_nguoi_dung"], KetNoi)
+    nd = {"id": rt["nd_id"], "vai_tro": rt["vai_tro"], "nguoi_tao_id": rt["nguoi_tao_id"]}
+    bai_xe = _lay_bai_xe(nd, KetNoi)
 
     return {
-        "access_token": tao_access_token(rt["id_nguoi_dung"], bai_xe["id"]),
+        "access_token": tao_access_token(nd["id"], bai_xe["id"], nd["vai_tro"]),
         "ten_bai_xe":   bai_xe["ten"],
         "id_bai_xe":    bai_xe["id"],
+        "vai_tro":      nd["vai_tro"],   # <-- thêm
     }
 
 
@@ -403,7 +409,6 @@ def quen_mat_khau(body: QuenMatKhauBody, KetNoi=Depends(lay_ket_noi_CSDL)):
     with KetNoi.cursor(dictionary=True) as cur:
         cur.execute("SELECT id FROM nguoi_dung WHERE sdt = %s", (body.sdt,))
         if not cur.fetchone():
-            # Không tiết lộ SĐT có tồn tại hay không
             raise HTTPException(404, "Số điện thoại chưa được đăng ký")
 
     _kiem_tra_cooldown_qmk(body.sdt, KetNoi)
@@ -478,7 +483,6 @@ def dat_lai_mat_khau(body: DatLaiMatKhauBody, KetNoi=Depends(lay_ket_noi_CSDL)):
     _validate_mat_khau(body.mat_khau)
     bay_gio = bay_gio_vn().replace(tzinfo=None)
 
-    # Kiểm tra lại OTP lần cuối trước khi đổi mật khẩu
     with KetNoi.cursor(dictionary=True) as cur:
         cur.execute("""
             SELECT * FROM otp
@@ -496,15 +500,12 @@ def dat_lai_mat_khau(body: DatLaiMatKhauBody, KetNoi=Depends(lay_ket_noi_CSDL)):
 
     try:
         with KetNoi.cursor() as cur:
-            # Đánh dấu OTP đã dùng
             cur.execute("UPDATE otp SET da_dung = 1 WHERE id = %s", (otp_row["id"],))
-            # Cập nhật mật khẩu mới
             cur.execute("""
                 UPDATE nguoi_dung
                 SET mat_khau_hash = %s, so_lan_dang_nhap_sai = 0, khoa_den = NULL
                 WHERE sdt = %s
             """, (hash_mat_khau(body.mat_khau), body.sdt))
-            # Hủy toàn bộ refresh token cũ (bảo mật)
             cur.execute("""
                 DELETE rt FROM refresh_token rt
                 JOIN nguoi_dung nd ON rt.id_nguoi_dung = nd.id
@@ -550,7 +551,6 @@ def doi_mat_khau(
                 "UPDATE nguoi_dung SET mat_khau_hash = %s WHERE id = %s",
                 (hash_mat_khau(body.mat_khau_moi), id_nguoi_dung)
             )
-            # Thu hồi toàn bộ refresh token — buộc đăng nhập lại trên mọi thiết bị (bảo mật)
             cur.execute("DELETE FROM refresh_token WHERE id_nguoi_dung = %s", (id_nguoi_dung,))
         KetNoi.commit()
     except mysql.connector.Error as err:
@@ -558,3 +558,62 @@ def doi_mat_khau(
         raise HTTPException(500, f"Lỗi CSDL: {err}")
 
     return {"message": "Đổi mật khẩu thành công. Vui lòng đăng nhập lại."}
+
+
+# ── 11. Quản lý nhân viên (chỉ admin) ──────────────────────────
+
+@router.post("/nhan-vien/")
+def tao_nhan_vien(
+    body: TaoNhanVienBody,
+    id_admin: int = Depends(lay_nguoi_dung_hien_tai),
+    _: str = Depends(yeu_cau_admin),
+    KetNoi=Depends(lay_ket_noi_CSDL),
+):
+    _validate_sdt(body.sdt)
+    _validate_mat_khau(body.mat_khau)
+
+    with KetNoi.cursor(dictionary=True) as cur:
+        cur.execute("SELECT id FROM nguoi_dung WHERE sdt = %s", (body.sdt,))
+        if cur.fetchone():
+            raise HTTPException(400, "Số điện thoại này đã được đăng ký")
+
+        cur.execute(
+            "INSERT INTO nguoi_dung (sdt, mat_khau_hash, vai_tro, nguoi_tao_id) "
+            "VALUES (%s, %s, 'nhan_vien', %s)",
+            (body.sdt, hash_mat_khau(body.mat_khau), id_admin)
+        )
+    KetNoi.commit()
+    return {"message": "Đã tạo tài khoản nhân viên", "sdt": body.sdt}
+
+
+@router.get("/nhan-vien/")
+def danh_sach_nhan_vien(
+    id_admin: int = Depends(lay_nguoi_dung_hien_tai),
+    _: str = Depends(yeu_cau_admin),
+    KetNoi=Depends(lay_ket_noi_CSDL),
+):
+    with KetNoi.cursor(dictionary=True) as cur:
+        cur.execute(
+            "SELECT id, sdt, created_at FROM nguoi_dung WHERE nguoi_tao_id = %s ORDER BY created_at DESC",
+            (id_admin,)
+        )
+        return cur.fetchall()
+
+
+@router.delete("/nhan-vien/{id_nhan_vien}/")
+def xoa_nhan_vien(
+    id_nhan_vien: int,
+    id_admin: int = Depends(lay_nguoi_dung_hien_tai),
+    _: str = Depends(yeu_cau_admin),
+    KetNoi=Depends(lay_ket_noi_CSDL),
+):
+    with KetNoi.cursor(dictionary=True) as cur:
+        cur.execute(
+            "SELECT id FROM nguoi_dung WHERE id = %s AND nguoi_tao_id = %s",
+            (id_nhan_vien, id_admin)
+        )
+        if not cur.fetchone():
+            raise HTTPException(404, "Không tìm thấy nhân viên")
+        cur.execute("DELETE FROM nguoi_dung WHERE id = %s", (id_nhan_vien,))
+    KetNoi.commit()
+    return {"message": "Đã xóa tài khoản nhân viên"}
