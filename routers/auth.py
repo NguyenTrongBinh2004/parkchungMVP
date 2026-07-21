@@ -67,6 +67,7 @@ class DoiMatKhauBody(BaseModel):
 class TaoNhanVienBody(BaseModel):          # <-- thêm model
     sdt:      str
     mat_khau: str = Field(..., min_length=8, max_length=20)
+    ho_ten:   str = Field(..., min_length=2, max_length=100) 
 
 
 # ── Helpers ─────────────────────────────────────────────────────
@@ -578,12 +579,12 @@ def tao_nhan_vien(
             raise HTTPException(400, "Số điện thoại này đã được đăng ký")
 
         cur.execute(
-            "INSERT INTO nguoi_dung (sdt, mat_khau_hash, vai_tro, nguoi_tao_id) "
-            "VALUES (%s, %s, 'nhan_vien', %s)",
-            (body.sdt, hash_mat_khau(body.mat_khau), id_admin)
+            "INSERT INTO nguoi_dung (sdt, mat_khau_hash, ho_ten, vai_tro, nguoi_tao_id) "
+            "VALUES (%s, %s, %s, 'nhan_vien', %s)",
+            (body.sdt, hash_mat_khau(body.mat_khau), body.ho_ten.strip(), id_admin)
         )
     KetNoi.commit()
-    return {"message": "Đã tạo tài khoản nhân viên", "sdt": body.sdt}
+    return {"message": "Đã tạo tài khoản nhân viên", "sdt": body.sdt, "ho_ten": body.ho_ten.strip()}
 
 
 @router.get("/nhan-vien/")
@@ -594,7 +595,7 @@ def danh_sach_nhan_vien(
 ):
     with KetNoi.cursor(dictionary=True) as cur:
         cur.execute(
-            "SELECT id, sdt, created_at FROM nguoi_dung WHERE nguoi_tao_id = %s ORDER BY created_at DESC",
+            "SELECT id, sdt, ho_ten, created_at FROM nguoi_dung WHERE nguoi_tao_id = %s ORDER BY created_at DESC",
             (id_admin,)
         )
         return cur.fetchall()

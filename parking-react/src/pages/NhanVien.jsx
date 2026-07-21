@@ -11,7 +11,7 @@ function formatNgay(iso) {
 
 // ─── Modal thêm nhân viên ────────────────────────────────────
 function ThemNhanVienModal({ onClose, onCreated }) {
-  const [form, setForm] = useState({ sdt: '', mat_khau: '', xacNhan: '' })
+  const [form, setForm] = useState({ ho_ten: '', sdt: '', mat_khau: '', xacNhan: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
@@ -21,6 +21,10 @@ function ThemNhanVienModal({ onClose, onCreated }) {
     e.preventDefault()
     setError(null)
 
+    if (!form.ho_ten.trim() || form.ho_ten.trim().length < 2) {
+      setError('Vui lòng nhập tên nhân viên (ít nhất 2 ký tự).')
+      return
+    }
     if (!/^(0[3-9][0-9]{8}|\+84[3-9][0-9]{8})$/.test(form.sdt)) {
       setError('Số điện thoại không đúng định dạng Việt Nam.')
       return
@@ -44,7 +48,7 @@ function ThemNhanVienModal({ onClose, onCreated }) {
 
     setLoading(true)
     try {
-      await nhanVienApi.create({ sdt: form.sdt, mat_khau: form.mat_khau })
+      await nhanVienApi.create({ ho_ten: form.ho_ten.trim(), sdt: form.sdt, mat_khau: form.mat_khau })
       onCreated()
       onClose()
     } catch (err) {
@@ -60,34 +64,17 @@ function ThemNhanVienModal({ onClose, onCreated }) {
         <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.9rem' }}>
           Nhân viên sẽ dùng số điện thoại và mật khẩu này để đăng nhập. Họ không thể sửa loại xe & giá hoặc thông tin bãi xe.
         </p>
+        <Field label="Tên nhân viên" required>
+          <input value={form.ho_ten} onChange={upd('ho_ten')} required maxLength={100} placeholder="Nguyễn Văn A" autoFocus />
+        </Field>
         <Field label="Số điện thoại" required>
-          <input value={form.sdt} onChange={upd('sdt')} required placeholder="09xxxxxxxx" autoFocus />
+          <input value={form.sdt} onChange={upd('sdt')} required placeholder="09xxxxxxxx" />
         </Field>
         <Field label="Mật khẩu" required>
-          <input
-            type="password"
-            value={form.mat_khau}
-            onChange={upd('mat_khau')}
-            required
-            autoComplete="off"
-            data-lpignore="true"
-            data-1p-ignore
-            minLength={8}
-            maxLength={20}
-          />
+          <input type="password" value={form.mat_khau} onChange={upd('mat_khau')} required autoComplete="off" data-lpignore="true" data-1p-ignore minLength={8} maxLength={20} />
         </Field>
         <Field label="Xác nhận mật khẩu" required>
-          <input
-            type="password"
-            value={form.xacNhan}
-            onChange={upd('xacNhan')}
-            required
-            autoComplete="off"
-            data-lpignore="true"
-            data-1p-ignore
-            minLength={8}
-            maxLength={20}
-          />
+          <input type="password" value={form.xacNhan} onChange={upd('xacNhan')} required autoComplete="off" data-lpignore="true" data-1p-ignore minLength={8} maxLength={20} />
         </Field>
 
         {error && <Alert type="danger">{error}</Alert>}
@@ -105,13 +92,9 @@ function NhanVienRow({ nv, onXoa }) {
   const [dangXoa, setDangXoa] = useState(false)
 
   async function handleXoa() {
-    if (!window.confirm(`Xóa tài khoản nhân viên ${nv.sdt}? Hành động này không thể hoàn tác.`)) return
+    if (!window.confirm(`Xóa tài khoản nhân viên ${nv.ho_ten || nv.sdt}? Hành động này không thể hoàn tác.`)) return
     setDangXoa(true)
-    try {
-      await onXoa(nv.id)
-    } finally {
-      setDangXoa(false)
-    }
+    try { await onXoa(nv.id) } finally { setDangXoa(false) }
   }
 
   return (
@@ -120,19 +103,17 @@ function NhanVienRow({ nv, onXoa }) {
       padding: '0.75rem 0', borderBottom: '1px solid var(--border)',
     }}>
       <div>
-        <div style={{ fontWeight: 600, fontSize: '0.92rem', color: 'var(--text)' }}>{nv.sdt}</div>
+        <div style={{ fontWeight: 600, fontSize: '0.92rem', color: 'var(--text)' }}>
+          {nv.ho_ten || 'Chưa đặt tên'}
+        </div>
         <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: 2 }}>
-          Tạo lúc {formatNgay(nv.created_at)}
+          {nv.sdt} · Tạo lúc {formatNgay(nv.created_at)}
         </div>
       </div>
-      <button
-        onClick={handleXoa}
-        disabled={dangXoa}
-        style={{
-          background: 'none', border: '1px solid var(--border)', borderRadius: 8,
-          padding: '0.4rem 0.7rem', fontSize: '0.8rem', color: '#ef4444', cursor: 'pointer',
-        }}
-      >
+      <button onClick={handleXoa} disabled={dangXoa} style={{
+        background: 'none', border: '1px solid var(--border)', borderRadius: 8,
+        padding: '0.4rem 0.7rem', fontSize: '0.8rem', color: '#ef4444', cursor: 'pointer',
+      }}>
         {dangXoa ? '...' : '🗑️ Xóa'}
       </button>
     </div>
