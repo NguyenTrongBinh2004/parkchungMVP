@@ -345,7 +345,19 @@ function SmartPanel() {
             <p><strong>Biển số:</strong> <span style={{ fontFamily: 'var(--font-mono)' }}>{ticket.bien_so}</span></p>
             <p style={{ color: 'var(--text-muted)' }}>Giờ vào: {fmtDt(ticket.gio_vao)}</p>
             {ticket.canh_bao_het_cho && (
-              <Alert type="warning">{ticket.canh_bao_het_cho}</Alert>
+              <div style={{
+                display: 'flex', alignItems: 'flex-start', gap: 8,
+                textAlign: 'left', fontSize: '0.82rem',
+                color: '#f5c451',
+                background: 'rgba(245, 196, 81, 0.08)',
+                borderLeft: '3px solid #f5c451',
+                borderRadius: 6,
+                padding: '0.6rem 0.8rem',
+                margin: '0.75rem 0',
+              }}>
+                <span style={{ flexShrink: 0, marginTop: 1 }}>⚠</span>
+                <span>{ticket.canh_bao_het_cho.replace('⚠️ ', '')}</span>
+              </div>
             )}
             {ticket.qr_image_url && <img src={ticket.qr_image_url} alt="QR" style={{ width: 220, borderRadius: 10, marginTop: 8 }} />}
             <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: 8 }}>📸 Chụp màn hình để xuất trình khi lấy xe.</p>
@@ -593,7 +605,19 @@ function BienSoPanel() {
             <p><strong>Biển số:</strong> <span style={{ fontFamily: 'var(--font-mono)' }}>{ticket.bien_so}</span></p>
             <p style={{ color: 'var(--text-muted)' }}>Giờ vào: {fmtDt(ticket.gio_vao)}</p>
             {ticket.canh_bao_het_cho && (
-              <Alert type="warning">{ticket.canh_bao_het_cho}</Alert>
+              <div style={{
+                display: 'flex', alignItems: 'flex-start', gap: 8,
+                textAlign: 'left', fontSize: '0.82rem',
+                color: '#f5c451',
+                background: 'rgba(245, 196, 81, 0.08)',
+                borderLeft: '3px solid #f5c451',
+                borderRadius: 6,
+                padding: '0.6rem 0.8rem',
+                margin: '0.75rem 0',
+              }}>
+                <span style={{ flexShrink: 0, marginTop: 1 }}>⚠</span>
+                <span>{ticket.canh_bao_het_cho.replace('⚠️ ', '')}</span>
+              </div>
             )}
             {ticket.qr_image_url && <img src={ticket.qr_image_url} alt="QR" style={{ width: 220, borderRadius: 10 }} />}
             <button className="btn btn-accent" style={{ marginTop: '1rem' }} onClick={() => setTicket(null)}>Đóng</button>
