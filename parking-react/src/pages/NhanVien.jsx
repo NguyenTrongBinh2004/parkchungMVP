@@ -14,6 +14,7 @@ function ThemNhanVienModal({ onClose, onCreated }) {
   const [form, setForm] = useState({ ho_ten: '', sdt: '', mat_khau: '', xacNhan: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [hienMatKhau, setHienMatKhau] = useState(false) // thêm state hiển thị mật khẩu
 
   const upd = (f) => (e) => setForm(v => ({ ...v, [f]: e.target.value }))
 
@@ -71,11 +72,43 @@ function ThemNhanVienModal({ onClose, onCreated }) {
           <input value={form.sdt} onChange={upd('sdt')} required placeholder="09xxxxxxxx" />
         </Field>
         <Field label="Mật khẩu" required>
-          <input type="password" value={form.mat_khau} onChange={upd('mat_khau')} required autoComplete="off" data-lpignore="true" data-1p-ignore minLength={8} maxLength={20} />
+          <input
+            type={hienMatKhau ? 'text' : 'password'}
+            value={form.mat_khau}
+            onChange={upd('mat_khau')}
+            required
+            autoComplete="off"
+            data-lpignore="true"
+            data-1p-ignore
+            minLength={8}
+            maxLength={20}
+          />
         </Field>
         <Field label="Xác nhận mật khẩu" required>
-          <input type="password" value={form.xacNhan} onChange={upd('xacNhan')} required autoComplete="off" data-lpignore="true" data-1p-ignore minLength={8} maxLength={20} />
+          <input
+            type={hienMatKhau ? 'text' : 'password'}
+            value={form.xacNhan}
+            onChange={upd('xacNhan')}
+            required
+            autoComplete="off"
+            data-lpignore="true"
+            data-1p-ignore
+            minLength={8}
+            maxLength={20}
+          />
         </Field>
+
+        <div style={{ marginTop: 4, marginBottom: 12 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.85rem' }}>
+            <input
+              type="checkbox"
+              checked={hienMatKhau}
+              onChange={e => setHienMatKhau(e.target.checked)}
+              style={{ width: 'auto', accentColor: 'var(--accent)' }}
+            />
+            <span>Hiện mật khẩu</span>
+          </label>
+        </div>
 
         {error && <Alert type="danger">{error}</Alert>}
 
