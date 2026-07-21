@@ -344,6 +344,9 @@ function SmartPanel() {
           <div style={{ textAlign: 'center' }}>
             <p><strong>Biển số:</strong> <span style={{ fontFamily: 'var(--font-mono)' }}>{ticket.bien_so}</span></p>
             <p style={{ color: 'var(--text-muted)' }}>Giờ vào: {fmtDt(ticket.gio_vao)}</p>
+            {ticket.canh_bao_het_cho && (
+              <Alert type="warning">{ticket.canh_bao_het_cho}</Alert>
+            )}
             {ticket.qr_image_url && <img src={ticket.qr_image_url} alt="QR" style={{ width: 220, borderRadius: 10, marginTop: 8 }} />}
             <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: 8 }}>📸 Chụp màn hình để xuất trình khi lấy xe.</p>
             <button className="btn btn-accent" style={{ marginTop: '1rem' }} onClick={() => setTicket(null)}>Đóng</button>
@@ -589,6 +592,9 @@ function BienSoPanel() {
           <div style={{ textAlign: 'center' }}>
             <p><strong>Biển số:</strong> <span style={{ fontFamily: 'var(--font-mono)' }}>{ticket.bien_so}</span></p>
             <p style={{ color: 'var(--text-muted)' }}>Giờ vào: {fmtDt(ticket.gio_vao)}</p>
+            {ticket.canh_bao_het_cho && (
+              <Alert type="warning">{ticket.canh_bao_het_cho}</Alert>
+            )}
             {ticket.qr_image_url && <img src={ticket.qr_image_url} alt="QR" style={{ width: 220, borderRadius: 10 }} />}
             <button className="btn btn-accent" style={{ marginTop: '1rem' }} onClick={() => setTicket(null)}>Đóng</button>
           </div>

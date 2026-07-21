@@ -35,6 +35,31 @@ async def gui_thong_bao(email, sdt, ten_chu_xe, bien_so, gio_vao, duong_dan_qr, 
         ))
 
 
+def _kiem_tra_suc_chua(id_loai_xe: int, KetNoi) -> Optional[str]:
+    """Trả về chuỗi cảnh báo nếu nhóm xe đã đầy/vượt số chỗ, hoặc None nếu còn chỗ/không giới hạn."""
+    with KetNoi.cursor(dictionary=True) as ConTro:
+        ConTro.execute("""
+            SELECT n.id AS nhom_id, n.ten AS ten_nhom, n.so_cho
+            FROM loai_xe l JOIN nhom_xe n ON l.nhom_xe_id = n.id
+            WHERE l.id = %s
+        """, (id_loai_xe,))
+        nhom = ConTro.fetchone()
+
+        if not nhom or nhom["so_cho"] is None:
+            return None
+
+        ConTro.execute("""
+            SELECT COUNT(*) AS cnt FROM phien_gui_xe p
+            JOIN loai_xe l ON p.id_loai_xe = l.id
+            WHERE l.nhom_xe_id = %s AND p.is_in_bai = 1
+        """, (nhom["nhom_id"],))
+        da_dung = ConTro.fetchone()["cnt"]
+
+    if da_dung >= nhom["so_cho"]:
+        return f"⚠️ Nhóm \"{nhom['ten_nhom']}\" đã đầy ({da_dung}/{nhom['so_cho']} chỗ). Xe vẫn được xác nhận vào."
+    return None
+
+
 # ───────────────────────────────────────────
 # 1. NHẬN DIỆN (CHỈ OCR / QR, KHÔNG DB)
 # ───────────────────────────────────────────
@@ -234,6 +259,8 @@ async def xac_nhan_xe_vao_ve_thang(
         if ghi_chu:
             ghi_chu_tra_ve = f"{ghi_chu_tra_ve} | {ghi_chu}"
 
+        canh_bao_cho = _kiem_tra_suc_chua(ve_thang["id_loai_xe"], KetNoi)
+
         await gui_thong_bao(
             ve_thang.get("email"), ve_thang.get("sdt"),
             ve_thang["ten_chu_xe"], bien_so, bay_gio,
@@ -247,7 +274,8 @@ async def xac_nhan_xe_vao_ve_thang(
             "ten_chu_xe": ve_thang["ten_chu_xe"],
             "gio_vao": bay_gio, "ma_qr": ma_qr_moi,
             "qr_image_url": f"{BASE_URL}/{duong_dan_qr_moi}",
-            "ghi_chu": ghi_chu_tra_ve
+            "ghi_chu": ghi_chu_tra_ve,
+            "canh_bao_het_cho": canh_bao_cho,
         }
 
     except mysql.connector.Error as err:
@@ -396,6 +424,8 @@ async def xac_nhan_xe_vao_ve_thuong(
             id_moi = ConTro.lastrowid
             KetNoi.commit()
 
+        canh_bao_cho = _kiem_tra_suc_chua(id_loai_xe, KetNoi)
+
         await gui_thong_bao(
             email, sdt, ten_khach or "Khách vãng lai", bien_so_goc, bay_gio,
             duong_dan_qr, ma_phien
@@ -407,7 +437,8 @@ async def xac_nhan_xe_vao_ve_thuong(
             "ten_chu_xe": ten_khach or "Khách vãng lai",
             "gio_vao": bay_gio, "ma_qr": ma_qr,
             "qr_image_url": f"{BASE_URL}/{duong_dan_qr}",
-            "ghi_chu": ghi_chu or "Xe vãng lai vào bãi thành công"
+            "ghi_chu": ghi_chu or "Xe vãng lai vào bãi thành công",
+            "canh_bao_het_cho": canh_bao_cho,
         }
 
     except mysql.connector.Error as err:
