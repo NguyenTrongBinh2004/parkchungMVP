@@ -694,20 +694,15 @@ export default function LoaiXe() {
       {/* ── Banner hướng dẫn khi đang ở chế độ chọn ── */}
       {mode && (
         <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
           padding: '0.6rem 0.9rem', borderRadius: 10, marginBottom: 14,
           background: mode === 'xoa' ? 'rgba(239,68,68,0.1)' : 'rgba(255,215,0,0.1)',
           border: `1px solid ${mode === 'xoa' ? 'var(--danger)' : 'var(--accent)'}`,
         }}>
           <span style={{ fontSize: '0.85rem' }}>
             {mode === 'sua' ? '✏️ Bấm vào loại xe muốn sửa giá' : '🗑️ Bấm vào loại xe muốn ẩn/xóa'}
+            {' · '}
+            <span style={{ color: 'var(--text-muted)' }}>bấm lại nút {mode === 'sua' ? '"Sửa"' : '"Xóa"'} để thoát</span>
           </span>
-          <button
-            onClick={() => setMode(null)}
-            style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}
-          >
-            Xong
-          </button>
         </div>
       )}
 
