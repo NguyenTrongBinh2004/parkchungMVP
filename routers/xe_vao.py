@@ -13,7 +13,8 @@ from services.qr_service import tao_ma_qr, doc_ma_qr
 from services.ocr import nhan_dien_bien_so
 from services.email_service import gui_email_qr
 from services.sms_service import gui_thong_bao_xe_vao
-from services.auth_service import lay_nguoi_dung_hien_tai               # thêm import
+from services.auth_service import lay_nguoi_dung_hien_tai, lay_id_bai_xe_hien_tai   # thêm lay_id_bai_xe_hien_tai
+from routers.bai_xe import kiem_tra_bai_xe_day_du                                    # thêm import
 from utils import (
     VN_TZ, BASE_URL, MAX_IMAGE_SIZE,
     chuan_hoa_bien_so, bay_gio_vn, build_url, luu_anh, tach_bien_so,
@@ -187,9 +188,11 @@ async def xac_nhan_xe_vao_ve_thang(
     ghi_chu: Optional[str] = Form(None),
     anh_bien_so: UploadFile = File(...),
     anh_nguoi_lai: UploadFile = File(None),
-    id_nguoi_dung: int = Depends(lay_nguoi_dung_hien_tai),   # thêm id người dùng
+    id_nguoi_dung: int = Depends(lay_nguoi_dung_hien_tai),
+    id_bai_xe: int = Depends(lay_id_bai_xe_hien_tai),   # <-- thêm
     KetNoi=Depends(lay_ket_noi_CSDL)
 ):
+    kiem_tra_bai_xe_day_du(id_bai_xe, KetNoi)           # <-- thêm kiểm tra
     bay_gio = bay_gio_vn()
     try:
         with KetNoi.cursor(dictionary=True) as ConTro:
@@ -249,7 +252,7 @@ async def xac_nhan_xe_vao_ve_thang(
                     duong_dan_bien_so, duong_dan_nguoi_lai,
                     bay_gio, 0,
                     int(ve_thang.get("cho_phep_lay_ho", 0)),
-                    id_nguoi_dung                                    # thêm giá trị
+                    id_nguoi_dung
                 ))
                 id_moi = ConTro.lastrowid
                 KetNoi.commit()
@@ -302,9 +305,11 @@ async def xac_nhan_xe_vao_ve_thuong(
     cho_phep_lay_ho: bool = Form(False),
     anh_bien_so: Optional[UploadFile] = File(None),
     anh_nguoi_lai: Optional[UploadFile] = File(None),
-    id_nguoi_dung: int = Depends(lay_nguoi_dung_hien_tai),   # thêm id người dùng
+    id_nguoi_dung: int = Depends(lay_nguoi_dung_hien_tai),
+    id_bai_xe: int = Depends(lay_id_bai_xe_hien_tai),   # <-- thêm
     KetNoi=Depends(lay_ket_noi_CSDL)
 ):
+    kiem_tra_bai_xe_day_du(id_bai_xe, KetNoi)           # <-- thêm kiểm tra
     sdt   = sdt.strip()   if sdt   else None
     email = email.strip() if email else None
 
@@ -423,7 +428,7 @@ async def xac_nhan_xe_vao_ve_thuong(
             """, (
                 ma_phien, bien_so_goc, duoi_bien_so, id_loai_xe, id_khach_hang,
                 duong_dan_bien_so, duong_dan_nguoi_lai, bay_gio, ghi_chu,
-                int(cho_phep_lay_ho), ma_qr, id_nguoi_dung             # thêm giá trị
+                int(cho_phep_lay_ho), ma_qr, id_nguoi_dung
             ))
             id_moi = ConTro.lastrowid
             KetNoi.commit()

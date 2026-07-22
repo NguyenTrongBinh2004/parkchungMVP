@@ -10,7 +10,8 @@ from models import PhanHoiVeThang
 from services.qr_service import tao_ma_qr
 from services.email_service import gui_email_qr
 from services.sms_service import gui_thong_bao_ve_thang
-from services.auth_service import lay_nguoi_dung_hien_tai
+from services.auth_service import lay_nguoi_dung_hien_tai, lay_id_bai_xe_hien_tai  # thêm lay_id_bai_xe_hien_tai
+from routers.bai_xe import kiem_tra_bai_xe_day_du                                   # thêm import
 from utils import (
     bay_gio_vn, build_url, chuan_hoa_bien_so,
     tinh_trang_thai, luu_anh, is_valid_bien_so
@@ -60,8 +61,10 @@ async def dang_ky_ve_thang(
     anh_bien_so: UploadFile = File(None),
     anh_nguoi_dung: UploadFile = File(None),
     id_nguoi_dung: int = Depends(lay_nguoi_dung_hien_tai),
+    id_bai_xe: int = Depends(lay_id_bai_xe_hien_tai),   # <-- thêm
     KetNoi=Depends(lay_ket_noi_CSDL),
 ):
+    kiem_tra_bai_xe_day_du(id_bai_xe, KetNoi)           # <-- thêm kiểm tra
     sdt   = sdt.strip()   if sdt   else None
     email = email.strip() if email else None
 

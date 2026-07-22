@@ -1,10 +1,11 @@
 // parking-react/src/XeVao.jsx
 import { useState, useEffect, useRef } from 'react'
 import { PageLayout, Spinner, Alert, Field, Modal, fmtDt } from '../components/UI'
-import { xeVaoApi } from '../services/api'   // không import loaiXeApi nữa
+import { xeVaoApi } from '../services/api'
 import imageCompression from 'browser-image-compression'
 import { chuanHoaBienSo, isValidBienSo, isMaTuSinhXeDap } from '../utils'
-import { useLoaiXe } from '../context/LoaiXeContext'   // import context mới
+import { useLoaiXe } from '../context/LoaiXeContext'
+import { useBaiXe } from '../context/BaiXeContext' // thêm import
 
 // ── Tiện ích ──────────────────────────────────────────────────────
 async function compressImage(file) {
@@ -68,8 +69,8 @@ function ImagePicker({ label, required, file, onFile, refInput }) {
   )
 }
 
-// ── VeThangCard ────────────────────────────────────────────────────
-function VeThangCard({ result, onXacNhan, loading }) {
+// ── VeThangCard (đã thêm prop hoanThien) ────────────────────────
+function VeThangCard({ result, onXacNhan, loading, hoanThien }) {
   const [fileBienSo, setFileBienSo] = useState(null)
   const [fileNguoiLai, setFileNguoiLai] = useState(null)
   const [localError, setLocalError] = useState(null)
@@ -105,7 +106,7 @@ function VeThangCard({ result, onXacNhan, loading }) {
         <ImagePicker label="Ảnh người lái" required file={fileNguoiLai} onFile={setFileNguoiLai} />
       </div>
       {localError && <Alert type="danger" onClose={() => setLocalError(null)}>{localError}</Alert>}
-      <button className="btn btn-accent" onClick={handleXacNhan} disabled={loading} style={{ marginTop: 8 }}>
+      <button className="btn btn-accent" onClick={handleXacNhan} disabled={loading || !hoanThien} style={{ marginTop: 8 }}>
         ✅ Xác nhận xe vào (Vé tháng)
       </button>
     </div>
@@ -123,8 +124,8 @@ function pickDefaultLoaiXe(groupedLoaiXe) {
 
 // ── SmartPanel ─────────────────────────────────────────────────────
 function SmartPanel() {
-  // Lấy dữ liệu từ context thay vì props
   const { allLoaiXe, configuredLoaiXe, groupedLoaiXe, dataLoading } = useLoaiXe()
+  const { hoanThien, thieuThongTin, dataLoading: baiXeLoading } = useBaiXe() // thêm
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -143,7 +144,6 @@ function SmartPanel() {
   const defaultLoaiXeRef = useRef('')
   const [autoModeFailed, setAutoModeFailed] = useState(false)
 
-  // Set default loại xe khi data load xong
   useEffect(() => {
     if (groupedLoaiXe.length === 0) return
     const defaultId = pickDefaultLoaiXe(groupedLoaiXe)
@@ -258,6 +258,7 @@ function SmartPanel() {
   const isVeThangQR = result?.loai === 've_thang_qr'
   const isVeThang = result?.loai === 've_thang'
 
+  // Component nội bộ dùng lại biến hoanThien từ SmartPanel
   const VeThangInfo = ({ r }) => (
     <div className="card" style={{ borderColor: 'var(--info)', marginBottom: '0.75rem' }} key={r.ma_qr || 'auto'}>
       <h5 style={{ color: 'var(--info)', marginBottom: '0.75rem' }}>🎫 Vé tháng</h5>
@@ -274,12 +275,32 @@ function SmartPanel() {
         </div>
       </div>
       <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>✅ Hệ thống sẽ tự động dùng ảnh hồ sơ đã lưu.</p>
-      <button className="btn btn-accent" onClick={xacNhanVeThangAuto} disabled={loading} style={{ marginTop: 8 }}>✅ Xác nhận xe vào (Vé tháng)</button>
+      <button className="btn btn-accent" onClick={xacNhanVeThangAuto} disabled={loading || !hoanThien} style={{ marginTop: 8 }}>✅ Xác nhận xe vào (Vé tháng)</button>
     </div>
   )
 
   return (
     <div>
+      {/* Banner cảnh báo chưa hoàn thiện bãi xe */}
+      {!baiXeLoading && !hoanThien && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+          padding: '0.75rem 1rem', borderRadius: 10, marginBottom: '0.75rem',
+          background: 'rgba(239,68,68,0.1)', border: '1px solid var(--danger)',
+        }}>
+          <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>⚠️</span>
+          <div style={{ fontSize: '0.85rem' }}>
+            <div style={{ fontWeight: 600, marginBottom: 2 }}>Chưa thể cho xe vào</div>
+            <div style={{ color: 'var(--text-muted)' }}>
+              Vui lòng hoàn thiện thông tin bãi xe: {thieuThongTin.join(', ')}.
+            </div>
+            <a href="/#nguoi-dung" style={{ color: 'var(--accent)', fontSize: '0.82rem', fontWeight: 600 }}>
+              → Đi tới Cài đặt
+            </a>
+          </div>
+        </div>
+      )}
+
       <div className="card" style={{ marginBottom: '0.75rem' }}>
         <ImagePicker label="Ảnh biển số xe" required file={fileBienSo} onFile={handleBienSoFile} />
       </div>
@@ -294,7 +315,7 @@ function SmartPanel() {
       {(isVeThangQR || isVeThang) && (
         hasProfileImages
           ? <VeThangInfo r={result} />
-          : <VeThangCard key={result.ma_qr || 'manual'} result={result} onXacNhan={xacNhanVeThangManual} loading={loading} />
+          : <VeThangCard key={result.ma_qr || 'manual'} result={result} onXacNhan={xacNhanVeThangManual} loading={loading} hoanThien={hoanThien} />
       )}
 
       {result?.loai === 'bien_so' && (
@@ -335,7 +356,7 @@ function SmartPanel() {
               <span>Có</span>
             </label>
           </Field>
-          <button className="btn btn-accent" onClick={xacNhanThuong} disabled={loading}>✅ Xác nhận xe vào</button>
+          <button className="btn btn-accent" onClick={xacNhanThuong} disabled={loading || !hoanThien}>✅ Xác nhận xe vào</button>
         </div>
       )}
 
@@ -371,8 +392,8 @@ function SmartPanel() {
 
 // ── BienSoPanel ────────────────────────────────────────────────────
 function BienSoPanel() {
-  // Lấy dữ liệu từ context thay vì props
   const { configuredLoaiXe, groupedLoaiXe, dataLoading } = useLoaiXe()
+  const { hoanThien, thieuThongTin, dataLoading: baiXeLoading } = useBaiXe() // thêm
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -499,6 +520,26 @@ function BienSoPanel() {
 
   return (
     <div className="card">
+      {/* Banner cảnh báo chưa hoàn thiện bãi xe */}
+      {!baiXeLoading && !hoanThien && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+          padding: '0.75rem 1rem', borderRadius: 10, marginBottom: '0.75rem',
+          background: 'rgba(239,68,68,0.1)', border: '1px solid var(--danger)',
+        }}>
+          <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>⚠️</span>
+          <div style={{ fontSize: '0.85rem' }}>
+            <div style={{ fontWeight: 600, marginBottom: 2 }}>Chưa thể cho xe vào</div>
+            <div style={{ color: 'var(--text-muted)' }}>
+              Vui lòng hoàn thiện thông tin bãi xe: {thieuThongTin.join(', ')}.
+            </div>
+            <a href="/#nguoi-dung" style={{ color: 'var(--accent)', fontSize: '0.82rem', fontWeight: 600 }}>
+              → Đi tới Cài đặt
+            </a>
+          </div>
+        </div>
+      )}
+
       <Field label="Nhập biển số">
         <input value={bienSo} onChange={e => setBienSo(e.target.value)} placeholder="VD: 51F-12345"
           style={{ textTransform: 'uppercase' }} onKeyDown={e => e.key === 'Enter' && handleXacNhan()} />
@@ -562,10 +603,10 @@ function BienSoPanel() {
               </div>
             </div>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>✅ Hệ thống sẽ tự động dùng ảnh hồ sơ đã lưu.</p>
-            <button className="btn btn-accent" onClick={xacNhanVeThangAuto} disabled={loading} style={{ marginTop: 8 }}>✅ Xác nhận xe vào (Vé tháng)</button>
+            <button className="btn btn-accent" onClick={xacNhanVeThangAuto} disabled={loading || !hoanThien} style={{ marginTop: 8 }}>✅ Xác nhận xe vào (Vé tháng)</button>
           </div>
         ) : (
-          <VeThangCard key={result.ma_qr || 'manual'} result={result} onXacNhan={xacNhanVeThangManual} loading={loading} />
+          <VeThangCard key={result.ma_qr || 'manual'} result={result} onXacNhan={xacNhanVeThangManual} loading={loading} hoanThien={hoanThien} />
         )
       )}
 
@@ -595,7 +636,7 @@ function BienSoPanel() {
               <span>Có</span>
             </label>
           </Field>
-          <button className="btn btn-accent" onClick={handleXacNhan} disabled={loading}>✅ Xác nhận xe vào</button>
+          <button className="btn btn-accent" onClick={handleXacNhan} disabled={loading || !hoanThien}>✅ Xác nhận xe vào</button>
         </div>
       )}
 
@@ -631,7 +672,6 @@ function BienSoPanel() {
 // ── Trang chính ────────────────────────────────────────────────────
 export default function XeVao() {
   const [tab, setTab] = useState('smart')
-  // Không cần gọi useLoaiXeData nữa, các panel tự lấy từ context
 
   const tabs = [
     { id: 'smart', label: '📷 Chụp ảnh' },

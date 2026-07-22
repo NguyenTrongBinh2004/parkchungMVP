@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { PageLayout, Spinner, Alert, Field, Modal } from '../components/UI'
 import { veThangApi, loaiXeApi } from '../services/api'
 import { chuanHoaBienSo, isValidBienSo } from '../utils'
+import { useBaiXe } from '../context/BaiXeContext'   // thêm
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -13,7 +14,6 @@ function groupByNhomWithGiaVeThang(configuredData, nhomGiaList) {
 
   const map = {}
   configuredData.forEach(lx => {
-    // Bỏ qua xe mồi (tên chứa "(đồng giá)") – chúng chỉ dùng cho ID
     if (lx.ten && lx.ten.includes('(đồng giá)')) return
 
     if (!map[lx.nhom_xe_id]) {
@@ -27,7 +27,6 @@ function groupByNhomWithGiaVeThang(configuredData, nhomGiaList) {
     map[lx.nhom_xe_id].items.push(lx)
   })
 
-  // Thêm nhóm có đồng giá vé tháng nhưng chưa có xe riêng lẻ nào
   nhomGiaList.forEach(ng => {
     if (ng.gia_ve_thang && Number(ng.gia_ve_thang) > 0 && !map[ng.nhom_xe_id]) {
       map[ng.nhom_xe_id] = {
@@ -45,10 +44,7 @@ function groupByNhomWithGiaVeThang(configuredData, nhomGiaList) {
       const riengLe = [...group.items]
       const nhomGia = nhomGiaMap[group.nhom_id]
 
-      // Chỉ thêm dòng đồng giá nếu nhóm có cấu hình giá vé tháng trong nhom_gia
       if (nhomGia && nhomGia.gia_ve_thang && Number(nhomGia.gia_ve_thang) > 0) {
-        // Tìm một xe trong nhóm (ưu tiên xe mồi, tức tên chứa "(đồng giá)") để lấy ID
-        // nhưng không cần thêm nó vào danh sách riêng lẻ
         const xeMoi = configuredData.find(lx => lx.nhom_xe_id === group.nhom_id && lx.ten && lx.ten.includes('(đồng giá)'))
         if (xeMoi) {
           riengLe.unshift({
@@ -120,6 +116,7 @@ function ImagePicker({ label, required, file, onFile }) {
 
 export default function DangKyVeThang() {
   const navigate = useNavigate()
+  const { hoanThien, thieuThongTin, dataLoading: baiXeLoading } = useBaiXe()   // thêm
   const [allLoaiXe, setAllLoaiXe] = useState([])
   const [groupedLoaiXe, setGroupedLoaiXe] = useState([])
   const [loading, setLoading] = useState(false)
@@ -149,7 +146,6 @@ export default function DangKyVeThang() {
     ]).then(([allData, configuredData, nhomGia]) => {
       setAllLoaiXe(allData)
 
-      // Lọc các xe có thể đăng ký vé tháng (có giá vé riêng hoặc nhóm có đồng giá vé tháng)
       const nhomGiaMap = {}
       nhomGia.forEach(ng => { nhomGiaMap[ng.nhom_xe_id] = ng })
 
@@ -184,6 +180,7 @@ export default function DangKyVeThang() {
 
   async function submit(e) {
     e.preventDefault()
+    if (!hoanThien) { setError('Vui lòng hoàn thiện thông tin bãi xe trước khi đăng ký vé tháng.'); return }   // chặn trong hàm submit
     const loaiXeObj = allLoaiXe.find(lx => lx.id == form.id_loai_xe)
     const isBicycle = loaiXeObj?.ten.toLowerCase().includes('đạp')
     let bienSoGui
@@ -220,6 +217,26 @@ export default function DangKyVeThang() {
   return (
     <PageLayout title="📝 Đăng ký vé tháng" backTo="/ve-thang">
       <form onSubmit={submit} noValidate>
+        {/* Banner cảnh báo chưa hoàn thiện bãi xe */}
+        {!baiXeLoading && !hoanThien && (
+          <div style={{
+            display: 'flex', alignItems: 'flex-start', gap: 10,
+            padding: '0.75rem 1rem', borderRadius: 10, marginBottom: '0.75rem',
+            background: 'rgba(239,68,68,0.1)', border: '1px solid var(--danger)',
+          }}>
+            <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>⚠️</span>
+            <div style={{ fontSize: '0.85rem' }}>
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>Chưa thể đăng ký vé tháng</div>
+              <div style={{ color: 'var(--text-muted)' }}>
+                Vui lòng hoàn thiện thông tin bãi xe: {thieuThongTin.join(', ')}.
+              </div>
+              <a href="/#nguoi-dung" style={{ color: 'var(--accent)', fontSize: '0.82rem', fontWeight: 600 }}>
+                → Đi tới Cài đặt
+              </a>
+            </div>
+          </div>
+        )}
+
         <div className="card" style={{ marginBottom: '0.75rem' }}>
           <h5 style={sectionTitle}>Thông tin xe</h5>
           <Field label="Biển số" required>
@@ -260,7 +277,7 @@ export default function DangKyVeThang() {
         </div>
         {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
         {loading && <Spinner />}
-        <button type="submit" className="btn btn-accent" disabled={loading} style={{ marginTop: '0.5rem' }}>
+        <button type="submit" className="btn btn-accent" disabled={loading || !hoanThien} style={{ marginTop: '0.5rem' }}>
           {loading ? 'Đang xử lý...' : '✓ Đăng ký vé tháng'}
         </button>
       </form>

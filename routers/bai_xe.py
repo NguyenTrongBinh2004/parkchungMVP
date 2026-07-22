@@ -83,6 +83,42 @@ def _lay_bai_xe_hien_tai(id_bai_xe: int, KetNoi) -> dict:
     return bai_xe
 
 
+def kiem_tra_bai_xe_day_du(id_bai_xe: int, KetNoi) -> None:
+    """Raise lỗi 400 nếu bãi xe chưa điền đủ: tên, địa chỉ, khung giờ, ngày hoạt động."""
+    with KetNoi.cursor(dictionary=True) as cur:
+        cur.execute(
+            "SELECT ten, dia_chi, gio_mo_cua, gio_dong_cua, cac_ngay_hoat_dong FROM bai_xe WHERE id = %s",
+            (id_bai_xe,)
+        )
+        bx = cur.fetchone()
+
+    if not bx:
+        raise HTTPException(404, "Không tìm thấy bãi xe")
+
+    thieu = []
+    if not bx.get("ten"):
+        thieu.append("Tên bãi xe")
+    if not bx.get("dia_chi"):
+        thieu.append("Địa chỉ")
+    if not bx.get("gio_mo_cua") or not bx.get("gio_dong_cua"):
+        thieu.append("Khung giờ hoạt động")
+
+    ngay = bx.get("cac_ngay_hoat_dong")
+    if isinstance(ngay, str):
+        try:
+            ngay = json.loads(ngay)
+        except (json.JSONDecodeError, TypeError):
+            ngay = []
+    if not ngay:
+        thieu.append("Ngày hoạt động")
+
+    if thieu:
+        raise HTTPException(
+            400,
+            f"Vui lòng hoàn thiện thông tin bãi xe trước khi tiếp tục: {', '.join(thieu)}."
+        )
+
+
 # ── Models ──────────────────────────────────────────────────────
 class CapNhatThongTinBody(BaseModel):
     ten:                Optional[str]       = Field(None, min_length=2, max_length=100)
