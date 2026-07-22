@@ -478,7 +478,7 @@ function NhomXeCard({ nhom, loaiXeList, nhomGia, sucChua, onXoa, onXoaDongGia, o
               type="number" min="0" placeholder="Không giới hạn"
               value={soChoInput}
               onChange={e => { setSoChoInput(e.target.value); setDirty(true) }}
-              style={{ width: 110, fontSize: '0.85rem' }}
+              style={{ width: 72, fontSize: '0.85rem', textAlign: 'center' }}
             />
             {dirty && (
               <button
