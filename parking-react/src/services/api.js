@@ -54,12 +54,12 @@ export const loaiXeApi = {
   listNhom: () => request('/loai-xe/nhom'),
   getToanBo: () => request('/loai-xe/toan-bo'),
   listNhomGia: () => request('/loai-xe/nhom-gia'),
-  create: (formData) => request('/loai-xe/', { method: 'POST', body: formData }),
-  dongGia: (formData) => request('/loai-xe/dong-gia', { method: 'POST', body: formData }),
-  xoaDongGia: (nhomId) => request(`/loai-xe/dong-gia/${nhomId}`, { method: 'DELETE' }),
-  update: (id, formData) => request(`/loai-xe/${id}`, { method: 'PUT', body: formData }),
-  delete: (id) => request(`/loai-xe/${id}`, { method: 'DELETE' }),
-  capNhatSoChoNhom: (nhomId, formData) => request(`/loai-xe/nhom/${nhomId}/so-cho`, { method: 'PUT', body: formData }),
+  create: (formData) => request('/loai-xe/', { method: 'POST', headers: authHeader(), body: formData }),
+  dongGia: (formData) => request('/loai-xe/dong-gia', { method: 'POST', headers: authHeader(), body: formData }),
+  xoaDongGia: (nhomId) => request(`/loai-xe/dong-gia/${nhomId}`, { method: 'DELETE', headers: authHeader() }),
+  update: (id, formData) => request(`/loai-xe/${id}`, { method: 'PUT', headers: authHeader(), body: formData }),
+  delete: (id) => request(`/loai-xe/${id}`, { method: 'DELETE', headers: authHeader() }),
+  capNhatSoChoNhom: (nhomId, formData) => request(`/loai-xe/nhom/${nhomId}/so-cho`, { method: 'PUT', headers: authHeader(), body: formData }),
   laySucChuaTheoNhom: () => request('/loai-xe/nhom/suc-chua'),
 }
 
