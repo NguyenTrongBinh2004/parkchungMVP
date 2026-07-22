@@ -524,30 +524,16 @@ function NhomXeCard({ nhom, loaiXeList, nhomGia, sucChua, onXoa, onXoaDongGia, o
 
 // ─── Component chính ──────────────────────────────────────────────
 export default function LoaiXe() {
-  const { allLoaiXe, groupedLoaiXe, dataLoading, refetchLoaiXe } = useLoaiXe()
+  const { allLoaiXe, groupedLoaiXe, sucChuaList, dataLoading, refetchLoaiXe, refetchSucChua } = useLoaiXe()
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [openNhomId, setOpenNhomId] = useState(null)
   const [dongGiaNhom, setDongGiaNhom] = useState(null)
+  const [savingSoCho, setSavingSoCho] = useState(false)
 
   // Chế độ chọn: null | 'sua' | 'xoa'
   const [mode, setMode] = useState(null)
   const [suaLx, setSuaLx] = useState(null)
-
-  // State & logic cho sức chứa
-  const [sucChuaList, setSucChuaList] = useState([])
-  const [savingSoCho, setSavingSoCho] = useState(false)
-
-  const fetchSucChua = async () => {
-    try {
-      const data = await loaiXeApi.laySucChuaTheoNhom()
-      setSucChuaList(data)
-    } catch (err) {
-      console.warn('Không tải được sức chứa:', err.message)
-    }
-  }
-
-  useEffect(() => { fetchSucChua() }, [])
 
   const sucChuaMap = useMemo(() => {
     const map = {}
@@ -561,7 +547,7 @@ export default function LoaiXe() {
       const fd = new FormData()
       if (soCho !== null) fd.append('so_cho', soCho)
       await loaiXeApi.capNhatSoChoNhom(nhomId, fd)
-      await fetchSucChua()
+      await refetchSucChua()   // dùng từ context, chỉ gọi API sức chứa
     } catch (err) {
       setError(err.message)
     } finally {
@@ -690,6 +676,21 @@ export default function LoaiXe() {
           🗑️ Xóa
         </button>
       </div>
+
+      {/* ── Banner hướng dẫn khi đang ở chế độ chọn ── */}
+      {mode && (
+        <div style={{
+          padding: '0.6rem 0.9rem', borderRadius: 10, marginBottom: 14,
+          background: mode === 'xoa' ? 'rgba(239,68,68,0.1)' : 'rgba(255,215,0,0.1)',
+          border: `1px solid ${mode === 'xoa' ? 'var(--danger)' : 'var(--accent)'}`,
+        }}>
+          <span style={{ fontSize: '0.85rem' }}>
+            {mode === 'sua' ? '✏️ Bấm vào loại xe muốn sửa giá' : '🗑️ Bấm vào loại xe muốn ẩn/xóa'}
+            {' · '}
+            <span style={{ color: 'var(--text-muted)' }}>bấm lại nút {mode === 'sua' ? '"Sửa"' : '"Xóa"'} để thoát</span>
+          </span>
+        </div>
+      )}
 
       {dataLoading && <Spinner />}
       {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}

@@ -72,6 +72,7 @@ export function LoaiXeProvider({ children }) {
   const [allLoaiXe, setAllLoaiXe]           = useState([])
   const [configuredLoaiXe, setConfigured]   = useState([])
   const [groupedLoaiXe, setGrouped]         = useState([])
+  const [sucChuaList, setSucChuaList]       = useState([])   // <-- thêm
   const [dataLoading, setDataLoading]       = useState(true)
   const [error, setError]                   = useState(null)
 
@@ -79,18 +80,30 @@ export function LoaiXeProvider({ children }) {
     if (!silent) setDataLoading(true)
     setError(null)
     try {
-      const [all, configured, nhomGia] = await Promise.all([
+      const [all, configured, nhomGia, sucChua] = await Promise.all([
         loaiXeApi.list(),
         loaiXeApi.list({ da_cau_hinh: true }),
-        loaiXeApi.listNhomGia().catch(() => [])
+        loaiXeApi.listNhomGia().catch(() => []),
+        loaiXeApi.laySucChuaTheoNhom().catch(() => [])   // <-- thêm
       ])
       setAllLoaiXe(all)
       setConfigured(configured)
       setGrouped(groupByNhomWithGia(configured, nhomGia, all))
+      setSucChuaList(sucChua)   // <-- thêm
     } catch (err) {
       setError(err)
     } finally {
       if (!silent) setDataLoading(false)
+    }
+  }, [])
+
+  // Thêm refetch riêng cho sức chứa
+  const refetchSucChua = useCallback(async () => {
+    try {
+      const sucChua = await loaiXeApi.laySucChuaTheoNhom()
+      setSucChuaList(sucChua)
+    } catch (err) {
+      console.warn('Không tải lại được sức chứa:', err.message)
     }
   }, [])
 
@@ -102,10 +115,12 @@ export function LoaiXeProvider({ children }) {
     allLoaiXe,
     configuredLoaiXe,
     groupedLoaiXe,
+    sucChuaList,        // <-- thêm
     dataLoading,
     error,
-    refetchLoaiXe: fetchData
-  }), [allLoaiXe, configuredLoaiXe, groupedLoaiXe, dataLoading, error, fetchData])
+    refetchLoaiXe: fetchData,
+    refetchSucChua,     // <-- thêm
+  }), [allLoaiXe, configuredLoaiXe, groupedLoaiXe, sucChuaList, dataLoading, error, fetchData, refetchSucChua])
 
   return (
     <LoaiXeContext.Provider value={value}>
