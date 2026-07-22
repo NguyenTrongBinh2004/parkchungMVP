@@ -314,6 +314,13 @@ function NhomXeCard({ nhom, loaiXeList, nhomGia, sucChua, onXoa, onXoaDongGia, o
   const daDung = sucChua?.da_dung ?? 0
   const soCho = sucChua?.so_cho
 
+  // Đồng bộ lại ô nhập khi dữ liệu sucChua tải xong / thay đổi từ server
+  useEffect(() => {
+    if (!dirty) {
+      setSoChoInput(sucChua?.so_cho ?? '')
+    }
+  }, [sucChua?.so_cho])
+
   if (!nhomGia && loaiTrongNhom.length === 0) return null
 
   return (
