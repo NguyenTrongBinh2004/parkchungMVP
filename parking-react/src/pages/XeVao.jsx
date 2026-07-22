@@ -5,7 +5,7 @@ import { xeVaoApi } from '../services/api'
 import imageCompression from 'browser-image-compression'
 import { chuanHoaBienSo, isValidBienSo, isMaTuSinhXeDap } from '../utils'
 import { useLoaiXe } from '../context/LoaiXeContext'
-import { useBaiXe } from '../context/BaiXeContext' // thêm import
+import { useBaiXe } from '../context/BaiXeContext'
 
 // ── Tiện ích ──────────────────────────────────────────────────────
 async function compressImage(file) {
@@ -125,7 +125,7 @@ function pickDefaultLoaiXe(groupedLoaiXe) {
 // ── SmartPanel ─────────────────────────────────────────────────────
 function SmartPanel() {
   const { allLoaiXe, configuredLoaiXe, groupedLoaiXe, dataLoading } = useLoaiXe()
-  const { hoanThien, thieuThongTin, dataLoading: baiXeLoading } = useBaiXe() // thêm
+  const { hoanThien, thieuThongTin, dataLoading: baiXeLoading } = useBaiXe()
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -390,17 +390,17 @@ function SmartPanel() {
   )
 }
 
-// ── BienSoPanel ────────────────────────────────────────────────────
-function BienSoPanel() {
+// ── BienSoPanel (nhận coChupAnh từ props) ──────────────────────
+function BienSoPanel({ coChupAnh, setCoChupAnh }) {
   const { configuredLoaiXe, groupedLoaiXe, dataLoading } = useLoaiXe()
-  const { hoanThien, thieuThongTin, dataLoading: baiXeLoading } = useBaiXe() // thêm
+  const { hoanThien, thieuThongTin, dataLoading: baiXeLoading } = useBaiXe()
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [ticket, setTicket] = useState(null)
   const [bienSo, setBienSo] = useState('')
   const [result, setResult] = useState(null)
-  const [coChupAnh, setCoChupAnh] = useState(false)
+  // const [coChupAnh, setCoChupAnh] = useState(false)   // <-- xóa dòng này
   const [fileBienSo, setFileBienSo] = useState(null)
   const [fileNguoiLai, setFileNguoiLai] = useState(null)
   const [formThuong, setFormThuong] = useState({ loaiXe: '', tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false })
@@ -552,6 +552,7 @@ function BienSoPanel() {
           gap: 12, padding: '0.7rem 0.85rem', margin: '0.6rem 0',
           background: 'var(--bg-input, rgba(255,255,255,0.03))',
           border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer',
+          userSelect: 'none', WebkitUserSelect: 'none',   // <-- thêm thuộc tính này
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -672,6 +673,7 @@ function BienSoPanel() {
 // ── Trang chính ────────────────────────────────────────────────────
 export default function XeVao() {
   const [tab, setTab] = useState('smart')
+  const [coChupAnhBienSo, setCoChupAnhBienSo] = useState(false)   // state dùng chung cho BienSoPanel
 
   const tabs = [
     { id: 'smart', label: '📷 Chụp ảnh' },
@@ -686,7 +688,7 @@ export default function XeVao() {
         ))}
       </div>
       {tab === 'smart' && <SmartPanel />}
-      {tab === 'bien'  && <BienSoPanel />}
+      {tab === 'bien'  && <BienSoPanel coChupAnh={coChupAnhBienSo} setCoChupAnh={setCoChupAnhBienSo} />}
     </PageLayout>
   )
 }
