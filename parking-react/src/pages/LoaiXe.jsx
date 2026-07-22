@@ -691,21 +691,6 @@ export default function LoaiXe() {
         </button>
       </div>
 
-      {/* ── Banner hướng dẫn khi đang ở chế độ chọn ── */}
-      {mode && (
-        <div style={{
-          padding: '0.6rem 0.9rem', borderRadius: 10, marginBottom: 14,
-          background: mode === 'xoa' ? 'rgba(239,68,68,0.1)' : 'rgba(255,215,0,0.1)',
-          border: `1px solid ${mode === 'xoa' ? 'var(--danger)' : 'var(--accent)'}`,
-        }}>
-          <span style={{ fontSize: '0.85rem' }}>
-            {mode === 'sua' ? '✏️ Bấm vào loại xe muốn sửa giá' : '🗑️ Bấm vào loại xe muốn ẩn/xóa'}
-            {' · '}
-            <span style={{ color: 'var(--text-muted)' }}>bấm lại nút {mode === 'sua' ? '"Sửa"' : '"Xóa"'} để thoát</span>
-          </span>
-        </div>
-      )}
-
       {dataLoading && <Spinner />}
       {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
 
