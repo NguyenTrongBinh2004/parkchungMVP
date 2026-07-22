@@ -243,7 +243,7 @@ function ChonNhanhKhungGio({ form, setForm }) {
 // ─── Modal xem thông tin bãi xe (chỉ đọc, dùng context) ─────
 function ThongTinBaiXeViewModal({ onClose, onEdit }) {
   const { thongTin: data, loading, error } = useBaiXe()
-  const { laAdmin } = useAuth()   // <-- lấy quyền admin
+  const { laAdmin } = useAuth()
 
   const labelNgay = (n) => ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'CN'][n - 1]
 
@@ -279,7 +279,7 @@ function ThongTinBaiXeViewModal({ onClose, onEdit }) {
             value={data.tien_ich?.length ? data.tien_ich.map(k => TIEN_ICH_LABEL[k] || k).join(', ') : null}
           />
 
-          {laAdmin && (   // <-- chỉ admin mới thấy nút chỉnh sửa
+          {laAdmin && (
             <button className="btn btn-accent" style={{ marginTop: '0.5rem' }} onClick={onEdit}>
               ✏️ Chỉnh sửa
             </button>
@@ -359,6 +359,9 @@ function ThongTinBaiXeModal({ onClose }) {
     e.preventDefault()
     setError(null)
     if (!form.ten.trim()) { setError('Tên bãi xe không được để trống.'); return }
+    if (!form.dia_chi.trim()) { setError('Địa chỉ không được để trống.'); return }
+    if (!form.gio_mo_cua || !form.gio_dong_cua) { setError('Vui lòng chọn khung giờ hoạt động.'); return }
+    if (form.cac_ngay_hoat_dong.length === 0) { setError('Vui lòng chọn ít nhất 1 ngày hoạt động.'); return }
     setLoading(true)
     try {
       await baiXeApi.capNhat({
@@ -401,15 +404,17 @@ function ThongTinBaiXeModal({ onClose }) {
           <Field label="Tên bãi xe" required>
             <input value={form.ten} onChange={upd('ten')} required maxLength={100} />
           </Field>
-          <Field label="Địa chỉ">
-            <input value={form.dia_chi} onChange={upd('dia_chi')} maxLength={255} />
+          <Field label="Địa chỉ" required>
+            <input value={form.dia_chi} onChange={upd('dia_chi')} required maxLength={255} />
           </Field>
           <Field label="Mô tả">
             <textarea rows={3} value={form.mo_ta} onChange={upd('mo_ta')} style={{ resize: 'vertical' }} />
           </Field>
 
           <div style={{ marginBottom: '1rem' }}>
-            <label className="form-label">Khung giờ hoạt động</label>
+            <label className="form-label">
+              Khung giờ hoạt động<span style={{ color: 'var(--danger)' }}> *</span>
+            </label>
             <ChonNhanhKhungGio form={form} setForm={setForm} />
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <div style={{ flex: 1 }}>
@@ -424,7 +429,9 @@ function ThongTinBaiXeModal({ onClose }) {
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
-            <label className="form-label">Ngày hoạt động</label>
+            <label className="form-label">
+              Ngày hoạt động<span style={{ color: 'var(--danger)' }}> *</span>
+            </label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {[1,2,3,4,5,6,7].map(ngay => (
                 <label key={ngay} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.85rem' }}>
