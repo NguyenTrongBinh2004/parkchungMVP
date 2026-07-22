@@ -1,7 +1,7 @@
 // src/pages/Dashboard.jsx
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { useBaiXe } from '../context/BaiXeContext'
+import { useBaiXe } from '../context/BaiXeContext'   // thêm import
 
 function LogoParkchung({ size = 32 }) {
   return (
@@ -120,8 +120,8 @@ const TABS = [
     label: 'Quản lý',
     icon: '🏷️',
     items: [
-      { label: 'Loại xe & giá', icon: '🏷️', path: '/loai-xe', color: '#f59e0b', adminOnly: true },          // <-- thêm adminOnly
-       { label: 'Quản lý nhân viên', icon: '👥', path: '/nhan-vien', color: '#0ea5e9', adminOnly: true }, 
+      { label: 'Loại xe & giá', icon: '🏷️', path: '/loai-xe', color: '#f59e0b', adminOnly: true },
+      { label: 'Quản lý nhân viên', icon: '👥', path: '/nhan-vien', color: '#0ea5e9', adminOnly: true },
     ],
   },
   {
@@ -150,7 +150,8 @@ const TABS = [
 export default function Dashboard() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { dangXuat, tenBaiXe, laAdmin } = useAuth()   // lấy thêm laAdmin
+  const { dangXuat, laAdmin } = useAuth()                  // bỏ tenBaiXe
+  const { thongTin } = useBaiXe()                          // lấy từ BaiXeContext
 
   // Lọc tab theo quyền: bỏ item adminOnly nếu không phải admin, sau đó ẩn cả tab nếu không còn item nào
   const tabsHienThi = TABS
@@ -219,8 +220,8 @@ export default function Dashboard() {
         {/* Thông tin bãi xe — chỉ hiện ở tab Bảng giữ xe */}
         {activeTab.id === 'ban-gui-xe' && <ThongTinBaiXeCard />}
 
-        {/* Tên bãi xe — chỉ hiện ở tab Người dùng */}
-        {activeTab.id === 'nguoi-dung' && tenBaiXe && (
+        {/* Tên bãi xe — chỉ hiện ở tab Người dùng, dùng dữ liệu từ BaiXeContext */}
+        {activeTab.id === 'nguoi-dung' && thongTin?.ten && (
           <div style={{
             background: 'var(--bg-secondary)', borderRadius: 14,
             padding: '14px 16px', marginBottom: 12,
@@ -230,7 +231,7 @@ export default function Dashboard() {
             <span style={{ fontSize: '1.4rem' }}>🏢</span>
             <div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Bãi xe</div>
-              <div style={{ fontWeight: 700, color: 'var(--text)' }}>{tenBaiXe}</div>
+              <div style={{ fontWeight: 700, color: 'var(--text)' }}>{thongTin.ten}</div>
             </div>
           </div>
         )}
@@ -297,7 +298,7 @@ export default function Dashboard() {
         bottom: 0,
         zIndex: 100,
       }}>
-        {tabsHienThi.map(tab => {   {/* dùng tabsHienThi thay vì TABS */}
+        {tabsHienThi.map(tab => {
           const isActive = tab.id === activeTab.id
           return (
             <button
