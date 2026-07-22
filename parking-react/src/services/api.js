@@ -1,3 +1,4 @@
+// services/api.js
 const BASE = import.meta.env.VITE_API_URL || 'https://parking-mvp-backend.onrender.com';
 console.log('BASE URL:', BASE);
 console.log('ENV:', import.meta.env.VITE_API_URL);
@@ -66,8 +67,8 @@ export const loaiXeApi = {
 export const xeVaoApi = {
   nhanDien: (formData) => request('/xe-vao/nhan-dien/', { method: 'POST', body: formData }),
   kiemTraBienSo: (formData) => request('/xe-vao/kiem-tra-bien-so/', { method: 'POST', body: formData }),
-  xacNhanVeThang: (formData) => request('/xe-vao/ve-thang/xac-nhan/', { method: 'POST', body: formData }),
-  xacNhanThuong: (formData) => request('/xe-vao/ve-thuong/xac-nhan/', { method: 'POST', body: formData }),
+  xacNhanVeThang: (formData) => request('/xe-vao/ve-thang/xac-nhan/', { method: 'POST', headers: authHeader(), body: formData }),
+  xacNhanThuong: (formData) => request('/xe-vao/ve-thuong/xac-nhan/', { method: 'POST', headers: authHeader(), body: formData }),
 }
 
 // ─── Xe ra ───
@@ -79,8 +80,8 @@ export const xeRaApi = {
 
 // ─── Thanh toán ───
 export const thanhToanApi = {
-  xacNhanQR: (maQr, formData) => request(`/thanh-toan/xac-nhan-qr/${maQr}`, { method: 'POST', body: formData }),
-  xacNhanPhiRa: (formData) => request('/thanh-toan/xac-nhan-phi-ra/', { method: 'POST', body: formData }),
+  xacNhanQR: (maQr, formData) => request(`/thanh-toan/xac-nhan-qr/${maQr}`, { method: 'POST', headers: authHeader(), body: formData }),
+  xacNhanPhiRa: (formData) => request('/thanh-toan/xac-nhan-phi-ra/', { method: 'POST', headers: authHeader(), body: formData }),
 }
 
 // ─── Xe trong bãi ───
@@ -96,10 +97,10 @@ export const xeDaRaApi = {
 // ─── Vé tháng ───
 export const veThangApi = {
   list: () => request('/danh-sach-ve-thang/'),
-  dangKy: (formData) => request('/dang-ky-ve-thang/', { method: 'POST', body: formData }),
-  giaHan: (idVe, formData) => request(`/ve-thang/${idVe}/gia-han/`, { method: 'POST', body: formData }),
+  dangKy: (formData) => request('/dang-ky-ve-thang/', { method: 'POST', headers: authHeader(), body: formData }),
+  giaHan: (idVe, formData) => request(`/ve-thang/${idVe}/gia-han/`, { method: 'POST', headers: authHeader(), body: formData }),
   lichSu: (idVe) => request(`/ve-thang/${idVe}/lich-su/`),
-  xoa: (idVe) => request(`/ve-thang/${idVe}`, { method: 'DELETE' }),
+  xoa: (idVe) => request(`/ve-thang/${idVe}`, { method: 'DELETE', headers: authHeader() }),
 };
 
 export const baoCaoApi = {
@@ -109,6 +110,7 @@ export const baoCaoApi = {
     const qs = new URLSearchParams(params).toString()
     return request(`/bao-cao/thong-ke?${qs}`)
   },
+  danhSachNhanVien: () => request('/bao-cao/nhan-vien-list', { headers: authHeader() }),
 }
 
 export const timXeApi = {

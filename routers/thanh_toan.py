@@ -8,12 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, Form
 from database import lay_ket_noi_CSDL
 from models import PhanHoiXeRa, HinhThucThanhToan
 from services.billing_service import BillingService, _co_gia_rieng
+from services.auth_service import lay_nguoi_dung_hien_tai
 from utils import bay_gio_vn
 
 router = APIRouter(prefix="/thanh-toan", tags=["Thanh Toán"])
 
 
-def _cap_nhat_xe_ra(phien: dict, KetNoi, bay_gio: datetime, httt: str | None):
+def _cap_nhat_xe_ra(phien: dict, KetNoi, bay_gio: datetime, httt: str | None, id_nguoi_dung: int):
     gio_vao = phien["gio_vao"]
 
     with KetNoi.cursor(dictionary=True) as cur:
@@ -47,10 +48,11 @@ def _cap_nhat_xe_ra(phien: dict, KetNoi, bay_gio: datetime, httt: str | None):
                    so_tien              = %s,
                    hinh_thuc_thanh_toan = %s,
                    da_thu_tien          = 1,
-                   is_in_bai            = 0
+                   is_in_bai            = 0,
+                   id_nguoi_ra          = %s
              WHERE id = %s
             """,
-            (bay_gio, so_tien, httt, phien["id"]),
+            (bay_gio, so_tien, httt, id_nguoi_dung, phien["id"]),
         )
         KetNoi.commit()
 
@@ -62,6 +64,7 @@ def _cap_nhat_xe_ra(phien: dict, KetNoi, bay_gio: datetime, httt: str | None):
 def thanh_toan_xac_nhan_qr(
     ma_qr: str,
     hinh_thuc_thanh_toan: Optional[HinhThucThanhToan] = Form(None),
+    id_nguoi_dung: int = Depends(lay_nguoi_dung_hien_tai),
     KetNoi=Depends(lay_ket_noi_CSDL),
 ):
     bay_gio = bay_gio_vn()
@@ -84,7 +87,7 @@ def thanh_toan_xac_nhan_qr(
             raise HTTPException(status_code=422, detail="Vui lòng chọn hình thức thanh toán.")
 
         httt = hinh_thuc_thanh_toan.value if hinh_thuc_thanh_toan else None
-        so_tien, so_phut, gio_vao = _cap_nhat_xe_ra(phien, KetNoi, bay_gio, httt)
+        so_tien, so_phut, gio_vao = _cap_nhat_xe_ra(phien, KetNoi, bay_gio, httt, id_nguoi_dung)
 
         return {
             "id": phien["id"],
@@ -110,6 +113,7 @@ def thanh_toan_xac_nhan_qr(
 def xac_nhan_thanh_toan_bien_so(
     id_phien: int = Form(...),
     hinh_thuc_thanh_toan: Optional[HinhThucThanhToan] = Form(None),
+    id_nguoi_dung: int = Depends(lay_nguoi_dung_hien_tai),
     KetNoi=Depends(lay_ket_noi_CSDL),
 ):
     bay_gio = bay_gio_vn()
@@ -132,7 +136,7 @@ def xac_nhan_thanh_toan_bien_so(
             raise HTTPException(status_code=422, detail="Vui lòng chọn hình thức thanh toán.")
 
         httt = hinh_thuc_thanh_toan.value if hinh_thuc_thanh_toan else None
-        so_tien, so_phut, gio_vao = _cap_nhat_xe_ra(phien, KetNoi, bay_gio, httt)
+        so_tien, so_phut, gio_vao = _cap_nhat_xe_ra(phien, KetNoi, bay_gio, httt, id_nguoi_dung)
 
         return {
             "id": phien["id"],

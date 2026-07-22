@@ -13,6 +13,7 @@ from services.qr_service import tao_ma_qr, doc_ma_qr
 from services.ocr import nhan_dien_bien_so
 from services.email_service import gui_email_qr
 from services.sms_service import gui_thong_bao_xe_vao
+from services.auth_service import lay_nguoi_dung_hien_tai               # thêm import
 from utils import (
     VN_TZ, BASE_URL, MAX_IMAGE_SIZE,
     chuan_hoa_bien_so, bay_gio_vn, build_url, luu_anh, tach_bien_so,
@@ -186,6 +187,7 @@ async def xac_nhan_xe_vao_ve_thang(
     ghi_chu: Optional[str] = Form(None),
     anh_bien_so: UploadFile = File(...),
     anh_nguoi_lai: UploadFile = File(None),
+    id_nguoi_dung: int = Depends(lay_nguoi_dung_hien_tai),   # thêm id người dùng
     KetNoi=Depends(lay_ket_noi_CSDL)
 ):
     bay_gio = bay_gio_vn()
@@ -238,15 +240,16 @@ async def xac_nhan_xe_vao_ve_thang(
                     INSERT INTO phien_gui_xe
                     (ma_phien, bien_so, duoi_bien_so, id_loai_xe, id_khach_hang,
                      id_ve_thang, ma_qr, duong_dan_anh_bien_so, duong_dan_anh_nguoi_lai,
-                     gio_vao, so_tien, cho_phep_lay_ho, is_in_bai)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)
+                     gio_vao, so_tien, cho_phep_lay_ho, id_nguoi_vao, is_in_bai)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)
                 """, (
                     ma_phien, bien_so, duoi_bien_so,
                     ve_thang["id_loai_xe"], ve_thang["id_khach_hang"],
                     ve_thang["id"], ma_qr_moi,
                     duong_dan_bien_so, duong_dan_nguoi_lai,
                     bay_gio, 0,
-                    int(ve_thang.get("cho_phep_lay_ho", 0))
+                    int(ve_thang.get("cho_phep_lay_ho", 0)),
+                    id_nguoi_dung                                    # thêm giá trị
                 ))
                 id_moi = ConTro.lastrowid
                 KetNoi.commit()
@@ -299,6 +302,7 @@ async def xac_nhan_xe_vao_ve_thuong(
     cho_phep_lay_ho: bool = Form(False),
     anh_bien_so: Optional[UploadFile] = File(None),
     anh_nguoi_lai: Optional[UploadFile] = File(None),
+    id_nguoi_dung: int = Depends(lay_nguoi_dung_hien_tai),   # thêm id người dùng
     KetNoi=Depends(lay_ket_noi_CSDL)
 ):
     sdt   = sdt.strip()   if sdt   else None
@@ -414,12 +418,12 @@ async def xac_nhan_xe_vao_ve_thuong(
                 INSERT INTO phien_gui_xe
                 (ma_phien, bien_so, duoi_bien_so, id_loai_xe, id_khach_hang,
                  duong_dan_anh_bien_so, duong_dan_anh_nguoi_lai, gio_vao, ghi_chu,
-                 cho_phep_lay_ho, ma_qr, is_in_bai)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)
+                 cho_phep_lay_ho, ma_qr, id_nguoi_vao, is_in_bai)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)
             """, (
                 ma_phien, bien_so_goc, duoi_bien_so, id_loai_xe, id_khach_hang,
                 duong_dan_bien_so, duong_dan_nguoi_lai, bay_gio, ghi_chu,
-                int(cho_phep_lay_ho), ma_qr
+                int(cho_phep_lay_ho), ma_qr, id_nguoi_dung             # thêm giá trị
             ))
             id_moi = ConTro.lastrowid
             KetNoi.commit()

@@ -10,6 +10,7 @@ from models import PhanHoiVeThang
 from services.qr_service import tao_ma_qr
 from services.email_service import gui_email_qr
 from services.sms_service import gui_thong_bao_ve_thang
+from services.auth_service import lay_nguoi_dung_hien_tai
 from utils import (
     bay_gio_vn, build_url, chuan_hoa_bien_so,
     tinh_trang_thai, luu_anh, is_valid_bien_so
@@ -58,6 +59,7 @@ async def dang_ky_ve_thang(
     cho_phep_lay_ho: bool = Form(False),
     anh_bien_so: UploadFile = File(None),
     anh_nguoi_dung: UploadFile = File(None),
+    id_nguoi_dung: int = Depends(lay_nguoi_dung_hien_tai),
     KetNoi=Depends(lay_ket_noi_CSDL),
 ):
     sdt   = sdt.strip()   if sdt   else None
@@ -210,10 +212,10 @@ async def dang_ky_ve_thang(
             cur.execute(
                 """
                 INSERT INTO lich_su_ve_thang
-                (id_ve_thang, loai, ngay_thuc_hien, ngay_het_han_cu, ngay_het_han_moi, so_tien, ghi_chu)
-                VALUES (%s,'dang_ky_moi',%s,NULL,%s,%s,%s)
+                (id_ve_thang, loai, ngay_thuc_hien, ngay_het_han_cu, ngay_het_han_moi, so_tien, ghi_chu, id_nguoi_thuc_hien)
+                VALUES (%s,'dang_ky_moi',%s,NULL,%s,%s,%s,%s)
                 """,
-                (id_ve, hom_nay, ngay_het_han, so_tien, ghi_chu),
+                (id_ve, hom_nay, ngay_het_han, so_tien, ghi_chu, id_nguoi_dung),
             )
 
             KetNoi.commit()
@@ -254,11 +256,12 @@ async def dang_ky_ve_thang(
         raise
 
 
-# ── Gia hạn vé tháng (ĐÃ XÓA QUERY THỪA) ─────────────────────
+# ── Gia hạn vé tháng ──────────────────────────────────────────
 @router.post("/ve-thang/{id_ve}/gia-han/")
 async def gia_han_ve_thang(
     id_ve: int,
     ghi_chu: Optional[str] = Form(None),
+    id_nguoi_dung: int = Depends(lay_nguoi_dung_hien_tai),
     KetNoi=Depends(lay_ket_noi_CSDL),
 ):
     hom_nay = date.today()
@@ -298,10 +301,10 @@ async def gia_han_ve_thang(
             cur.execute(
                 """
                 INSERT INTO lich_su_ve_thang
-                (id_ve_thang, loai, ngay_thuc_hien, ngay_het_han_cu, ngay_het_han_moi, so_tien, ghi_chu)
-                VALUES (%s,'gia_han',%s,%s,%s,%s,%s)
+                (id_ve_thang, loai, ngay_thuc_hien, ngay_het_han_cu, ngay_het_han_moi, so_tien, ghi_chu, id_nguoi_thuc_hien)
+                VALUES (%s,'gia_han',%s,%s,%s,%s,%s,%s)
                 """,
-                (id_ve, hom_nay, ngay_het_han_cu, ngay_het_han_moi, so_tien, ghi_chu),
+                (id_ve, hom_nay, ngay_het_han_cu, ngay_het_han_moi, so_tien, ghi_chu, id_nguoi_dung),
             )
             KetNoi.commit()
 

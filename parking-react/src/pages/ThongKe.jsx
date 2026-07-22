@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { PageLayout, Spinner, Alert } from '../components/UI'
 import { baoCaoApi } from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 const formatVND = (v) => {
   if (v === undefined || v === null) return '0 đ';
@@ -16,16 +17,33 @@ const CHE_DO = [
 ]
 
 export default function ThongKe() {
+  const { laAdmin } = useAuth()
   const [loai, setLoai] = useState('hom_nay')
+  const [idNhanVien, setIdNhanVien] = useState('')   // '' = tất cả
+  const [dsNhanVien, setDsNhanVien] = useState([])
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+
+  // Tải danh sách nhân viên để lọc (chỉ admin)
+  useEffect(() => {
+    if (!laAdmin) return
+    (async () => {
+      try {
+        const list = await baoCaoApi.danhSachNhanVien()
+        setDsNhanVien(list)
+      } catch {
+        // im lặng bỏ qua — không chặn trang thống kê nếu lỗi
+      }
+    })()
+  }, [laAdmin])
 
   const fetchData = async () => {
     setLoading(true)
     setError(null)
     try {
       const params = { loai }
+      if (idNhanVien) params.id_nhan_vien = idNhanVien
       const res = await baoCaoApi.thongKe(params)
       setData(res)
     } catch (err) {
@@ -37,13 +55,13 @@ export default function ThongKe() {
 
   useEffect(() => {
     fetchData()
-  }, [loai])
+  }, [loai, idNhanVien])
 
   return (
     <PageLayout title="📊 Thống kê" backTo="/#bai-xe">
       {/* Nút chọn chế độ */}
       <div style={{
-        display: 'flex', justifyContent: 'center', gap: 10, marginBottom: 28,
+        display: 'flex', justifyContent: 'center', gap: 10, marginBottom: 20,
         flexWrap: 'wrap'
       }}>
         {CHE_DO.map(cd => (
@@ -57,7 +75,6 @@ export default function ThongKe() {
               borderRadius: 40,
               border: cd.key === loai ? '2px solid var(--accent)' : '2px solid var(--border)',
               background: cd.key === loai ? 'var(--accent)' : 'transparent',
-              // Fix tương phản: chữ tối đậm trên nền accent, thay vì trắng
               color: cd.key === loai ? '#1e293b' : 'var(--text)',
               cursor: 'pointer',
               transition: 'all 0.2s',
@@ -69,12 +86,40 @@ export default function ThongKe() {
         ))}
       </div>
 
+      {/* Bộ lọc theo nhân viên — chỉ admin thấy */}
+      {laAdmin && dsNhanVien.length > 0 && (
+        <div style={{ maxWidth: 320, margin: '0 auto 24px' }}>
+          <label style={{
+            display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)',
+            marginBottom: 6, textAlign: 'center',
+          }}>
+            👤 Xem theo nhân viên
+          </label>
+          <select
+            value={idNhanVien}
+            onChange={(e) => setIdNhanVien(e.target.value)}
+            style={{
+              width: '100%', padding: '10px 12px', borderRadius: 10,
+              border: '1px solid var(--border)', background: 'var(--bg-secondary)',
+              color: 'var(--text)', fontSize: '0.92rem',
+            }}
+          >
+            <option value="">Tất cả</option>
+            {dsNhanVien.map(nv => (
+              <option key={nv.id} value={nv.id}>
+                {nv.ho_ten || nv.sdt} {nv.vai_tro === 'admin' ? '(chủ bãi)' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {loading && <Spinner />}
       {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
 
       {data && (
         <>
-          {/* KHỐI 1: TỔNG TIỀN THU — nổi bật nhất, tách riêng hoàn toàn khỏi số lượng xe */}
+          {/* KHỐI 1: TỔNG TIỀN THU */}
           <div style={{
             maxWidth: 480, margin: '0 auto 20px', background: '#14532d',
             borderRadius: 24, padding: '32px 24px', textAlign: 'center',
@@ -88,7 +133,7 @@ export default function ThongKe() {
             </div>
           </div>
 
-          {/* KHỐI 2: 2 thẻ chi tiết tiền — có ghi chú khi bằng 0 để tránh hiểu lầm */}
+          {/* KHỐI 2 */}
           <div style={{
             display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 32,
             flexWrap: 'wrap'
@@ -130,7 +175,7 @@ export default function ThongKe() {
             </div>
           </div>
 
-          {/* KHỐI 3: Số lượng xe — tách hẳn khỏi tiền, nhỏ hơn, để không gây nhầm "0 xe / có tiền" */}
+          {/* KHỐI 3 */}
           <div style={{
             display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 32,
             flexWrap: 'wrap'
