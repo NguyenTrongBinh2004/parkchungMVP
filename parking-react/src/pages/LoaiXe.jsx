@@ -281,11 +281,138 @@ function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
   )
 }
 
-// ─── Card loại xe ──────────────────────────────────────────────────
-function LoaiXeCard({ lx, onXoa }) {
-  const giaVeThang = lx.gia_ve_thang ? `· Vé tháng ${Number(lx.gia_ve_thang).toLocaleString('vi-VN')}đ` : ''
+// ─── Modal sửa giá loại xe ───────────────────────────────────────
+function SuaLoaiXeModal({ lx, onClose, onSuccess }) {
+  const { refetchLoaiXe } = useLoaiXe()
+  const [kieu, setKieu] = useState(lx.kieu_tinh_gia || 'theo_luot')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const [form, setForm] = useState({
+    gia_luot: lx.gia_luot ?? '',
+    gia_ngay: lx.gia_ngay ?? '',
+    gia_dem: lx.gia_dem ?? '',
+    gia_ngay_dem: lx.gia_ngay_dem ?? '',
+    gia_ve_thang: lx.gia_ve_thang ?? '',
+  })
+
+  const cfgGoc = (() => {
+    let cfg = lx.cau_hinh_theo_gio
+    if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg) } catch { cfg = [] } }
+    return Array.isArray(cfg) ? cfg : []
+  })()
+  const mocGoc = cfgGoc.filter(b => b.den_gio !== undefined).map(b => ({ tuGio: b.tu_gio, denGio: b.den_gio, gia: b.gia }))
+  const tiepGoc = cfgGoc.find(b => b.moi_gio_tiep !== undefined)?.moi_gio_tiep ?? ''
+
+  const [bangGio, setBangGio] = useState(mocGoc.length ? mocGoc : [{ tuGio: 1, denGio: 2, gia: '' }])
+  const [giaMoiGioTiep, setGiaMoiGioTiep] = useState(tiepGoc)
+
+  const upd = (f) => (e) => setForm(v => ({ ...v, [f]: e.target.value }))
+  const themDong = () => { const last = bangGio[bangGio.length - 1]; setBangGio([...bangGio, { tuGio: last.denGio + 1, denGio: last.denGio + 2, gia: '' }]) }
+  const xoaDong = (idx) => { if (bangGio.length > 1) setBangGio(bangGio.filter((_, i) => i !== idx)) }
+  const updateDong = (idx, field, value) => { const arr = [...bangGio]; arr[idx][field] = value; setBangGio(arr) }
+  const buildJsonGio = () => {
+    const arr = bangGio.map(d => ({ tu_gio: Number(d.tuGio), den_gio: Number(d.denGio), gia: Number(d.gia) }))
+    if (giaMoiGioTiep) arr.push({ moi_gio_tiep: Number(giaMoiGioTiep) })
+    return JSON.stringify(arr)
+  }
+
+  async function submit(e) {
+    e.preventDefault()
+    if (kieu === 'theo_gio' && !bangGio.some(d => d.gia)) { setError('Vui lòng nhập ít nhất một mốc giờ với giá.'); return }
+    setLoading(true); setError(null)
+    const fd = new FormData()
+    fd.append('kieu_tinh_gia', kieu)
+    if (kieu === 'theo_luot') fd.append('gia_luot', form.gia_luot || 0)
+    else if (kieu === 'theo_gio') fd.append('cau_hinh_theo_gio', buildJsonGio())
+    else if (kieu === 'theo_ngay_dem') {
+      fd.append('gia_ngay', form.gia_ngay || 0); fd.append('gia_dem', form.gia_dem || 0); fd.append('gia_ngay_dem', form.gia_ngay_dem || 0)
+    }
+    if (form.gia_ve_thang) fd.append('gia_ve_thang', form.gia_ve_thang)
+    try {
+      await loaiXeApi.update(lx.id, fd)
+      await refetchLoaiXe(true)
+      onSuccess()
+    } catch (err) { setError(err.message) } finally { setLoading(false) }
+  }
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.6rem 0', borderBottom: '1px solid var(--border)' }}>
+    <Modal onClose={onClose} title={`✏️ Sửa giá — ${lx.ten}`}>
+      <form onSubmit={submit}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, marginBottom: '1rem',
+          padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)',
+        }}>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: lx.mau_sac || '#FFD700', flexShrink: 0 }} />
+          <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{lx.ten}</span>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>Không đổi được tên/nhóm ở đây</span>
+        </div>
+
+        <Field label="Kiểu tính giá">
+          <select value={kieu} onChange={e => setKieu(e.target.value)}>
+            <option value="theo_luot">Theo lượt</option>
+            <option value="theo_gio">Theo giờ</option>
+            <option value="theo_ngay_dem">Theo ngày / đêm</option>
+          </select>
+        </Field>
+        {kieu === 'theo_luot' && <Field label="Giá mỗi lượt (VNĐ)" required><input type="number" value={form.gia_luot} onChange={upd('gia_luot')} min="0" step="1000" required /></Field>}
+        {kieu === 'theo_ngay_dem' && (
+          <>
+            <Field label="Giá ban ngày (đ)" required><input type="number" value={form.gia_ngay} onChange={upd('gia_ngay')} min="0" step="1000" required /></Field>
+            <Field label="Giá ban đêm (đ)" required><input type="number" value={form.gia_dem} onChange={upd('gia_dem')} min="0" step="1000" required /></Field>
+            <Field label="Giá qua đêm (đ)" required><input type="number" value={form.gia_ngay_dem} onChange={upd('gia_ngay_dem')} min="0" step="1000" required /></Field>
+          </>
+        )}
+        {kieu === 'theo_gio' && (
+          <Field label="Cấu hình giá theo giờ">
+            <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 6, padding: 10 }}>
+              {bangGio.map((dong, idx) => (
+                <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+                  <span>Từ giờ</span>
+                  <input type="number" value={dong.tuGio} style={{ width: 50 }} onChange={e => updateDong(idx, 'tuGio', Number(e.target.value))} />
+                  <span>đến</span>
+                  <input type="number" value={dong.denGio} style={{ width: 50 }} onChange={e => updateDong(idx, 'denGio', Number(e.target.value))} />
+                  <input type="number" value={dong.gia} style={{ width: 90 }} placeholder="VNĐ" onChange={e => updateDong(idx, 'gia', e.target.value)} />
+                  {bangGio.length > 1 && <button type="button" onClick={() => xoaDong(idx)}>Xóa</button>}
+                </div>
+              ))}
+              <button type="button" onClick={themDong} className="btn btn-sm btn-outline">+ Thêm mốc giờ</button>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <label style={{ fontSize: '0.82rem' }}>Mỗi giờ tiếp theo</label>
+              <input type="number" value={giaMoiGioTiep} onChange={e => setGiaMoiGioTiep(e.target.value)} min="0" step="1000" style={{ width: '100%', marginTop: 4 }} />
+            </div>
+          </Field>
+        )}
+        <Field label="Giá vé tháng (đ) — để trống nếu không có">
+          <input type="number" value={form.gia_ve_thang} onChange={upd('gia_ve_thang')} min="0" step="10000" placeholder="Không bắt buộc" />
+        </Field>
+        {error && <Alert type="danger">{error}</Alert>}
+        <button type="submit" className="btn btn-accent" style={{ marginTop: '1rem' }} disabled={loading}>
+          {loading ? 'Đang lưu...' : '✓ Lưu thay đổi'}
+        </button>
+      </form>
+    </Modal>
+  )
+}
+
+// ─── Card loại xe (hỗ trợ chế độ chọn) ─────────────────────────
+function LoaiXeCard({ lx, mode, onSelect }) {
+  const giaVeThang = lx.gia_ve_thang ? `· Vé tháng ${Number(lx.gia_ve_thang).toLocaleString('vi-VN')}đ` : ''
+  const chonDuoc = mode === 'sua' || mode === 'xoa'
+
+  return (
+    <div
+      onClick={chonDuoc ? () => onSelect(lx) : undefined}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10, padding: '0.6rem 0.4rem',
+        borderBottom: '1px solid var(--border)',
+        cursor: chonDuoc ? 'pointer' : 'default',
+        borderRadius: chonDuoc ? 8 : 0,
+        background: chonDuoc ? (mode === 'xoa' ? 'rgba(239,68,68,0.06)' : 'rgba(255,215,0,0.06)') : 'transparent',
+        transition: 'background 0.12s',
+      }}
+    >
       <span style={{ width: 10, height: 10, borderRadius: '50%', background: lx.mau_sac || '#FFD700', flexShrink: 0 }} />
       <div style={{ flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -296,14 +423,18 @@ function LoaiXeCard({ lx, onXoa }) {
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span className="badge badge-gray" style={{ fontSize: '0.62rem' }}>{KIEU_LABEL[lx.kieu_tinh_gia]}</span>
-        <button onClick={() => onXoa(lx.id, lx.ten)} style={{ background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)', padding: '2px 8px', borderRadius: 4 }}>Ẩn</button>
+        {chonDuoc && (
+          <span style={{ fontSize: '0.75rem', color: mode === 'xoa' ? 'var(--danger)' : 'var(--accent)' }}>
+            {mode === 'xoa' ? '🗑️' : '✏️'}
+          </span>
+        )}
       </div>
     </div>
   )
 }
 
 // ─── Card nhóm xe ─────────────────────────────────────────────────
-function NhomXeCard({ nhom, loaiXeList, nhomGia, sucChua, onXoa, onXoaDongGia, onLuuSoCho, isOpen, onToggle }) {
+function NhomXeCard({ nhom, loaiXeList, nhomGia, sucChua, onXoa, onXoaDongGia, onLuuSoCho, isOpen, onToggle, mode, onSelectLoaiXe }) {
   const loaiTrongNhom = loaiXeList.filter(lx => 
     lx.nhom_xe_id === nhom.id && lx.co_gia && 
     !(lx.gia_luot === 0 && lx.ten && lx.ten.includes('(đồng giá)'))
@@ -382,50 +513,10 @@ function NhomXeCard({ nhom, loaiXeList, nhomGia, sucChua, onXoa, onXoaDongGia, o
               </button>
             </div>
           )}
-          {loaiTrongNhom.map(lx => <LoaiXeCard key={lx.id} lx={lx} onXoa={onXoa} />)}
+          {loaiTrongNhom.map(lx => (
+            <LoaiXeCard key={lx.id} lx={lx} mode={mode} onSelect={onSelectLoaiXe} />
+          ))}
         </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Hàng sức chứa 1 nhóm (nhập/sửa số chỗ) ────────────────────
-function SucChuaRow({ nhom, data, onSave, saving }) {
-  const [value, setValue] = useState(data?.so_cho ?? '')
-  const [dirty, setDirty] = useState(false)
-
-  const daDung = data?.da_dung ?? 0
-  const soCho = data?.so_cho
-  const conTrong = data?.con_trong
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.6rem 0', borderBottom: '1px solid var(--border)' }}>
-      <span style={{ fontSize: '1.1rem' }}>{NHOM_ICON[nhom.id] || '🚘'}</span>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{nhom.ten}</div>
-        <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-          {soCho != null
-            ? `Đang dùng ${daDung}/${soCho} · Còn trống ${conTrong}`
-            : `Đang có ${daDung} xe · Chưa giới hạn sức chứa`}
-        </div>
-      </div>
-      <input
-        type="number"
-        min="0"
-        placeholder="Số chỗ"
-        value={value}
-        onChange={e => { setValue(e.target.value); setDirty(true) }}
-        style={{ width: 90 }}
-      />
-      {dirty && (
-        <button
-          className="btn btn-accent btn-sm"
-          disabled={saving}
-          onClick={() => { onSave(nhom.id, value === '' ? null : Number(value)); setDirty(false) }}
-          style={{ width: 'auto', whiteSpace: 'nowrap' }}
-        >
-          Lưu
-        </button>
       )}
     </div>
   )
@@ -438,6 +529,10 @@ export default function LoaiXe() {
   const [showModal, setShowModal] = useState(false)
   const [openNhomId, setOpenNhomId] = useState(null)
   const [dongGiaNhom, setDongGiaNhom] = useState(null)
+
+  // Chế độ chọn: null | 'sua' | 'xoa'
+  const [mode, setMode] = useState(null)
+  const [suaLx, setSuaLx] = useState(null)
 
   // State & logic cho sức chứa
   const [sucChuaList, setSucChuaList] = useState([])
@@ -537,6 +632,17 @@ export default function LoaiXe() {
 
   const handleDongGia = (nhom) => { setShowModal(false); setDongGiaNhom(nhom) }
 
+  // Xử lý khi bấm vào 1 dòng loại xe trong lúc đang ở chế độ chọn
+  function handleSelectLoaiXe(lx) {
+    if (mode === 'sua') {
+      setSuaLx(lx)
+      setMode(null)
+    } else if (mode === 'xoa') {
+      handleXoa(lx.id, lx.ten)
+      // Giữ nguyên mode 'xoa' để có thể xóa tiếp nhiều loại xe liên tiếp
+    }
+  }
+
   return (
     <PageLayout title="🏷️ Loại xe" backTo="/#quan-ly">
       {!dataLoading && stats.totalXe > 0 && (
@@ -546,6 +652,65 @@ export default function LoaiXe() {
           <span>⚙️ {stats.customCount} tùy chỉnh</span>
         </div>
       )}
+
+      {/* ── Thanh thao tác chính: Thêm / Sửa / Xóa ── */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+        <button
+          className="btn btn-accent btn-sm"
+          style={{ flex: 1, minWidth: 110 }}
+          onClick={() => setShowModal(true)}
+          disabled={allNhomList.length === 0 || dataLoading || mode !== null}
+        >
+          + Thêm
+        </button>
+        <button
+          className="btn btn-sm"
+          style={{
+            flex: 1, minWidth: 110,
+            background: mode === 'sua' ? 'var(--accent)' : 'transparent',
+            border: '1px solid var(--accent)',
+            color: mode === 'sua' ? '#1e293b' : 'var(--accent)',
+          }}
+          onClick={() => setMode(mode === 'sua' ? null : 'sua')}
+          disabled={dataLoading}
+        >
+          ✏️ Sửa
+        </button>
+        <button
+          className="btn btn-sm"
+          style={{
+            flex: 1, minWidth: 110,
+            background: mode === 'xoa' ? 'var(--danger)' : 'transparent',
+            border: '1px solid var(--danger)',
+            color: mode === 'xoa' ? '#fff' : 'var(--danger)',
+          }}
+          onClick={() => setMode(mode === 'xoa' ? null : 'xoa')}
+          disabled={dataLoading}
+        >
+          🗑️ Xóa
+        </button>
+      </div>
+
+      {/* ── Banner hướng dẫn khi đang ở chế độ chọn ── */}
+      {mode && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+          padding: '0.6rem 0.9rem', borderRadius: 10, marginBottom: 14,
+          background: mode === 'xoa' ? 'rgba(239,68,68,0.1)' : 'rgba(255,215,0,0.1)',
+          border: `1px solid ${mode === 'xoa' ? 'var(--danger)' : 'var(--accent)'}`,
+        }}>
+          <span style={{ fontSize: '0.85rem' }}>
+            {mode === 'sua' ? '✏️ Bấm vào loại xe muốn sửa giá' : '🗑️ Bấm vào loại xe muốn ẩn/xóa'}
+          </span>
+          <button
+            onClick={() => setMode(null)}
+            style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}
+          >
+            Xong
+          </button>
+        </div>
+      )}
+
       {dataLoading && <Spinner />}
       {error && <Alert type="danger" onClose={() => setError(null)}>{error}</Alert>}
 
@@ -561,6 +726,8 @@ export default function LoaiXe() {
           onLuuSoCho={handleLuuSoCho}
           isOpen={openNhomId === nhom.id}
           onToggle={() => toggleNhom(nhom.id)}
+          mode={mode}
+          onSelectLoaiXe={handleSelectLoaiXe}
         />
       ))}
       {!dataLoading && filteredList.length === 0 && Object.keys(nhomGiaMap).length === 0 && (
@@ -568,18 +735,21 @@ export default function LoaiXe() {
           Chưa có loại xe nào được cấu hình giá...
         </p>
       )}
-      <button className="btn btn-accent" style={{ marginTop: '0.75rem' }} onClick={() => setShowModal(true)} disabled={allNhomList.length === 0 || dataLoading}>
-        + Thêm loại xe tùy chỉnh
-      </button>
-      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.6rem' }}>
-        💡 Chỉ những loại xe đã được thiết lập giá mới hiển thị bên trên...
-      </p>
+
       {showModal && allNhomList.length > 0 && (
         <ThemLoaiXeModal
           nhomList={allNhomList}
           onClose={() => setShowModal(false)}
           onSuccess={() => { setShowModal(false); }}
           onDongGia={handleDongGia}
+        />
+      )}
+
+      {suaLx && (
+        <SuaLoaiXeModal
+          lx={suaLx}
+          onClose={() => setSuaLx(null)}
+          onSuccess={() => setSuaLx(null)}
         />
       )}
 
