@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { PageLayout, Spinner, Alert, fmtDt, fmtTien } from '../components/UI'
 import { xeTrongBaiApi } from '../services/api'
 import SuaXeModal from '../components/SuaXeModal'
+import ChiTietXeModal from '../components/ChiTietXeModal'
 
 function AnhBienSo({ src }) {
   if (src) {
@@ -55,6 +56,7 @@ export default function DanhSach() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [suaPhienId, setSuaPhienId] = useState(null)
+  const [xemChiTiet, setXemChiTiet] = useState(null) // ← xe đang được xem chi tiết
 
   async function fetchData() {
     setLoading(true)
@@ -69,9 +71,9 @@ export default function DanhSach() {
   }
 
   useEffect(() => {
-    fetchData()                           // lấy dữ liệu lần đầu
-    const timer = setInterval(fetchData, 30000) // tự động làm mới mỗi 30 giây
-    return () => clearInterval(timer)      // cleanup khi component unmount
+    fetchData()
+    const timer = setInterval(fetchData, 30000)
+    return () => clearInterval(timer)
   }, [])
 
   return (
@@ -92,7 +94,12 @@ export default function DanhSach() {
       )}
 
       {list.map(xe => (
-        <div key={xe.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+        <div
+          key={xe.id}
+          className="card"
+          style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, cursor: 'pointer' }}
+          onClick={() => setXemChiTiet(xe)}
+        >
           <AnhBienSo src={xe.anh_bien_so} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '1.1rem' }}>{xe.bien_so}</div>
@@ -102,19 +109,18 @@ export default function DanhSach() {
               Tạm tính: <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{fmtTien(xe.so_tien_tam_tinh)}</span>
             </div>
             {xe.la_xe_ve_thang && <span className="badge badge-info" style={{ marginTop: 4 }}>Vé tháng</span>}
-            <div style={{ marginTop: 6 }}>
-              <button
-                className="btn btn-outline btn-sm"
-                style={{ width: 'auto' }}
-                onClick={() => setSuaPhienId(xe.id)}
-              >
-                ✏️ Sửa
-              </button>
-            </div>
           </div>
           <AnhNguoiLai src={xe.anh_nguoi_lai} />
         </div>
       ))}
+
+      {xemChiTiet && (
+        <ChiTietXeModal
+          xe={xemChiTiet}
+          onClose={() => setXemChiTiet(null)}
+          onSua={(id) => { setXemChiTiet(null); setSuaPhienId(id) }}
+        />
+      )}
 
       {suaPhienId && (
         <SuaXeModal
