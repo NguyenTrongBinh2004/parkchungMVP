@@ -83,6 +83,40 @@ function fmtThoiGianGui(phut) {
   return `${phut} phút${parts.length ? ` (${parts.join(' ')})` : ''}`
 }
 
+// ─── Chọn kiểu giá khi cần (phiên cũ chưa được gán lúc xe vào) ──
+function KieuGiaPicker({ xe, value, onChange }) {
+  if (!xe || !xe.yeu_cau_chon_kieu) return null
+
+  const options = [
+    xe.co_gia_luot && { key: 'theo_luot', label: 'Theo lượt' },
+    xe.co_gia_gio && { key: 'theo_gio', label: 'Theo giờ' },
+    xe.co_gia_ngay_dem && { key: 'theo_ngay_dem', label: 'Theo ngày/đêm' },
+  ].filter(Boolean)
+
+  return (
+    <div style={{
+      margin: '0.75rem 0', padding: '0.75rem 0.9rem', borderRadius: 10,
+      background: 'rgba(255,215,0,0.08)', border: '1px solid var(--accent)',
+    }}>
+      <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: 8 }}>
+        ⚖️ Xe này có nhiều kiểu giá — chọn kiểu áp dụng để tính tiền
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {options.map(opt => (
+          <button
+            key={opt.key}
+            type="button"
+            className={`btn btn-sm ${value === opt.key ? 'btn-accent' : 'btn-outline'}`}
+            onClick={() => onChange(opt.key)}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Component hiển thị đầy đủ thông tin xe ─────────────────
 function XeInfo({ xe }) {
   const thoiGianGui = xe.thoi_gian_gui_phut != null
@@ -105,6 +139,11 @@ function XeInfo({ xe }) {
         <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>
           {fmtTien(xe.so_tien_tam_tinh)}
         </span>
+        {xe.yeu_cau_chon_kieu && (
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: 6 }}>
+            (sẽ tính lại theo kiểu giá bạn chọn bên dưới)
+          </span>
+        )}
       </p>
       {xe.ghi_chu && (
         <p><strong>Ghi chú:</strong> <span style={{ color: 'var(--info)' }}>{xe.ghi_chu}</span></p>
@@ -137,7 +176,8 @@ function SmartPanel({ onChuyenTabBienSo }) {
 
   const [htttQR, setHtttQR] = useState('tien_mat')
   const [bienSoText, setBienSoText] = useState('')
-  const [fileScan, setFileScan] = useState(null)   // ảnh đã chọn
+  const [fileScan, setFileScan] = useState(null)
+  const [kieuTinhGia, setKieuTinhGia] = useState('')
 
   async function handleFile(file) {
     if (!file) return
@@ -147,6 +187,7 @@ function SmartPanel({ onChuyenTabBienSo }) {
     setResult(null)
     setSuccess(false)
     setBienSoText('')
+    setKieuTinhGia('')
 
     try {
       const compressed = await compressImage(file)
@@ -166,14 +207,20 @@ function SmartPanel({ onChuyenTabBienSo }) {
 
   async function thanhToanQR() {
     if (!result?.ma_qr) return
+    if (result.yeu_cau_chon_kieu && !kieuTinhGia) {
+      setError('Vui lòng chọn kiểu tính giá áp dụng.')
+      return
+    }
     const fd = new FormData()
     fd.append('hinh_thuc_thanh_toan', htttQR)
+    if (kieuTinhGia) fd.append('kieu_tinh_gia', kieuTinhGia)
     setLoading(true)
     try {
       await thanhToanApi.xacNhanQR(result.ma_qr, fd)
       setSuccess(true)
       setResult(null)
       setFileScan(null)
+      setKieuTinhGia('')
       setResetKey(k => k + 1)
     } catch (err) {
       setError(err.message)
@@ -182,23 +229,23 @@ function SmartPanel({ onChuyenTabBienSo }) {
     }
   }
 
-function xacNhanBienSo() {
-  const raw = bienSoText.trim()
-  if (!raw) {
-    setError('Vui lòng nhập biển số')
-    return
+  function xacNhanBienSo() {
+    const raw = bienSoText.trim()
+    if (!raw) {
+      setError('Vui lòng nhập biển số')
+      return
+    }
+
+    const cleaned = chuanHoaBienSo(raw)
+    if (!isMaTuSinhXeDap(cleaned) && !isValidBienSo(cleaned)) {
+      setError('Biển số không đúng định dạng (VD: 51F-123.45)')
+      return
+    }
+
+    setBienSoText(cleaned)
+    onChuyenTabBienSo(cleaned)
   }
 
-  const cleaned = chuanHoaBienSo(raw)
-  // Cho phép mã XD... (xe không biển số) bỏ qua kiểm tra định dạng biển số thông thường
-  if (!isMaTuSinhXeDap(cleaned) && !isValidBienSo(cleaned)) {
-    setError('Biển số không đúng định dạng (VD: 51F-123.45)')
-    return
-  }
-
-  setBienSoText(cleaned) // hiển thị lại biển số đã chuẩn hóa
-  onChuyenTabBienSo(cleaned) // chuyển sang tab Biển số với biển đã chuẩn hóa
-}
   return (
     <div className="card">
       <ImagePicker
@@ -215,6 +262,7 @@ function xacNhanBienSo() {
       {result?.loai === 'qr' && (
         <>
           <XeInfo xe={result} />
+          <KieuGiaPicker xe={result} value={kieuTinhGia} onChange={setKieuTinhGia} />
           <HinhThucSelect id="smart-httt-qr" value={htttQR} onChange={e => setHtttQR(e.target.value)} />
           <button className="btn btn-accent" onClick={thanhToanQR} disabled={loading}>
             Xác nhận thanh toán
@@ -261,6 +309,7 @@ function BienSoPanel({ bienSoMacDinh }) {
   const [nhieu, setNhieu] = useState(null)
   const [httt, setHttt] = useState('tien_mat')
   const [success, setSuccess] = useState(false)
+  const [kieuTinhGia, setKieuTinhGia] = useState('')
 
   useEffect(() => {
     if (bienSoMacDinh && bienSoMacDinh.trim()) {
@@ -274,19 +323,19 @@ function BienSoPanel({ bienSoMacDinh }) {
     if (!raw) return
 
     const cleaned = chuanHoaBienSo(raw)
-    // Cho phép mã XD... (xe không biển số) bỏ qua kiểm tra định dạng biển số
     if (!isMaTuSinhXeDap(cleaned) && !isValidBienSo(cleaned)) {
       setError('Biển số không đúng định dạng (VD: 51F-123.45)')
       return
     }
 
-    setBienSo(cleaned) // hiển thị lại biển số đã chuẩn hóa
+    setBienSo(cleaned)
 
     setLoading(true)
     setError(null)
     setXe(null)
     setNhieu(null)
     setSuccess(false)
+    setKieuTinhGia('')
 
     const fd = new FormData()
     fd.append('bien_so', cleaned)
@@ -308,9 +357,14 @@ function BienSoPanel({ bienSoMacDinh }) {
   }
 
   async function thanhToan(xeData) {
+    if (xeData.yeu_cau_chon_kieu && !kieuTinhGia) {
+      setError('Vui lòng chọn kiểu tính giá áp dụng.')
+      return
+    }
     const fd = new FormData()
     fd.append('id_phien', xeData.id)
     fd.append('hinh_thuc_thanh_toan', httt)
+    if (kieuTinhGia) fd.append('kieu_tinh_gia', kieuTinhGia)
     setLoading(true)
     try {
       await thanhToanApi.xacNhanPhiRa(fd)
@@ -318,6 +372,7 @@ function BienSoPanel({ bienSoMacDinh }) {
       setXe(null)
       setNhieu(null)
       setBienSo('')
+      setKieuTinhGia('')
     } catch (err) {
       setError(err.message)
     } finally {
@@ -328,6 +383,7 @@ function BienSoPanel({ bienSoMacDinh }) {
   function chonXe(x) {
     setXe(x)
     setNhieu(null)
+    setKieuTinhGia('')
   }
 
   return (
@@ -382,6 +438,7 @@ function BienSoPanel({ bienSoMacDinh }) {
       {xe && (
         <>
           <XeInfo xe={xe} />
+          <KieuGiaPicker xe={xe} value={kieuTinhGia} onChange={setKieuTinhGia} />
           <HinhThucSelect id="bien-httt" value={httt} onChange={e => setHttt(e.target.value)} />
           <button className="btn btn-accent" onClick={() => thanhToan(xe)} disabled={loading}>
             Xác nhận thanh toán

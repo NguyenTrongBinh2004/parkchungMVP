@@ -1,5 +1,5 @@
 """
-billing_service.py — Tính tiền giữ xe (hỗ trợ đồng giá nhóm)
+billing_service.py — Tính tiền giữ xe (hỗ trợ đồng giá nhóm + nhiều kiểu giá song song)
 """
 import json
 import logging
@@ -41,6 +41,18 @@ def _co_gia_rieng(loai_xe: Dict[str, Any]) -> bool:
     return False
 
 
+def cac_kieu_co_san(loai_xe: Dict[str, Any]) -> list[str]:
+    """Trả về danh sách kiểu tính giá đã được cấu hình (bật) cho loại xe này."""
+    ket_qua = []
+    if loai_xe.get("co_gia_luot"):
+        ket_qua.append("theo_luot")
+    if loai_xe.get("co_gia_gio"):
+        ket_qua.append("theo_gio")
+    if loai_xe.get("co_gia_ngay_dem"):
+        ket_qua.append("theo_ngay_dem")
+    return ket_qua
+
+
 class BillingService:
 
     @staticmethod
@@ -49,12 +61,17 @@ class BillingService:
         gio_vao: datetime,
         gio_ra: datetime,
         nhom_gia: Optional[Dict[str, Any]] = None,
+        kieu_ap_dung: Optional[str] = None,
     ) -> int:
         """
         Tính tiền theo thứ tự ưu tiên:
         1. Giá riêng trên loai_xe (nếu có)
         2. Giá đồng nhóm từ nhom_xe_gia (nếu được truyền vào)
         3. Báo lỗi nếu không có nguồn giá nào.
+
+        kieu_ap_dung: kiểu giá cụ thể cần dùng (do nhân viên chọn lúc xe vào/ra).
+        Nếu không truyền, fallback về kieu_tinh_gia của nguồn giá (tương thích ngược
+        với đồng giá nhóm — vẫn chỉ có 1 kiểu).
         """
         # ── Chọn nguồn dữ liệu giá ─────────────────────────────
         nguon_gia = loai_xe
@@ -65,7 +82,7 @@ class BillingService:
                 raise ValueError("Loại xe chưa có giá riêng và nhóm không có đồng giá.")
 
         so_phut = (gio_ra - gio_vao).total_seconds() / 60
-        kieu = nguon_gia.get("kieu_tinh_gia")
+        kieu = kieu_ap_dung or nguon_gia.get("kieu_tinh_gia")
         minimum = int(nguon_gia.get("gia_luot") or 0)
 
         # ── Theo lượt ──────────────────────────────────────────

@@ -13,55 +13,139 @@ const TEN_MAU = {
   4: ['Xe đạp / Xe đạp điện'],
 }
 
-function fmtGia(lx) {
-  const fmt = (n) => Number(n || 0).toLocaleString('vi-VN')
-  if (lx.kieu_tinh_gia === 'theo_luot') return `${fmt(lx.gia_luot)} đ / lượt`
-  if (lx.kieu_tinh_gia === 'theo_gio') {
-    let cfg = lx.cau_hinh_theo_gio
-    if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg) } catch { cfg = [] } }
-    if (Array.isArray(cfg) && cfg.length) {
-      return cfg.map(b => b.den_gio ? `${b.den_gio}h: ${b.gia.toLocaleString()}đ` : `+${b.moi_gio_tiep.toLocaleString()}đ/h`).join(' · ')
-    }
-    return 'Chưa cấu hình'
+// ─── Editor giá dùng chung: cho phép tích chọn nhiều kiểu cùng lúc ──
+function KieuGiaEditor({ gia, onChange }) {
+  const upd = (patch) => onChange({ ...gia, ...patch })
+  const toggleKieu = (key) => upd({ [key]: !gia[key] })
+
+  const themDong = () => {
+    const last = gia.bangGio[gia.bangGio.length - 1]
+    upd({ bangGio: [...gia.bangGio, { tuGio: last.denGio + 1, denGio: last.denGio + 2, gia: '' }] })
   }
-  if (lx.kieu_tinh_gia === 'theo_ngay_dem') return `Ngày ${fmt(lx.gia_ngay)} · Đêm ${fmt(lx.gia_dem)} · Qua đêm ${fmt(lx.gia_ngay_dem)} đ`
-  return ''
+  const xoaDong = (idx) => {
+    if (gia.bangGio.length > 1) upd({ bangGio: gia.bangGio.filter((_, i) => i !== idx) })
+  }
+  const updateDong = (idx, field, value) => {
+    const arr = [...gia.bangGio]; arr[idx][field] = value; upd({ bangGio: arr })
+  }
+
+  return (
+    <div>
+      <Field label="Kiểu tính giá (có thể chọn nhiều)">
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button type="button"
+            className={`btn btn-sm ${gia.coGiaLuot ? 'btn-accent' : 'btn-outline'}`}
+            onClick={() => toggleKieu('coGiaLuot')}>
+            {gia.coGiaLuot ? '✓ ' : ''}Theo lượt
+          </button>
+          <button type="button"
+            className={`btn btn-sm ${gia.coGiaGio ? 'btn-accent' : 'btn-outline'}`}
+            onClick={() => toggleKieu('coGiaGio')}>
+            {gia.coGiaGio ? '✓ ' : ''}Theo giờ
+          </button>
+          <button type="button"
+            className={`btn btn-sm ${gia.coGiaNgayDem ? 'btn-accent' : 'btn-outline'}`}
+            onClick={() => toggleKieu('coGiaNgayDem')}>
+            {gia.coGiaNgayDem ? '✓ ' : ''}Theo ngày/đêm
+          </button>
+        </div>
+        <small style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 6 }}>
+          Chọn từ 1 đến 3 kiểu. Nhân viên sẽ chọn kiểu áp dụng lúc xe vào/ra nếu loại xe có nhiều hơn 1 kiểu.
+        </small>
+      </Field>
+
+      {gia.coGiaLuot && (
+        <Field label="Giá mỗi lượt (VNĐ)" required>
+          <input type="number" value={gia.giaLuot} onChange={e => upd({ giaLuot: e.target.value })} min="0" step="1000" required />
+        </Field>
+      )}
+
+      {gia.coGiaNgayDem && (
+        <>
+          <Field label="Giá ban ngày (đ)" required><input type="number" value={gia.giaNgay} onChange={e => upd({ giaNgay: e.target.value })} min="0" step="1000" required /></Field>
+          <Field label="Giá ban đêm (đ)" required><input type="number" value={gia.giaDem} onChange={e => upd({ giaDem: e.target.value })} min="0" step="1000" required /></Field>
+          <Field label="Giá qua đêm (đ)" required><input type="number" value={gia.giaNgayDem} onChange={e => upd({ giaNgayDem: e.target.value })} min="0" step="1000" required /></Field>
+        </>
+      )}
+
+      {gia.coGiaGio && (
+        <Field label="Cấu hình giá theo giờ">
+          <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 6, padding: 10 }}>
+            {gia.bangGio.map((dong, idx) => (
+              <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+                <span>Từ giờ</span>
+                <input type="number" value={dong.tuGio} style={{ width: 50 }} onChange={e => updateDong(idx, 'tuGio', Number(e.target.value))} />
+                <span>đến</span>
+                <input type="number" value={dong.denGio} style={{ width: 50 }} onChange={e => updateDong(idx, 'denGio', Number(e.target.value))} />
+                <input type="number" value={dong.gia} style={{ width: 90 }} placeholder="VNĐ" onChange={e => updateDong(idx, 'gia', e.target.value)} />
+                {gia.bangGio.length > 1 && <button type="button" onClick={() => xoaDong(idx)}>Xóa</button>}
+              </div>
+            ))}
+            <button type="button" onClick={themDong} className="btn btn-sm btn-outline">+ Thêm mốc giờ</button>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <label style={{ fontSize: '0.82rem' }}>Mỗi giờ tiếp theo</label>
+            <input type="number" value={gia.giaMoiGioTiep} onChange={e => upd({ giaMoiGioTiep: e.target.value })} min="0" step="1000" style={{ width: '100%', marginTop: 4 }} />
+          </div>
+        </Field>
+      )}
+    </div>
+  )
 }
 
-const KIEU_LABEL = { theo_luot: 'Lượt', theo_gio: 'Giờ', theo_ngay_dem: 'Ngày/đêm' }
+function giaMacDinh() {
+  return {
+    coGiaLuot: true, giaLuot: '',
+    coGiaGio: false, bangGio: [{ tuGio: 1, denGio: 2, gia: '' }], giaMoiGioTiep: '',
+    coGiaNgayDem: false, giaNgay: '', giaDem: '', giaNgayDem: '',
+  }
+}
+
+function validateGia(gia) {
+  if (!gia.coGiaLuot && !gia.coGiaGio && !gia.coGiaNgayDem) {
+    return 'Vui lòng chọn ít nhất 1 kiểu tính giá.'
+  }
+  if (gia.coGiaGio && !gia.bangGio.some(d => d.gia)) {
+    return 'Vui lòng nhập ít nhất một mốc giờ với giá.'
+  }
+  return null
+}
+
+function buildFormDataGia(fd, gia) {
+  fd.append('co_gia_luot', gia.coGiaLuot)
+  fd.append('co_gia_gio', gia.coGiaGio)
+  fd.append('co_gia_ngay_dem', gia.coGiaNgayDem)
+  if (gia.coGiaLuot) fd.append('gia_luot', gia.giaLuot || 0)
+  if (gia.coGiaNgayDem) {
+    fd.append('gia_ngay', gia.giaNgay || 0)
+    fd.append('gia_dem', gia.giaDem || 0)
+    fd.append('gia_ngay_dem', gia.giaNgayDem || 0)
+  }
+  if (gia.coGiaGio) {
+    const arr = gia.bangGio.map(d => ({ tu_gio: Number(d.tuGio), den_gio: Number(d.denGio), gia: Number(d.gia) }))
+    if (gia.giaMoiGioTiep) arr.push({ moi_gio_tiep: Number(gia.giaMoiGioTiep) })
+    fd.append('cau_hinh_theo_gio', JSON.stringify(arr))
+  }
+}
 
 // ─── Modal đồng giá cho cả nhóm ─────────────────────────────────────────
 function DongGiaModal({ nhom, onClose, onSuccess }) {
   const { refetchLoaiXe } = useLoaiXe()
-  const [kieu, setKieu] = useState('theo_luot')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [form, setForm] = useState({ gia_luot: '', gia_ngay: '', gia_dem: '', gia_ngay_dem: '', gia_ve_thang: '' })
-  const [bangGio, setBangGio] = useState([{ tuGio: 1, denGio: 2, gia: '' }])
-  const [giaMoiGioTiep, setGiaMoiGioTiep] = useState('')
 
-  const upd = (f) => (e) => setForm(v => ({ ...v, [f]: e.target.value }))
-
-  const buildJsonGio = () => {
-    const arr = bangGio.map(d => ({ tu_gio: Number(d.tuGio), den_gio: Number(d.denGio), gia: Number(d.gia) }))
-    if (giaMoiGioTiep) arr.push({ moi_gio_tiep: Number(giaMoiGioTiep) })
-    return JSON.stringify(arr)
-  }
+  const [gia, setGia] = useState(giaMacDinh())
+  const [giaVeThang, setGiaVeThang] = useState('')
 
   async function submit(e) {
     e.preventDefault()
+    const errGia = validateGia(gia)
+    if (errGia) { setError(errGia); return }
     setLoading(true); setError(null)
     const fd = new FormData()
     fd.append('nhom_xe_id', nhom.id)
-    fd.append('kieu_tinh_gia', kieu)
-    if (kieu === 'theo_luot') fd.append('gia_luot', form.gia_luot || 0)
-    else if (kieu === 'theo_gio') fd.append('cau_hinh_theo_gio', buildJsonGio())
-    else if (kieu === 'theo_ngay_dem') {
-      fd.append('gia_ngay', form.gia_ngay || 0)
-      fd.append('gia_dem', form.gia_dem || 0)
-      fd.append('gia_ngay_dem', form.gia_ngay_dem || 0)
-    }
-    if (form.gia_ve_thang) fd.append('gia_ve_thang', form.gia_ve_thang)
+    buildFormDataGia(fd, gia)
+    if (giaVeThang) fd.append('gia_ve_thang', giaVeThang)
     try {
       await loaiXeApi.dongGia(fd)
       await refetchLoaiXe(true)
@@ -75,42 +159,9 @@ function DongGiaModal({ nhom, onClose, onSuccess }) {
         Áp một mức giá chung cho <strong>tất cả loại xe</strong> trong nhóm này.
       </p>
       <form onSubmit={submit}>
-        <Field label="Kiểu tính giá">
-          <select value={kieu} onChange={e => setKieu(e.target.value)}>
-            <option value="theo_luot">Theo lượt</option>
-            <option value="theo_gio">Theo giờ</option>
-            <option value="theo_ngay_dem">Theo ngày / đêm</option>
-          </select>
-        </Field>
-        {kieu === 'theo_luot' && <Field label="Giá mỗi lượt (VNĐ)" required><input type="number" value={form.gia_luot} onChange={upd('gia_luot')} min="0" step="1000" required /></Field>}
-        {kieu === 'theo_ngay_dem' && (
-          <>
-            <Field label="Giá ban ngày (đ)" required><input type="number" value={form.gia_ngay} onChange={upd('gia_ngay')} min="0" step="1000" required /></Field>
-            <Field label="Giá ban đêm (đ)" required><input type="number" value={form.gia_dem} onChange={upd('gia_dem')} min="0" step="1000" required /></Field>
-            <Field label="Giá qua đêm (đ)" required><input type="number" value={form.gia_ngay_dem} onChange={upd('gia_ngay_dem')} min="0" step="1000" required /></Field>
-          </>
-        )}
-        {kieu === 'theo_gio' && (
-          <Field label="Cấu hình giá theo giờ">
-            {bangGio.map((dong, idx) => (
-              <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
-                <span style={{ fontSize: '0.8rem' }}>Từ giờ</span>
-                <input type="number" value={dong.tuGio} style={{ width: 50 }} min="1" onChange={e => { const a = [...bangGio]; a[idx].tuGio = Number(e.target.value); setBangGio(a) }} />
-                <span style={{ fontSize: '0.8rem' }}>đến giờ</span>
-                <input type="number" value={dong.denGio} style={{ width: 50 }} min={dong.tuGio + 1} onChange={e => { const a = [...bangGio]; a[idx].denGio = Number(e.target.value); setBangGio(a) }} />
-                <input type="number" value={dong.gia} style={{ width: 90 }} min="0" step="1000" placeholder="VNĐ" onChange={e => { const a = [...bangGio]; a[idx].gia = e.target.value; setBangGio(a) }} />
-                {bangGio.length > 1 && <button type="button" onClick={() => setBangGio(bangGio.filter((_, i) => i !== idx))} style={{ background: 'none', border: '1px solid #f44', color: '#f44', borderRadius: 4, cursor: 'pointer' }}>Xóa</button>}
-              </div>
-            ))}
-            <button type="button" onClick={() => { const l = bangGio[bangGio.length - 1]; setBangGio([...bangGio, { tuGio: l.denGio + 1, denGio: l.denGio + 2, gia: '' }]) }} className="btn btn-sm btn-outline">+ Thêm mốc</button>
-            <div style={{ marginTop: 10 }}>
-              <label style={{ fontSize: '0.82rem' }}>Mỗi giờ tiếp theo</label>
-              <input type="number" value={giaMoiGioTiep} onChange={e => setGiaMoiGioTiep(e.target.value)} min="0" step="1000" style={{ width: '100%', marginTop: 4 }} />
-            </div>
-          </Field>
-        )}
+        <KieuGiaEditor gia={gia} onChange={setGia} />
         <Field label="Giá vé tháng (đ) — để trống nếu không có">
-          <input type="number" value={form.gia_ve_thang} onChange={upd('gia_ve_thang')} min="0" step="10000" placeholder="Không bắt buộc" />
+          <input type="number" value={giaVeThang} onChange={e => setGiaVeThang(e.target.value)} min="0" step="10000" placeholder="Không bắt buộc" />
         </Field>
         {error && <Alert type="danger">{error}</Alert>}
         <button type="submit" className="btn btn-accent" style={{ marginTop: '1rem' }} disabled={loading}>
@@ -124,47 +175,30 @@ function DongGiaModal({ nhom, onClose, onSuccess }) {
 // ─── Modal thêm loại xe ─────────────────────────────────────────────
 function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
   const { refetchLoaiXe } = useLoaiXe()
-  const [kieu, setKieu] = useState('theo_luot')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [gia, setGia] = useState(giaMacDinh())
 
   const [form, setForm] = useState({
     ten: '',
     nhom_xe_id: nhomList[0]?.id || 0,
     mau_sac: '#FFD700',
-    gia_luot: '', cau_hinh_theo_gio: '', gia_ngay: '', gia_dem: '', gia_ngay_dem: '', gia_ve_thang: '',
+    gia_ve_thang: '',
   })
 
-  const [bangGio, setBangGio] = useState([{ tuGio: 1, denGio: 2, gia: '' }])
-  const [giaMoiGioTiep, setGiaMoiGioTiep] = useState('')
-
   const upd = (f) => (e) => setForm(v => ({ ...v, [f]: e.target.value }))
-
   const dsMau = TEN_MAU[form.nhom_xe_id] || []
-
-  const themDong = () => { const last = bangGio[bangGio.length - 1]; setBangGio([...bangGio, { tuGio: last.denGio + 1, denGio: last.denGio + 2, gia: '' }]) }
-  const xoaDong = (idx) => { if (bangGio.length > 1) setBangGio(bangGio.filter((_, i) => i !== idx)) }
-  const updateDong = (idx, field, value) => { const arr = [...bangGio]; arr[idx][field] = value; setBangGio(arr) }
-  const buildJsonGio = () => {
-    const arr = bangGio.map(d => ({ tu_gio: Number(d.tuGio), den_gio: Number(d.denGio), gia: Number(d.gia) }))
-    if (giaMoiGioTiep) arr.push({ moi_gio_tiep: Number(giaMoiGioTiep) })
-    return JSON.stringify(arr)
-  }
 
   async function submit(e) {
     e.preventDefault()
     if (!form.ten.trim()) { setError('Vui lòng nhập tên loại xe.'); return }
     if (!form.nhom_xe_id) { setError('Vui lòng chọn nhóm xe.'); return }
-    if (kieu === 'theo_gio' && !bangGio.some(d => d.gia)) { setError('Vui lòng nhập ít nhất một mốc giờ với giá.'); return }
+    const errGia = validateGia(gia)
+    if (errGia) { setError(errGia); return }
     setLoading(true); setError(null)
     const fd = new FormData()
     fd.append('ten', form.ten.trim()); fd.append('nhom_xe_id', form.nhom_xe_id); fd.append('mau_sac', form.mau_sac)
-    fd.append('kieu_tinh_gia', kieu)
-    if (kieu === 'theo_luot') fd.append('gia_luot', form.gia_luot || 0)
-    else if (kieu === 'theo_gio') fd.append('cau_hinh_theo_gio', buildJsonGio())
-    else if (kieu === 'theo_ngay_dem') {
-      fd.append('gia_ngay', form.gia_ngay || 0); fd.append('gia_dem', form.gia_dem || 0); fd.append('gia_ngay_dem', form.gia_ngay_dem || 0)
-    }
+    buildFormDataGia(fd, gia)
     if (form.gia_ve_thang) fd.append('gia_ve_thang', form.gia_ve_thang)
     try {
       await loaiXeApi.create(fd)
@@ -233,42 +267,9 @@ function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
             <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Màu hiển thị trên bản đồ vị trí</span>
           </div>
         </Field>
-        <Field label="Kiểu tính giá">
-          <select value={kieu} onChange={e => setKieu(e.target.value)}>
-            <option value="theo_luot">Theo lượt</option>
-            <option value="theo_gio">Theo giờ</option>
-            <option value="theo_ngay_dem">Theo ngày / đêm</option>
-          </select>
-        </Field>
-        {kieu === 'theo_luot' && <Field label="Giá mỗi lượt (VNĐ)" required><input type="number" value={form.gia_luot} onChange={upd('gia_luot')} min="0" step="1000" required /></Field>}
-        {kieu === 'theo_ngay_dem' && (
-          <>
-            <Field label="Giá ban ngày (đ)" required><input type="number" value={form.gia_ngay} onChange={upd('gia_ngay')} min="0" step="1000" required /></Field>
-            <Field label="Giá ban đêm (đ)" required><input type="number" value={form.gia_dem} onChange={upd('gia_dem')} min="0" step="1000" required /></Field>
-            <Field label="Giá qua đêm (đ)" required><input type="number" value={form.gia_ngay_dem} onChange={upd('gia_ngay_dem')} min="0" step="1000" required /></Field>
-          </>
-        )}
-        {kieu === 'theo_gio' && (
-          <Field label="Cấu hình giá theo giờ">
-            <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 6, padding: 10 }}>
-              {bangGio.map((dong, idx) => (
-                <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
-                  <span>Từ giờ</span>
-                  <input type="number" value={dong.tuGio} style={{ width: 50 }} onChange={e => updateDong(idx, 'tuGio', Number(e.target.value))} />
-                  <span>đến</span>
-                  <input type="number" value={dong.denGio} style={{ width: 50 }} onChange={e => updateDong(idx, 'denGio', Number(e.target.value))} />
-                  <input type="number" value={dong.gia} style={{ width: 90 }} placeholder="VNĐ" onChange={e => updateDong(idx, 'gia', e.target.value)} />
-                  {bangGio.length > 1 && <button type="button" onClick={() => xoaDong(idx)}>Xóa</button>}
-                </div>
-              ))}
-              <button type="button" onClick={themDong} className="btn btn-sm btn-outline">+ Thêm mốc giờ</button>
-            </div>
-            <div style={{ marginTop: 12 }}>
-              <label style={{ fontSize: '0.82rem' }}>Mỗi giờ tiếp theo</label>
-              <input type="number" value={giaMoiGioTiep} onChange={e => setGiaMoiGioTiep(e.target.value)} min="0" step="1000" style={{ width: '100%', marginTop: 4 }} />
-            </div>
-          </Field>
-        )}
+
+        <KieuGiaEditor gia={gia} onChange={setGia} />
+
         <Field label="Giá vé tháng (đ) — để trống nếu không có">
           <input type="number" value={form.gia_ve_thang} onChange={upd('gia_ve_thang')} min="0" step="10000" placeholder="Không bắt buộc" />
         </Field>
@@ -284,51 +285,31 @@ function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
 // ─── Modal sửa giá loại xe ───────────────────────────────────────
 function SuaLoaiXeModal({ lx, onClose, onSuccess }) {
   const { refetchLoaiXe } = useLoaiXe()
-  const [kieu, setKieu] = useState(lx.kieu_tinh_gia || 'theo_luot')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  const [form, setForm] = useState({
-    gia_luot: lx.gia_luot ?? '',
-    gia_ngay: lx.gia_ngay ?? '',
-    gia_dem: lx.gia_dem ?? '',
-    gia_ngay_dem: lx.gia_ngay_dem ?? '',
-    gia_ve_thang: lx.gia_ve_thang ?? '',
-  })
-
-  const cfgGoc = (() => {
+  const [gia, setGia] = useState(() => {
     let cfg = lx.cau_hinh_theo_gio
     if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg) } catch { cfg = [] } }
-    return Array.isArray(cfg) ? cfg : []
-  })()
-  const mocGoc = cfgGoc.filter(b => b.den_gio !== undefined).map(b => ({ tuGio: b.tu_gio, denGio: b.den_gio, gia: b.gia }))
-  const tiepGoc = cfgGoc.find(b => b.moi_gio_tiep !== undefined)?.moi_gio_tiep ?? ''
-
-  const [bangGio, setBangGio] = useState(mocGoc.length ? mocGoc : [{ tuGio: 1, denGio: 2, gia: '' }])
-  const [giaMoiGioTiep, setGiaMoiGioTiep] = useState(tiepGoc)
-
-  const upd = (f) => (e) => setForm(v => ({ ...v, [f]: e.target.value }))
-  const themDong = () => { const last = bangGio[bangGio.length - 1]; setBangGio([...bangGio, { tuGio: last.denGio + 1, denGio: last.denGio + 2, gia: '' }]) }
-  const xoaDong = (idx) => { if (bangGio.length > 1) setBangGio(bangGio.filter((_, i) => i !== idx)) }
-  const updateDong = (idx, field, value) => { const arr = [...bangGio]; arr[idx][field] = value; setBangGio(arr) }
-  const buildJsonGio = () => {
-    const arr = bangGio.map(d => ({ tu_gio: Number(d.tuGio), den_gio: Number(d.denGio), gia: Number(d.gia) }))
-    if (giaMoiGioTiep) arr.push({ moi_gio_tiep: Number(giaMoiGioTiep) })
-    return JSON.stringify(arr)
-  }
+    cfg = Array.isArray(cfg) ? cfg : []
+    const mocGoc = cfg.filter(b => b.den_gio !== undefined).map(b => ({ tuGio: b.tu_gio, denGio: b.den_gio, gia: b.gia }))
+    const tiepGoc = cfg.find(b => b.moi_gio_tiep !== undefined)?.moi_gio_tiep ?? ''
+    return {
+      coGiaLuot: !!lx.co_gia_luot, giaLuot: lx.gia_luot ?? '',
+      coGiaGio: !!lx.co_gia_gio, bangGio: mocGoc.length ? mocGoc : [{ tuGio: 1, denGio: 2, gia: '' }], giaMoiGioTiep: tiepGoc,
+      coGiaNgayDem: !!lx.co_gia_ngay_dem, giaNgay: lx.gia_ngay ?? '', giaDem: lx.gia_dem ?? '', giaNgayDem: lx.gia_ngay_dem ?? '',
+    }
+  })
+  const [giaVeThang, setGiaVeThang] = useState(lx.gia_ve_thang ?? '')
 
   async function submit(e) {
     e.preventDefault()
-    if (kieu === 'theo_gio' && !bangGio.some(d => d.gia)) { setError('Vui lòng nhập ít nhất một mốc giờ với giá.'); return }
+    const errGia = validateGia(gia)
+    if (errGia) { setError(errGia); return }
     setLoading(true); setError(null)
     const fd = new FormData()
-    fd.append('kieu_tinh_gia', kieu)
-    if (kieu === 'theo_luot') fd.append('gia_luot', form.gia_luot || 0)
-    else if (kieu === 'theo_gio') fd.append('cau_hinh_theo_gio', buildJsonGio())
-    else if (kieu === 'theo_ngay_dem') {
-      fd.append('gia_ngay', form.gia_ngay || 0); fd.append('gia_dem', form.gia_dem || 0); fd.append('gia_ngay_dem', form.gia_ngay_dem || 0)
-    }
-    if (form.gia_ve_thang) fd.append('gia_ve_thang', form.gia_ve_thang)
+    buildFormDataGia(fd, gia)
+    if (giaVeThang) fd.append('gia_ve_thang', giaVeThang)
     try {
       await loaiXeApi.update(lx.id, fd)
       await refetchLoaiXe(true)
@@ -348,44 +329,10 @@ function SuaLoaiXeModal({ lx, onClose, onSuccess }) {
           <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>Không đổi được tên/nhóm ở đây</span>
         </div>
 
-        <Field label="Kiểu tính giá">
-          <select value={kieu} onChange={e => setKieu(e.target.value)}>
-            <option value="theo_luot">Theo lượt</option>
-            <option value="theo_gio">Theo giờ</option>
-            <option value="theo_ngay_dem">Theo ngày / đêm</option>
-          </select>
-        </Field>
-        {kieu === 'theo_luot' && <Field label="Giá mỗi lượt (VNĐ)" required><input type="number" value={form.gia_luot} onChange={upd('gia_luot')} min="0" step="1000" required /></Field>}
-        {kieu === 'theo_ngay_dem' && (
-          <>
-            <Field label="Giá ban ngày (đ)" required><input type="number" value={form.gia_ngay} onChange={upd('gia_ngay')} min="0" step="1000" required /></Field>
-            <Field label="Giá ban đêm (đ)" required><input type="number" value={form.gia_dem} onChange={upd('gia_dem')} min="0" step="1000" required /></Field>
-            <Field label="Giá qua đêm (đ)" required><input type="number" value={form.gia_ngay_dem} onChange={upd('gia_ngay_dem')} min="0" step="1000" required /></Field>
-          </>
-        )}
-        {kieu === 'theo_gio' && (
-          <Field label="Cấu hình giá theo giờ">
-            <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 6, padding: 10 }}>
-              {bangGio.map((dong, idx) => (
-                <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
-                  <span>Từ giờ</span>
-                  <input type="number" value={dong.tuGio} style={{ width: 50 }} onChange={e => updateDong(idx, 'tuGio', Number(e.target.value))} />
-                  <span>đến</span>
-                  <input type="number" value={dong.denGio} style={{ width: 50 }} onChange={e => updateDong(idx, 'denGio', Number(e.target.value))} />
-                  <input type="number" value={dong.gia} style={{ width: 90 }} placeholder="VNĐ" onChange={e => updateDong(idx, 'gia', e.target.value)} />
-                  {bangGio.length > 1 && <button type="button" onClick={() => xoaDong(idx)}>Xóa</button>}
-                </div>
-              ))}
-              <button type="button" onClick={themDong} className="btn btn-sm btn-outline">+ Thêm mốc giờ</button>
-            </div>
-            <div style={{ marginTop: 12 }}>
-              <label style={{ fontSize: '0.82rem' }}>Mỗi giờ tiếp theo</label>
-              <input type="number" value={giaMoiGioTiep} onChange={e => setGiaMoiGioTiep(e.target.value)} min="0" step="1000" style={{ width: '100%', marginTop: 4 }} />
-            </div>
-          </Field>
-        )}
+        <KieuGiaEditor gia={gia} onChange={setGia} />
+
         <Field label="Giá vé tháng (đ) — để trống nếu không có">
-          <input type="number" value={form.gia_ve_thang} onChange={upd('gia_ve_thang')} min="0" step="10000" placeholder="Không bắt buộc" />
+          <input type="number" value={giaVeThang} onChange={e => setGiaVeThang(e.target.value)} min="0" step="10000" placeholder="Không bắt buộc" />
         </Field>
         {error && <Alert type="danger">{error}</Alert>}
         <button type="submit" className="btn btn-accent" style={{ marginTop: '1rem' }} disabled={loading}>
@@ -393,6 +340,34 @@ function SuaLoaiXeModal({ lx, onClose, onSuccess }) {
         </button>
       </form>
     </Modal>
+  )
+}
+
+// ─── Hiển thị giá tổng hợp & badge kiểu giá ──────────────────────
+function fmtGia(lx) {
+  const fmt = (n) => Number(n || 0).toLocaleString('vi-VN')
+  const parts = []
+  if (lx.co_gia_luot) parts.push(`${fmt(lx.gia_luot)} đ/lượt`)
+  if (lx.co_gia_ngay_dem) parts.push(`Ngày ${fmt(lx.gia_ngay)} · Đêm ${fmt(lx.gia_dem)} · Qua đêm ${fmt(lx.gia_ngay_dem)} đ`)
+  if (lx.co_gia_gio) {
+    let cfg = lx.cau_hinh_theo_gio
+    if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg) } catch { cfg = [] } }
+    if (Array.isArray(cfg) && cfg.length) {
+      parts.push(cfg.map(b => b.den_gio ? `${b.den_gio}h: ${b.gia.toLocaleString()}đ` : `+${b.moi_gio_tiep.toLocaleString()}đ/h`).join(' · '))
+    } else {
+      parts.push('Giờ: chưa cấu hình')
+    }
+  }
+  return parts.join('  |  ') || 'Chưa cấu hình giá'
+}
+
+function KieuBadges({ lx }) {
+  return (
+    <div style={{ display: 'flex', gap: 4 }}>
+      {lx.co_gia_luot && <span className="badge badge-gray" style={{ fontSize: '0.62rem' }}>Lượt</span>}
+      {lx.co_gia_gio && <span className="badge badge-gray" style={{ fontSize: '0.62rem' }}>Giờ</span>}
+      {lx.co_gia_ngay_dem && <span className="badge badge-gray" style={{ fontSize: '0.62rem' }}>Ngày/đêm</span>}
+    </div>
   )
 }
 
@@ -422,7 +397,7 @@ function LoaiXeCard({ lx, mode, onSelect }) {
         <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>{fmtGia(lx)} {giaVeThang}</div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span className="badge badge-gray" style={{ fontSize: '0.62rem' }}>{KIEU_LABEL[lx.kieu_tinh_gia]}</span>
+        <KieuBadges lx={lx} />
         {chonDuoc && (
           <span style={{ fontSize: '0.75rem', color: mode === 'xoa' ? 'var(--danger)' : 'var(--accent)' }}>
             {mode === 'xoa' ? '🗑️' : '✏️'}
@@ -445,7 +420,6 @@ function NhomXeCard({ nhom, loaiXeList, nhomGia, sucChua, onXoa, onXoaDongGia, o
   const daDung = sucChua?.da_dung ?? 0
   const soCho = sucChua?.so_cho
 
-  // Đồng bộ lại ô nhập khi dữ liệu sucChua tải xong / thay đổi từ server
   useEffect(() => {
     if (!dirty) {
       setSoChoInput(sucChua?.so_cho ?? '')
@@ -478,7 +452,7 @@ function NhomXeCard({ nhom, loaiXeList, nhomGia, sucChua, onXoa, onXoaDongGia, o
               type="number" min="0" placeholder="Không giới hạn"
               value={soChoInput}
               onChange={e => { setSoChoInput(e.target.value); setDirty(true) }}
-              style={{ width: 72, fontSize: '0.85rem', textAlign: 'center' }}
+              style={{ width: 110, fontSize: '0.85rem' }}
             />
             {dirty && (
               <button
@@ -503,7 +477,7 @@ function NhomXeCard({ nhom, loaiXeList, nhomGia, sucChua, onXoa, onXoaDongGia, o
                 </div>
                 <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>{fmtGia(nhomGia)}</div>
               </div>
-              <span className="badge badge-gray">{KIEU_LABEL[nhomGia.kieu_tinh_gia]}</span>
+              <KieuBadges lx={nhomGia} />
               <button
                 onClick={() => onXoaDongGia(nhom.id, nhom.ten)}
                 title="Bỏ đồng giá"
@@ -529,11 +503,11 @@ export default function LoaiXe() {
   const [showModal, setShowModal] = useState(false)
   const [openNhomId, setOpenNhomId] = useState(null)
   const [dongGiaNhom, setDongGiaNhom] = useState(null)
-  const [savingSoCho, setSavingSoCho] = useState(false)
 
-  // Chế độ chọn: null | 'sua' | 'xoa'
   const [mode, setMode] = useState(null)
   const [suaLx, setSuaLx] = useState(null)
+
+  const [savingSoCho, setSavingSoCho] = useState(false)
 
   const sucChuaMap = useMemo(() => {
     const map = {}
@@ -547,7 +521,7 @@ export default function LoaiXe() {
       const fd = new FormData()
       if (soCho !== null) fd.append('so_cho', soCho)
       await loaiXeApi.capNhatSoChoNhom(nhomId, fd)
-      await refetchSucChua()   // dùng từ context, chỉ gọi API sức chứa
+      await refetchSucChua()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -555,7 +529,6 @@ export default function LoaiXe() {
     }
   }
 
-  // Các danh sách nhóm & map giá (giữ nguyên logic)
   const nhomList = useMemo(() => {
     return groupedLoaiXe.map(g => ({ id: g.nhom_id, ten: g.ten_nhom, thu_tu: g.thu_tu }))
   }, [groupedLoaiXe])
@@ -618,14 +591,12 @@ export default function LoaiXe() {
 
   const handleDongGia = (nhom) => { setShowModal(false); setDongGiaNhom(nhom) }
 
-  // Xử lý khi bấm vào 1 dòng loại xe trong lúc đang ở chế độ chọn
   function handleSelectLoaiXe(lx) {
     if (mode === 'sua') {
       setSuaLx(lx)
       setMode(null)
     } else if (mode === 'xoa') {
       handleXoa(lx.id, lx.ten)
-      // Giữ nguyên mode 'xoa' để có thể xóa tiếp nhiều loại xe liên tiếp
     }
   }
 
@@ -639,7 +610,6 @@ export default function LoaiXe() {
         </div>
       )}
 
-      {/* ── Thanh thao tác chính: Thêm / Sửa / Xóa ── */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
         <button
           className="btn btn-accent btn-sm"
@@ -677,7 +647,6 @@ export default function LoaiXe() {
         </button>
       </div>
 
-      {/* ── Banner hướng dẫn khi đang ở chế độ chọn ── */}
       {mode && (
         <div style={{
           padding: '0.6rem 0.9rem', borderRadius: 10, marginBottom: 14,

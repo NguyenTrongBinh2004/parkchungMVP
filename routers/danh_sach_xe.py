@@ -7,7 +7,7 @@ import re
 import mysql.connector
 
 from database import lay_ket_noi_CSDL
-from services.billing_service import BillingService
+from services.billing_service import BillingService, _co_gia_rieng    # <-- sửa import
 from utils import (
     bay_gio_vn, build_url, chuan_hoa_bien_so,
     is_valid_bien_so, la_ma_xe_khong_bien_so, tach_bien_so,
@@ -23,6 +23,7 @@ def xe_trong_bai(KetNoi=Depends(lay_ket_noi_CSDL)):
     with KetNoi.cursor(dictionary=True) as cur:
         cur.execute("""
             SELECT p.id, p.ma_phien, p.bien_so, p.gio_vao, p.id_ve_thang,
+                   p.kieu_tinh_gia_ap_dung,                   -- thêm cột này
                    p.duong_dan_anh_bien_so, p.duong_dan_anh_nguoi_lai,
                    k.ten AS ten_chu_xe,
                    l.ten, l.kieu_tinh_gia, l.gia_luot,
@@ -42,33 +43,9 @@ def xe_trong_bai(KetNoi=Depends(lay_ket_noi_CSDL)):
             if xe.get("id_ve_thang"):
                 so_tien = 0
             else:
-                co_gia_rieng = False
-                if xe.get("kieu_tinh_gia") == "theo_luot":
-                    if (xe.get("gia_luot") or 0) > 0:
-                        co_gia_rieng = True
-                elif xe.get("kieu_tinh_gia") == "theo_gio":
-                    cfg = xe.get("cau_hinh_theo_gio")
-                    if cfg:
-                        if isinstance(cfg, str):
-                            try:
-                                cfg = json.loads(cfg)
-                            except Exception:
-                                cfg = []
-                        if isinstance(cfg, list) and len(cfg) > 0:
-                            for b in cfg:
-                                if (b.get("gia") or 0) > 0 or (b.get("moi_gio_tiep") or 0) > 0:
-                                    co_gia_rieng = True
-                                    break
-                elif xe.get("kieu_tinh_gia") == "theo_ngay_dem":
-                    if any([
-                        (xe.get("gia_ngay") or 0) > 0,
-                        (xe.get("gia_dem") or 0) > 0,
-                        (xe.get("gia_ngay_dem") or 0) > 0,
-                    ]):
-                        co_gia_rieng = True
-
                 nhom_gia = None
-                if not co_gia_rieng:
+                # Dùng _co_gia_rieng từ billing_service thay vì tự viết
+                if not _co_gia_rieng(xe):
                     with KetNoi.cursor(dictionary=True) as cur2:
                         cur2.execute(
                             "SELECT * FROM nhom_xe_gia WHERE nhom_xe_id = %s",
@@ -76,8 +53,11 @@ def xe_trong_bai(KetNoi=Depends(lay_ket_noi_CSDL)):
                         )
                         nhom_gia = cur2.fetchone()
 
+                # Truyền kieu_ap_dung từ phiên
                 so_tien = BillingService.tinh_tien_chi_tiet(
-                    xe, xe["gio_vao"], bay_gio, nhom_gia=nhom_gia
+                    xe, xe["gio_vao"], bay_gio,
+                    nhom_gia=nhom_gia,
+                    kieu_ap_dung=xe.get("kieu_tinh_gia_ap_dung"),
                 )
         except Exception as e:
             so_tien = 0
@@ -248,7 +228,6 @@ def sua_thong_tin_xe(
                     )
                     if not cur.fetchone():
                         raise HTTPException(status_code=400, detail="Vé tháng đã hết hạn, không thể sửa.")
-                    # Cho phép sửa dù xe có đang trong bãi hay không
                 else:
                     # Xe thường: phải đang trong bãi
                     if not phien["is_in_bai"]:
@@ -381,7 +360,6 @@ def sua_thong_tin_xe(
                         "UPDATE phien_gui_xe SET ghi_chu = %s WHERE id = %s",
                         (ghi_chu, id_phien)
                     )
-                # Với vé tháng không có phiên, tạm thời không lưu ghi chú (có thể mở rộng sau)
 
             KetNoi.commit()
 

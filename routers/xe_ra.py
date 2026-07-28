@@ -12,6 +12,25 @@ from utils import bay_gio_vn, build_url, chuan_hoa_bien_so, is_valid_bien_so, la
 router = APIRouter(prefix="/xe-ra", tags=["Quản lý Xe Ra"])
 
 
+# ── Helper: cờ nhiều kiểu giá & cờ bắt buộc chọn ───────────────
+def _thong_tin_kieu_gia(xe: dict) -> dict:
+    """Trả về các cờ liên quan tới việc chọn kiểu giá cho phiên này."""
+    cac_kieu = [k for k, co in [
+        ("theo_luot", xe.get("co_gia_luot")),
+        ("theo_gio", xe.get("co_gia_gio")),
+        ("theo_ngay_dem", xe.get("co_gia_ngay_dem")),
+    ] if co]
+    kieu_da_chon = xe.get("kieu_tinh_gia_ap_dung")
+    return {
+        "co_gia_luot": bool(xe.get("co_gia_luot")),
+        "co_gia_gio": bool(xe.get("co_gia_gio")),
+        "co_gia_ngay_dem": bool(xe.get("co_gia_ngay_dem")),
+        "kieu_tinh_gia_ap_dung": kieu_da_chon,
+        # true nếu xe có >1 kiểu giá VÀ chưa từng được chọn lúc vào (phiên cũ / lỗi)
+        "yeu_cau_chon_kieu": len(cac_kieu) > 1 and not kieu_da_chon,
+    }
+
+
 # ── Helper: tra cứu phiên qua mã QR ───────────────────────────
 def _tra_cuu_qr(ma_qr: str, KetNoi):
     with KetNoi.cursor(dictionary=True) as cur:
@@ -19,6 +38,7 @@ def _tra_cuu_qr(ma_qr: str, KetNoi):
             """
             SELECT p.*,
                    l.nhom_xe_id, l.kieu_tinh_gia, l.gia_luot,
+                   l.co_gia_luot, l.co_gia_gio, l.co_gia_ngay_dem,
                    l.cau_hinh_theo_gio, l.gia_ngay, l.gia_dem, l.gia_ngay_dem,
                    k.ten AS ten_chu_xe, k.sdt, k.email, k.cho_phep_lay_ho
               FROM phien_gui_xe p
@@ -35,6 +55,8 @@ def _tra_cuu_qr(ma_qr: str, KetNoi):
 
 
 def _so_tien_tam(xe: dict, KetNoi, bay_gio) -> int:
+    """Tính tạm tính dùng kiểu giá đã chọn lúc vào (nếu có); nếu chưa có và
+    chỉ có 1 kiểu thì billing_service tự fallback theo kieu_tinh_gia legacy."""
     try:
         nhom_gia = None
         if not _co_gia_rieng(xe):
@@ -46,7 +68,8 @@ def _so_tien_tam(xe: dict, KetNoi, bay_gio) -> int:
                 nhom_gia = cur.fetchone()
 
         return BillingService.tinh_tien_chi_tiet(
-            xe, xe["gio_vao"], bay_gio, nhom_gia=nhom_gia
+            xe, xe["gio_vao"], bay_gio, nhom_gia=nhom_gia,
+            kieu_ap_dung=xe.get("kieu_tinh_gia_ap_dung"),
         )
     except ValueError:
         return 0
@@ -83,6 +106,7 @@ async def nhan_dien_xe_ra(
                 "anh_bien_so": build_url(phien.get("duong_dan_anh_bien_so")),
                 "anh_nguoi_lai": build_url(phien.get("duong_dan_anh_nguoi_lai")),
                 "ghi_chu": phien.get("ghi_chu") or "Kiểm tra thông tin và xác nhận cho xe ra.",
+                **_thong_tin_kieu_gia(phien),
             }
     except HTTPException:
         raise
@@ -129,6 +153,7 @@ async def quet_qr_xem_thong_tin(
         "anh_bien_so": build_url(phien.get("duong_dan_anh_bien_so")),
         "anh_nguoi_lai": build_url(phien.get("duong_dan_anh_nguoi_lai")),
         "ghi_chu": phien.get("ghi_chu"),
+        **_thong_tin_kieu_gia(phien),
     }
 
 
@@ -142,7 +167,6 @@ def kiem_tra_xe_ra_bien_so(
     if not bien_so_sach:
         raise HTTPException(status_code=400, detail="Vui lòng nhập biển số")
 
-    # Cho phép mã XD... (xe không biển số) bỏ qua kiểm tra định dạng biển số thông thường
     if not la_ma_xe_khong_bien_so(bien_so_sach) and not is_valid_bien_so(bien_so_sach):
         raise HTTPException(status_code=400, detail="Biển số không đúng định dạng")
 
@@ -152,6 +176,7 @@ def kiem_tra_xe_ra_bien_so(
                 """
                 SELECT p.*,
                        l.nhom_xe_id, l.kieu_tinh_gia, l.gia_luot,
+                       l.co_gia_luot, l.co_gia_gio, l.co_gia_ngay_dem,
                        l.cau_hinh_theo_gio, l.gia_ngay, l.gia_dem, l.gia_ngay_dem,
                        k.ten AS ten_chu_xe, k.sdt, k.cho_phep_lay_ho
                   FROM phien_gui_xe p
@@ -178,6 +203,7 @@ def kiem_tra_xe_ra_bien_so(
                     """
                     SELECT p.*,
                            l.nhom_xe_id, l.kieu_tinh_gia, l.gia_luot,
+                           l.co_gia_luot, l.co_gia_gio, l.co_gia_ngay_dem,
                            l.cau_hinh_theo_gio, l.gia_ngay, l.gia_dem, l.gia_ngay_dem,
                            k.ten AS ten_chu_xe, k.sdt, k.cho_phep_lay_ho
                       FROM phien_gui_xe p
@@ -230,6 +256,7 @@ def kiem_tra_xe_ra_bien_so(
             "anh_nguoi_lai": build_url(xe.get("duong_dan_anh_nguoi_lai")),
             "ghi_chu": xe.get("ghi_chu"),
             "la_xe_ve_thang": bool(xe.get("id_ve_thang")),
+            **_thong_tin_kieu_gia(xe),
         }
 
     except mysql.connector.Error as err:

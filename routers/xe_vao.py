@@ -1,20 +1,18 @@
 # routers/xe_vao.py
 from fastapi import APIRouter, Depends, HTTPException, Form, UploadFile, File
-import re, os, uuid, asyncio, logging, random
+import re, os, uuid, asyncio, random
 from typing import Optional
-from datetime import datetime, date, timedelta
-from zoneinfo import ZoneInfo
+from datetime import date
 import mysql.connector
-import aiofiles
 
 from database import lay_ket_noi_CSDL
-from models import PhanHoiXeVao
+from models import PhanHoiXeVao, KieuTinhGia                          # thêm KieuTinhGia
 from services.qr_service import tao_ma_qr, doc_ma_qr
 from services.ocr import nhan_dien_bien_so
 from services.email_service import gui_email_qr
 from services.sms_service import gui_thong_bao_xe_vao
-from services.auth_service import lay_nguoi_dung_hien_tai, lay_id_bai_xe_hien_tai   # thêm lay_id_bai_xe_hien_tai
-from routers.bai_xe import kiem_tra_bai_xe_day_du                                    # thêm import
+from services.auth_service import lay_nguoi_dung_hien_tai, lay_id_bai_xe_hien_tai
+from routers.bai_xe import kiem_tra_bai_xe_day_du
 from utils import (
     VN_TZ, BASE_URL, MAX_IMAGE_SIZE,
     chuan_hoa_bien_so, bay_gio_vn, build_url, luu_anh, tach_bien_so,
@@ -189,10 +187,10 @@ async def xac_nhan_xe_vao_ve_thang(
     anh_bien_so: UploadFile = File(...),
     anh_nguoi_lai: UploadFile = File(None),
     id_nguoi_dung: int = Depends(lay_nguoi_dung_hien_tai),
-    id_bai_xe: int = Depends(lay_id_bai_xe_hien_tai),   # <-- thêm
+    id_bai_xe: int = Depends(lay_id_bai_xe_hien_tai),
     KetNoi=Depends(lay_ket_noi_CSDL)
 ):
-    kiem_tra_bai_xe_day_du(id_bai_xe, KetNoi)           # <-- thêm kiểm tra
+    kiem_tra_bai_xe_day_du(id_bai_xe, KetNoi)
     bay_gio = bay_gio_vn()
     try:
         with KetNoi.cursor(dictionary=True) as ConTro:
@@ -303,13 +301,14 @@ async def xac_nhan_xe_vao_ve_thuong(
     email: Optional[str] = Form(None),
     ghi_chu: Optional[str] = Form(None),
     cho_phep_lay_ho: bool = Form(False),
+    kieu_tinh_gia: Optional[KieuTinhGia] = Form(None),   # thêm tham số chọn kiểu giá
     anh_bien_so: Optional[UploadFile] = File(None),
     anh_nguoi_lai: Optional[UploadFile] = File(None),
     id_nguoi_dung: int = Depends(lay_nguoi_dung_hien_tai),
-    id_bai_xe: int = Depends(lay_id_bai_xe_hien_tai),   # <-- thêm
+    id_bai_xe: int = Depends(lay_id_bai_xe_hien_tai),
     KetNoi=Depends(lay_ket_noi_CSDL)
 ):
-    kiem_tra_bai_xe_day_du(id_bai_xe, KetNoi)           # <-- thêm kiểm tra
+    kiem_tra_bai_xe_day_du(id_bai_xe, KetNoi)
     sdt   = sdt.strip()   if sdt   else None
     email = email.strip() if email else None
 
@@ -321,14 +320,16 @@ async def xac_nhan_xe_vao_ve_thuong(
     bay_gio = bay_gio_vn()
     ten_khach = ten_chu_xe.strip() if ten_chu_xe else None
 
-    # 🔍 Kiểm tra loại xe: có yêu cầu biển số không?
+    # 🔍 Kiểm tra loại xe: lấy thêm cờ các kiểu giá
     with KetNoi.cursor(dictionary=True) as ConTro:
-        ConTro.execute("SELECT id, ten FROM loai_xe WHERE id=%s", (id_loai_xe,))
+        ConTro.execute(
+            "SELECT id, ten, co_gia_luot, co_gia_gio, co_gia_ngay_dem FROM loai_xe WHERE id=%s",
+            (id_loai_xe,)
+        )
         loai_xe_row = ConTro.fetchone()
         if not loai_xe_row:
             raise HTTPException(status_code=404, detail=f"Không tìm thấy loại xe id: {id_loai_xe}")
 
-        # 🚫 Không cho phép chọn trực tiếp xe mồi
         if "(đồng giá)" in (loai_xe_row["ten"] or ""):
             raise HTTPException(
                 status_code=422,
@@ -337,8 +338,29 @@ async def xac_nhan_xe_vao_ve_thuong(
 
         yeu_cau_bien = not ("đạp" in loai_xe_row["ten"].lower() or "xe đạp" in loai_xe_row["ten"].lower())
 
+    # ── Xác định kiểu tính giá áp dụng cho phiên ──
+    cac_kieu = [k for k, co in [
+        ("theo_luot", loai_xe_row.get("co_gia_luot")),
+        ("theo_gio", loai_xe_row.get("co_gia_gio")),
+        ("theo_ngay_dem", loai_xe_row.get("co_gia_ngay_dem")),
+    ] if co]
+
+    kieu_ap_dung = None
+    if cac_kieu:
+        if len(cac_kieu) == 1:
+            kieu_ap_dung = cac_kieu[0]
+        else:
+            if not kieu_tinh_gia:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f'Loại xe "{loai_xe_row["ten"]}" có nhiều kiểu tính giá. Vui lòng chọn kiểu giá áp dụng.'
+                )
+            if kieu_tinh_gia.value not in cac_kieu:
+                raise HTTPException(status_code=422, detail="Kiểu tính giá được chọn không khả dụng cho loại xe này.")
+            kieu_ap_dung = kieu_tinh_gia.value
+
+    # ── Xử lý biển số (giữ nguyên logic) ──
     if yeu_cau_bien:
-        # ── Xe thường, có biển số ──
         if not bien_so_xac_nhan or not bien_so_xac_nhan.strip():
             raise HTTPException(status_code=422, detail="Biển số không được để trống.")
 
@@ -346,7 +368,6 @@ async def xac_nhan_xe_vao_ve_thuong(
         bien_so_sach = chuan_hoa_bien_so(bien_so_xac_nhan)
         _, duoi_bien_so = tach_bien_so(bien_so_sach)
 
-        # Validate biển số: cho phép mã XD... (xe đạp) hoặc biển số hợp lệ
         if not la_ma_xe_khong_bien_so(bien_so_sach) and not is_valid_bien_so(bien_so_sach):
             raise HTTPException(status_code=422, detail="Biển số không đúng định dạng.")
 
@@ -374,16 +395,14 @@ async def xac_nhan_xe_vao_ve_thuong(
             raise HTTPException(status_code=500, detail=f"Lỗi CSDL: {err}")
 
     else:
-        # ── Xe đạp hoặc loại không yêu cầu biển số ──
         if not bien_so_xac_nhan or not bien_so_xac_nhan.strip():
-            # Tự sinh mã biển số tạm: XD + 6 chữ số (đồng bộ với frontend)
             bien_so_goc = f"XD{random.randint(100000, 999999)}"
         else:
             bien_so_goc = bien_so_xac_nhan.upper().strip()
         bien_so_sach = chuan_hoa_bien_so(bien_so_goc)
         duoi_bien_so = bien_so_sach[-5:] if len(bien_so_sach) >= 5 else bien_so_sach
 
-    # ── Các bước còn lại: lưu ảnh, tạo khách hàng, tạo phiên ──
+    # ── Tạo phiên gửi xe (INSERT có cột kieu_tinh_gia_ap_dung) ──
     try:
         duong_dan_bien_so   = await luu_anh(anh_bien_so,   "uploads/bien_so")   if anh_bien_so   else None
         duong_dan_nguoi_lai = await luu_anh(anh_nguoi_lai, "uploads/nguoi_lai") if anh_nguoi_lai else None
@@ -423,12 +442,12 @@ async def xac_nhan_xe_vao_ve_thuong(
                 INSERT INTO phien_gui_xe
                 (ma_phien, bien_so, duoi_bien_so, id_loai_xe, id_khach_hang,
                  duong_dan_anh_bien_so, duong_dan_anh_nguoi_lai, gio_vao, ghi_chu,
-                 cho_phep_lay_ho, ma_qr, id_nguoi_vao, is_in_bai)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)
+                 cho_phep_lay_ho, ma_qr, id_nguoi_vao, kieu_tinh_gia_ap_dung, is_in_bai)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)
             """, (
                 ma_phien, bien_so_goc, duoi_bien_so, id_loai_xe, id_khach_hang,
                 duong_dan_bien_so, duong_dan_nguoi_lai, bay_gio, ghi_chu,
-                int(cho_phep_lay_ho), ma_qr, id_nguoi_dung
+                int(cho_phep_lay_ho), ma_qr, id_nguoi_dung, kieu_ap_dung
             ))
             id_moi = ConTro.lastrowid
             KetNoi.commit()

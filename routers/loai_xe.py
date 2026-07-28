@@ -214,25 +214,26 @@ def tao_loai_xe(
     ten: str = Form(...),
     nhom_xe_id: int = Form(...),
     mau_sac: str = Form("#FFD700"),
-    kieu_tinh_gia: str = Form("theo_luot"),
+    co_gia_luot: bool = Form(False),
+    co_gia_gio: bool = Form(False),
+    co_gia_ngay_dem: bool = Form(False),
     gia_luot: Optional[float] = Form(None),
     gia_ngay: Optional[float] = Form(None),
     gia_dem: Optional[float] = Form(None),
     gia_ngay_dem: Optional[float] = Form(None),
     gia_ve_thang: Optional[float] = Form(None),
     cau_hinh_theo_gio: Optional[str] = Form(None),
-    _: str = Depends(yeu_cau_admin),   # <-- chỉ admin
+    _: str = Depends(yeu_cau_admin),
     KetNoi=Depends(lay_ket_noi_CSDL)
 ):
     # ── Validate chung ──
-    allowed = ["theo_luot", "theo_gio", "theo_ngay_dem"]
-    if kieu_tinh_gia not in allowed:
-        raise HTTPException(status_code=422, detail="Kiểu tính giá không hợp lệ.")
-    if kieu_tinh_gia == "theo_luot" and gia_luot is None:
+    if not (co_gia_luot or co_gia_gio or co_gia_ngay_dem):
+        raise HTTPException(status_code=422, detail="Phải chọn ít nhất 1 kiểu tính giá.")
+    if co_gia_luot and gia_luot is None:
         raise HTTPException(status_code=422, detail="Phải nhập giá theo lượt.")
-    if kieu_tinh_gia == "theo_ngay_dem" and not all([gia_ngay, gia_dem, gia_ngay_dem]):
+    if co_gia_ngay_dem and not all([gia_ngay, gia_dem, gia_ngay_dem]):
         raise HTTPException(status_code=422, detail="Phải nhập đầy đủ giá ngày, đêm, ngày-đêm.")
-    if kieu_tinh_gia == "theo_gio" and not cau_hinh_theo_gio:
+    if co_gia_gio and not cau_hinh_theo_gio:
         raise HTTPException(status_code=422, detail="Phải nhập cấu hình giá theo giờ.")
 
     # ── Không cho phép tên chứa "(đồng giá)" ──
@@ -249,6 +250,9 @@ def tao_loai_xe(
             json_gio = json.loads(cau_hinh_theo_gio)
         except json.JSONDecodeError:
             raise HTTPException(status_code=422, detail="Cấu hình giá theo giờ không đúng định dạng JSON.")
+
+    # kieu_tinh_gia (legacy) giữ để tương thích ngược — set theo ưu tiên lượt > giờ > ngày/đêm
+    kieu_tinh_gia_legacy = "theo_luot" if co_gia_luot else ("theo_gio" if co_gia_gio else "theo_ngay_dem")
 
     try:
         with KetNoi.cursor(dictionary=True) as cur:
@@ -267,11 +271,13 @@ def tao_loai_xe(
             if existing:
                 cur.execute("""
                     UPDATE loai_xe
-                    SET mau_sac = %s, kieu_tinh_gia = %s, gia_luot = %s,
-                        gia_ngay = %s, gia_dem = %s, gia_ngay_dem = %s,
+                    SET mau_sac = %s, kieu_tinh_gia = %s,
+                        co_gia_luot = %s, co_gia_gio = %s, co_gia_ngay_dem = %s,
+                        gia_luot = %s, gia_ngay = %s, gia_dem = %s, gia_ngay_dem = %s,
                         gia_ve_thang = %s, cau_hinh_theo_gio = %s, deleted_at = NULL
                     WHERE id = %s
-                """, (mau_sac, kieu_tinh_gia, gia_luot, gia_ngay, gia_dem, gia_ngay_dem,
+                """, (mau_sac, kieu_tinh_gia_legacy, co_gia_luot, co_gia_gio, co_gia_ngay_dem,
+                      gia_luot, gia_ngay, gia_dem, gia_ngay_dem,
                       gia_ve_thang, json.dumps(json_gio) if json_gio else None, existing["id"]))
                 KetNoi.commit()
                 _clear_cache()
@@ -280,10 +286,13 @@ def tao_loai_xe(
             else:
                 cur.execute("""
                     INSERT INTO loai_xe (ten, nhom_xe_id, is_default, mau_sac, kieu_tinh_gia,
+                     co_gia_luot, co_gia_gio, co_gia_ngay_dem,
                      gia_luot, gia_ngay, gia_dem, gia_ngay_dem, gia_ve_thang, cau_hinh_theo_gio)
-                    VALUES (%s,%s,0,%s,%s,%s,%s,%s,%s,%s,%s)
-                """, (ten, nhom_xe_id, mau_sac, kieu_tinh_gia, gia_luot, gia_ngay, gia_dem,
-                      gia_ngay_dem, gia_ve_thang, json.dumps(json_gio) if json_gio else None))
+                    VALUES (%s,%s,0,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """, (ten, nhom_xe_id, mau_sac, kieu_tinh_gia_legacy,
+                      co_gia_luot, co_gia_gio, co_gia_ngay_dem,
+                      gia_luot, gia_ngay, gia_dem, gia_ngay_dem, gia_ve_thang,
+                      json.dumps(json_gio) if json_gio else None))
                 KetNoi.commit()
                 _clear_cache()
                 return {"id": cur.lastrowid, "ten": ten, "nhom_xe_id": nhom_xe_id,
@@ -442,22 +451,35 @@ def xoa_loai_xe(
 @router.put("/{loai_xe_id}", status_code=200)
 def cap_nhat_loai_xe(
     loai_xe_id: int,
-    kieu_tinh_gia: str = Form("theo_luot"),
+    co_gia_luot: bool = Form(False),
+    co_gia_gio: bool = Form(False),
+    co_gia_ngay_dem: bool = Form(False),
     gia_luot: Optional[float] = Form(None),
     gia_ngay: Optional[float] = Form(None),
     gia_dem: Optional[float] = Form(None),
     gia_ngay_dem: Optional[float] = Form(None),
     gia_ve_thang: Optional[float] = Form(None),
     cau_hinh_theo_gio: Optional[str] = Form(None),
-    _: str = Depends(yeu_cau_admin),   # <-- chỉ admin
+    _: str = Depends(yeu_cau_admin),
     KetNoi=Depends(lay_ket_noi_CSDL)
 ):
+    if not (co_gia_luot or co_gia_gio or co_gia_ngay_dem):
+        raise HTTPException(status_code=422, detail="Phải chọn ít nhất 1 kiểu tính giá.")
+    if co_gia_luot and gia_luot is None:
+        raise HTTPException(status_code=422, detail="Phải nhập giá theo lượt.")
+    if co_gia_ngay_dem and not all([gia_ngay, gia_dem, gia_ngay_dem]):
+        raise HTTPException(status_code=422, detail="Phải nhập đầy đủ giá ngày, đêm, ngày-đêm.")
+    if co_gia_gio and not cau_hinh_theo_gio:
+        raise HTTPException(status_code=422, detail="Phải nhập cấu hình giá theo giờ.")
+
     json_gio = None
     if cau_hinh_theo_gio:
         try:
             json_gio = json.loads(cau_hinh_theo_gio)
         except json.JSONDecodeError:
             raise HTTPException(status_code=422, detail="JSON không hợp lệ.")
+
+    kieu_tinh_gia_legacy = "theo_luot" if co_gia_luot else ("theo_gio" if co_gia_gio else "theo_ngay_dem")
 
     try:
         with KetNoi.cursor(dictionary=True) as cur:
@@ -466,7 +488,6 @@ def cap_nhat_loai_xe(
             if not row:
                 raise HTTPException(status_code=404, detail="Không tìm thấy loại xe.")
 
-            # Cấm sửa giá riêng của xe mồi
             if row["ten"] and "(đồng giá)" in row["ten"]:
                 raise HTTPException(
                     status_code=400,
@@ -474,10 +495,13 @@ def cap_nhat_loai_xe(
                 )
 
             cur.execute("""
-                UPDATE loai_xe SET kieu_tinh_gia=%s, gia_luot=%s, gia_ngay=%s, gia_dem=%s,
-                gia_ngay_dem=%s, gia_ve_thang=%s, cau_hinh_theo_gio=%s
+                UPDATE loai_xe SET kieu_tinh_gia=%s,
+                    co_gia_luot=%s, co_gia_gio=%s, co_gia_ngay_dem=%s,
+                    gia_luot=%s, gia_ngay=%s, gia_dem=%s,
+                    gia_ngay_dem=%s, gia_ve_thang=%s, cau_hinh_theo_gio=%s
                 WHERE id=%s
-            """, (kieu_tinh_gia, gia_luot, gia_ngay, gia_dem, gia_ngay_dem, gia_ve_thang,
+            """, (kieu_tinh_gia_legacy, co_gia_luot, co_gia_gio, co_gia_ngay_dem,
+                  gia_luot, gia_ngay, gia_dem, gia_ngay_dem, gia_ve_thang,
                   json.dumps(json_gio) if json_gio else None, loai_xe_id))
             KetNoi.commit()
             _clear_cache()

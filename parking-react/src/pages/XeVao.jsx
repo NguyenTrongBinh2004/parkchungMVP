@@ -69,6 +69,35 @@ function ImagePicker({ label, required, file, onFile, refInput }) {
   )
 }
 
+// ─── Chọn kiểu giá khi loại xe có nhiều lựa chọn ─────────────
+function KieuGiaPicker({ loaiXe, value, onChange }) {
+  if (!loaiXe) return null
+  const options = [
+    loaiXe.co_gia_luot && { key: 'theo_luot', label: 'Theo lượt' },
+    loaiXe.co_gia_gio && { key: 'theo_gio', label: 'Theo giờ' },
+    loaiXe.co_gia_ngay_dem && { key: 'theo_ngay_dem', label: 'Theo ngày/đêm' },
+  ].filter(Boolean)
+
+  if (options.length <= 1) return null
+
+  return (
+    <Field label="⚖️ Loại xe này có nhiều kiểu giá — chọn kiểu áp dụng" required>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {options.map(opt => (
+          <button
+            key={opt.key}
+            type="button"
+            className={`btn btn-sm ${value === opt.key ? 'btn-accent' : 'btn-outline'}`}
+            onClick={() => onChange(opt.key)}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </Field>
+  )
+}
+
 // ── VeThangCard (đã thêm prop hoanThien) ────────────────────────
 function VeThangCard({ result, onXacNhan, loading, hoanThien }) {
   const [fileBienSo, setFileBienSo] = useState(null)
@@ -144,6 +173,9 @@ function SmartPanel() {
   const defaultLoaiXeRef = useRef('')
   const [autoModeFailed, setAutoModeFailed] = useState(false)
 
+  // State chọn kiểu giá (cho xe thường)
+  const [kieuTinhGia, setKieuTinhGia] = useState('')
+
   useEffect(() => {
     if (groupedLoaiXe.length === 0) return
     const defaultId = pickDefaultLoaiXe(groupedLoaiXe)
@@ -152,6 +184,9 @@ function SmartPanel() {
   }, [groupedLoaiXe])
 
   useEffect(() => { setAutoModeFailed(false) }, [result])
+
+  // Tìm loại xe đang chọn để dùng cho KieuGiaPicker
+  const loaiXeObjThuong = configuredLoaiXe.find(lx => lx.id == formThuong.loaiXe)
 
   async function handleBienSoFile(file) {
     if (!file) { setFileBienSo(null); setResult(null); setBienSoText(''); return }
@@ -232,6 +267,10 @@ function SmartPanel() {
     const loaiXeObj = configuredLoaiXe.find(lx => lx.id == formThuong.loaiXe)
     const isBicycle = loaiXeObj?.ten.toLowerCase().includes('đạp')
     if (!isBicycle && !bienSoText.trim()) { setError('Vui lòng nhập biển số'); return }
+
+    const coNhieuKieu = [loaiXeObj?.co_gia_luot, loaiXeObj?.co_gia_gio, loaiXeObj?.co_gia_ngay_dem].filter(Boolean).length > 1
+    if (coNhieuKieu && !kieuTinhGia) { setError('Vui lòng chọn kiểu tính giá áp dụng.'); return }
+
     setLoading(true)
     const fd = new FormData()
     fd.append('id_loai_xe', formThuong.loaiXe)
@@ -241,6 +280,7 @@ function SmartPanel() {
     fd.append('email', formThuong.email || '')
     fd.append('ghi_chu', formThuong.ghiChu || '')
     fd.append('cho_phep_lay_ho', formThuong.cho_phep_lay_ho)
+    if (kieuTinhGia) fd.append('kieu_tinh_gia', kieuTinhGia)
     fd.append('anh_bien_so', await compressImage(fileBienSo))
     fd.append('anh_nguoi_lai', await compressImage(fileNguoiLai))
     try { const data = await xeVaoApi.xacNhanThuong(fd); setTicket(data); setSuccess(true); resetForm() }
@@ -251,6 +291,7 @@ function SmartPanel() {
   function resetForm() {
     setFileBienSo(null); setFileNguoiLai(null); setBienSoText('')
     setResult(null); setShowFormThuong(false); setError(null); setAutoModeFailed(false)
+    setKieuTinhGia('')
     setFormThuong({ loaiXe: defaultLoaiXeRef.current, tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false })
   }
 
@@ -356,6 +397,7 @@ function SmartPanel() {
               <span>Có</span>
             </label>
           </Field>
+          <KieuGiaPicker loaiXe={loaiXeObjThuong} value={kieuTinhGia} onChange={setKieuTinhGia} />
           <button className="btn btn-accent" onClick={xacNhanThuong} disabled={loading || !hoanThien}>✅ Xác nhận xe vào</button>
         </div>
       )}
@@ -400,11 +442,14 @@ function BienSoPanel({ coChupAnh, setCoChupAnh }) {
   const [ticket, setTicket] = useState(null)
   const [bienSo, setBienSo] = useState('')
   const [result, setResult] = useState(null)
-  // const [coChupAnh, setCoChupAnh] = useState(false)   // <-- xóa dòng này
   const [fileBienSo, setFileBienSo] = useState(null)
   const [fileNguoiLai, setFileNguoiLai] = useState(null)
   const [formThuong, setFormThuong] = useState({ loaiXe: '', tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false })
   const [autoModeFailed, setAutoModeFailed] = useState(false)
+
+  // State chọn kiểu giá
+  const [kieuTinhGia, setKieuTinhGia] = useState('')
+
   const defaultLoaiXeRef = useRef('')
 
   useEffect(() => {
@@ -417,6 +462,7 @@ function BienSoPanel({ coChupAnh, setCoChupAnh }) {
   useEffect(() => { setAutoModeFailed(false) }, [result])
 
   const isVeThang = result?.loai === 've_thang'
+  const loaiXeObj = configuredLoaiXe.find(lx => lx.id == formThuong.loaiXe)  // dùng cho KieuGiaPicker
 
   async function xacNhanVeThangAuto() {
     if (!result?.ma_qr) { setError('Thiếu mã QR vé tháng'); return }
@@ -458,6 +504,7 @@ function BienSoPanel({ coChupAnh, setCoChupAnh }) {
     fd.append('cho_phep_lay_ho', formThuong.cho_phep_lay_ho)
     if (coChupAnh && fileBienSo)   fd.append('anh_bien_so', await compressImage(fileBienSo))
     if (coChupAnh && fileNguoiLai) fd.append('anh_nguoi_lai', await compressImage(fileNguoiLai))
+    if (kieuTinhGia) fd.append('kieu_tinh_gia', kieuTinhGia)
 
     try {
       const data = await xeVaoApi.xacNhanThuong(fd)
@@ -488,6 +535,10 @@ function BienSoPanel({ coChupAnh, setCoChupAnh }) {
       if (!fileNguoiLai) { setError('Vui lòng chụp ảnh người lái'); return }
     }
 
+    // Kiểm tra nếu có nhiều kiểu giá mà chưa chọn
+    const coNhieuKieu = [loaiXeObj?.co_gia_luot, loaiXeObj?.co_gia_gio, loaiXeObj?.co_gia_ngay_dem].filter(Boolean).length > 1
+    if (coNhieuKieu && !kieuTinhGia) { setError('Vui lòng chọn kiểu tính giá áp dụng.'); return }
+
     setBienSo(bienSoFinal)
     setLoading(true)
 
@@ -513,6 +564,7 @@ function BienSoPanel({ coChupAnh, setCoChupAnh }) {
   function resetForm() {
     setBienSo(''); setResult(null); setError(null); setAutoModeFailed(false)
     setFileBienSo(null); setFileNguoiLai(null); setCoChupAnh(false)
+    setKieuTinhGia('')
     setFormThuong({ loaiXe: defaultLoaiXeRef.current, tenChuXe: '', sdt: '', email: '', ghiChu: '', cho_phep_lay_ho: false })
   }
 
@@ -552,7 +604,7 @@ function BienSoPanel({ coChupAnh, setCoChupAnh }) {
           gap: 12, padding: '0.7rem 0.85rem', margin: '0.6rem 0',
           background: 'var(--bg-input, rgba(255,255,255,0.03))',
           border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer',
-          userSelect: 'none', WebkitUserSelect: 'none',   // <-- thêm thuộc tính này
+          userSelect: 'none', WebkitUserSelect: 'none',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -637,6 +689,7 @@ function BienSoPanel({ coChupAnh, setCoChupAnh }) {
               <span>Có</span>
             </label>
           </Field>
+          <KieuGiaPicker loaiXe={loaiXeObj} value={kieuTinhGia} onChange={setKieuTinhGia} />
           <button className="btn btn-accent" onClick={handleXacNhan} disabled={loading || !hoanThien}>✅ Xác nhận xe vào</button>
         </div>
       )}
@@ -673,7 +726,7 @@ function BienSoPanel({ coChupAnh, setCoChupAnh }) {
 // ── Trang chính ────────────────────────────────────────────────────
 export default function XeVao() {
   const [tab, setTab] = useState('smart')
-  const [coChupAnhBienSo, setCoChupAnhBienSo] = useState(false)   // state dùng chung cho BienSoPanel
+  const [coChupAnhBienSo, setCoChupAnhBienSo] = useState(false)
 
   const tabs = [
     { id: 'smart', label: '📷 Chụp ảnh' },
