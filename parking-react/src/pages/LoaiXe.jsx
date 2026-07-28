@@ -13,6 +13,12 @@ const TEN_MAU = {
   4: ['Xe đạp / Xe đạp điện'],
 }
 
+const KIEU_META = {
+  luot: { icon: '🎫', label: 'Theo lượt' },
+  gio: { icon: '⏱️', label: 'Theo giờ' },
+  ngayDem: { icon: '🌗', label: 'Theo ngày/đêm' },
+}
+
 // ─── Editor giá dùng chung: cho phép tích chọn nhiều kiểu cùng lúc ──
 function KieuGiaEditor({ gia, onChange }) {
   const upd = (patch) => onChange({ ...gia, ...patch })
@@ -31,63 +37,118 @@ function KieuGiaEditor({ gia, onChange }) {
 
   return (
     <div>
-      <Field label="Kiểu tính giá (có thể chọn nhiều)">
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button type="button"
-            className={`btn btn-sm ${gia.coGiaLuot ? 'btn-accent' : 'btn-outline'}`}
-            onClick={() => toggleKieu('coGiaLuot')}>
-            {gia.coGiaLuot ? '✓ ' : ''}Theo lượt
-          </button>
-          <button type="button"
-            className={`btn btn-sm ${gia.coGiaGio ? 'btn-accent' : 'btn-outline'}`}
-            onClick={() => toggleKieu('coGiaGio')}>
-            {gia.coGiaGio ? '✓ ' : ''}Theo giờ
-          </button>
-          <button type="button"
-            className={`btn btn-sm ${gia.coGiaNgayDem ? 'btn-accent' : 'btn-outline'}`}
-            onClick={() => toggleKieu('coGiaNgayDem')}>
-            {gia.coGiaNgayDem ? '✓ ' : ''}Theo ngày/đêm
-          </button>
+      <Field label="Kiểu tính giá">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          {[
+            ['coGiaLuot', 'luot'],
+            ['coGiaGio', 'gio'],
+            ['coGiaNgayDem', 'ngayDem'],
+          ].map(([key, metaKey]) => {
+            const meta = KIEU_META[metaKey]
+            const active = gia[key]
+            return (
+              <button
+                type="button"
+                key={key}
+                onClick={() => toggleKieu(key)}
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  padding: '10px 6px', borderRadius: 10,
+                  border: `1.5px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                  background: active ? 'rgba(255,215,0,0.1)' : 'transparent',
+                  color: active ? 'var(--accent)' : 'var(--text)',
+                  cursor: 'pointer', transition: 'all 0.12s',
+                }}
+              >
+                <span style={{ fontSize: '1.15rem', lineHeight: 1 }}>{meta.icon}</span>
+                <span style={{ fontSize: '0.74rem', fontWeight: active ? 700 : 500, textAlign: 'center' }}>{meta.label}</span>
+                {active && <span style={{ fontSize: '0.62rem' }}>✓ đang bật</span>}
+              </button>
+            )
+          })}
         </div>
-        <small style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 6 }}>
-          Chọn từ 1 đến 3 kiểu. Nhân viên sẽ chọn kiểu áp dụng lúc xe vào/ra nếu loại xe có nhiều hơn 1 kiểu.
+        <small style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 8 }}>
+          Có thể chọn nhiều kiểu cùng lúc — nhân viên sẽ chọn kiểu áp dụng lúc xe vào/ra nếu có hơn 1 kiểu.
         </small>
       </Field>
 
-      {gia.coGiaLuot && (
-        <Field label="Giá mỗi lượt (VNĐ)" required>
-          <input type="number" value={gia.giaLuot} onChange={e => upd({ giaLuot: e.target.value })} min="0" step="1000" required />
-        </Field>
-      )}
+      {(gia.coGiaLuot || gia.coGiaNgayDem || gia.coGiaGio) && (
+        <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', marginBottom: 14 }}>
 
-      {gia.coGiaNgayDem && (
-        <>
-          <Field label="Giá ban ngày (đ)" required><input type="number" value={gia.giaNgay} onChange={e => upd({ giaNgay: e.target.value })} min="0" step="1000" required /></Field>
-          <Field label="Giá ban đêm (đ)" required><input type="number" value={gia.giaDem} onChange={e => upd({ giaDem: e.target.value })} min="0" step="1000" required /></Field>
-          <Field label="Giá qua đêm (đ)" required><input type="number" value={gia.giaNgayDem} onChange={e => upd({ giaNgayDem: e.target.value })} min="0" step="1000" required /></Field>
-        </>
-      )}
-
-      {gia.coGiaGio && (
-        <Field label="Cấu hình giá theo giờ">
-          <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 6, padding: 10 }}>
-            {gia.bangGio.map((dong, idx) => (
-              <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
-                <span>Từ giờ</span>
-                <input type="number" value={dong.tuGio} style={{ width: 50 }} onChange={e => updateDong(idx, 'tuGio', Number(e.target.value))} />
-                <span>đến</span>
-                <input type="number" value={dong.denGio} style={{ width: 50 }} onChange={e => updateDong(idx, 'denGio', Number(e.target.value))} />
-                <input type="number" value={dong.gia} style={{ width: 90 }} placeholder="VNĐ" onChange={e => updateDong(idx, 'gia', e.target.value)} />
-                {gia.bangGio.length > 1 && <button type="button" onClick={() => xoaDong(idx)}>Xóa</button>}
+          {gia.coGiaLuot && (
+            <div style={{ marginBottom: gia.coGiaNgayDem || gia.coGiaGio ? 12 : 0 }}>
+              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                🎫 Giá mỗi lượt <span style={{ color: 'var(--danger)' }}>*</span>
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="number" value={gia.giaLuot} onChange={e => upd({ giaLuot: e.target.value })}
+                  min="0" step="1000" required
+                  style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', paddingRight: 32 }}
+                />
+                <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: 'var(--text-muted)', pointerEvents: 'none' }}>đ</span>
               </div>
-            ))}
-            <button type="button" onClick={themDong} className="btn btn-sm btn-outline">+ Thêm mốc giờ</button>
-          </div>
-          <div style={{ marginTop: 12 }}>
-            <label style={{ fontSize: '0.82rem' }}>Mỗi giờ tiếp theo</label>
-            <input type="number" value={gia.giaMoiGioTiep} onChange={e => upd({ giaMoiGioTiep: e.target.value })} min="0" step="1000" style={{ width: '100%', marginTop: 4 }} />
-          </div>
-        </Field>
+            </div>
+          )}
+
+          {gia.coGiaNgayDem && (
+            <div style={{ marginBottom: gia.coGiaGio ? 12 : 0 }}>
+              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                🌗 Giá theo ngày / đêm <span style={{ color: 'var(--danger)' }}>*</span>
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                {[
+                  ['giaNgay', 'Ban ngày'],
+                  ['giaDem', 'Ban đêm'],
+                  ['giaNgayDem', 'Qua đêm'],
+                ].map(([field, label]) => (
+                  <div key={field}>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginBottom: 3, textAlign: 'center' }}>{label}</div>
+                    <input
+                      type="number" value={gia[field]} onChange={e => upd({ [field]: e.target.value })}
+                      min="0" step="1000" required
+                      style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', padding: '8px 8px' }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {gia.coGiaGio && (
+            <div>
+              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
+                ⏱️ Cấu hình giá theo giờ
+              </label>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr 1.2fr auto', gap: 6, fontSize: '0.68rem', color: 'var(--text-muted)', padding: '0 2px 4px', alignItems: 'center' }}>
+                <span>Từ giờ</span><span></span><span>Đến giờ</span><span style={{ textAlign: 'right' }}>Giá (đ)</span><span></span>
+              </div>
+
+              {gia.bangGio.map((dong, idx) => (
+                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr 1.2fr auto', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+                  <input type="number" value={dong.tuGio} style={{ textAlign: 'center', padding: '6px 4px' }} onChange={e => updateDong(idx, 'tuGio', Number(e.target.value))} />
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>→</span>
+                  <input type="number" value={dong.denGio} style={{ textAlign: 'center', padding: '6px 4px' }} onChange={e => updateDong(idx, 'denGio', Number(e.target.value))} />
+                  <input type="number" value={dong.gia} placeholder="0" style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', padding: '6px 8px' }} onChange={e => updateDong(idx, 'gia', e.target.value)} />
+                  {gia.bangGio.length > 1 ? (
+                    <button type="button" onClick={() => xoaDong(idx)}
+                      style={{ background: 'none', border: '1px solid var(--danger)', color: 'var(--danger)', borderRadius: 6, width: 26, height: 26, cursor: 'pointer', fontSize: '0.75rem' }}>
+                      ✕
+                    </button>
+                  ) : <span />}
+                </div>
+              ))}
+              <button type="button" onClick={themDong} className="btn btn-sm btn-outline" style={{ marginTop: 4 }}>+ Thêm mốc giờ</button>
+
+              <div style={{ marginTop: 12 }}>
+                <label style={{ fontSize: '0.76rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Mỗi giờ tiếp theo (đ)</label>
+                <input type="number" value={gia.giaMoiGioTiep} onChange={e => upd({ giaMoiGioTiep: e.target.value })} min="0" step="1000"
+                  style={{ width: '100%', textAlign: 'right', fontFamily: 'var(--font-mono)' }} />
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   )
@@ -155,13 +216,14 @@ function DongGiaModal({ nhom, onClose, onSuccess }) {
 
   return (
     <Modal onClose={onClose} title={`⚖️ Đồng giá nhóm "${nhom.ten}"`}>
-      <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+      <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.9rem' }}>
         Áp một mức giá chung cho <strong>tất cả loại xe</strong> trong nhóm này.
       </p>
       <form onSubmit={submit}>
         <KieuGiaEditor gia={gia} onChange={setGia} />
         <Field label="Giá vé tháng (đ) — để trống nếu không có">
-          <input type="number" value={giaVeThang} onChange={e => setGiaVeThang(e.target.value)} min="0" step="10000" placeholder="Không bắt buộc" />
+          <input type="number" value={giaVeThang} onChange={e => setGiaVeThang(e.target.value)} min="0" step="10000" placeholder="Không bắt buộc"
+            style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }} />
         </Field>
         {error && <Alert type="danger">{error}</Alert>}
         <button type="submit" className="btn btn-accent" style={{ marginTop: '1rem' }} disabled={loading}>
@@ -249,13 +311,17 @@ function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
           </Field>
         )}
 
-        <div style={{ marginBottom: '1rem' }}>
-          <button type="button" className="btn btn-sm btn-outline" onClick={handleDongGiaClick}>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.03)',
+          border: '1px solid var(--border)', marginBottom: '1rem', gap: 10,
+        }}>
+          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+            Cần áp giá chung cho cả nhóm thay vì từng xe?
+          </span>
+          <button type="button" className="btn btn-sm btn-outline" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={handleDongGiaClick}>
             ⚖️ Đồng giá cả nhóm
           </button>
-          <small style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 4 }}>
-            Áp một mức giá chung cho tất cả loại xe trong nhóm đã chọn.
-          </small>
         </div>
 
         <Field label="Tên loại xe" required>
@@ -263,15 +329,16 @@ function ThemLoaiXeModal({ nhomList, onClose, onSuccess, onDongGia }) {
         </Field>
         <Field label="Màu đại diện">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <input type="color" value={form.mau_sac} onChange={upd('mau_sac')} style={{ height: 38, width: 60 }} />
-            <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Màu hiển thị trên bản đồ vị trí</span>
+            <input type="color" value={form.mau_sac} onChange={upd('mau_sac')} style={{ height: 38, width: 60, padding: 2 }} />
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Màu hiển thị trên bản đồ vị trí</span>
           </div>
         </Field>
 
         <KieuGiaEditor gia={gia} onChange={setGia} />
 
         <Field label="Giá vé tháng (đ) — để trống nếu không có">
-          <input type="number" value={form.gia_ve_thang} onChange={upd('gia_ve_thang')} min="0" step="10000" placeholder="Không bắt buộc" />
+          <input type="number" value={form.gia_ve_thang} onChange={upd('gia_ve_thang')} min="0" step="10000" placeholder="Không bắt buộc"
+            style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }} />
         </Field>
         {error && <Alert type="danger">{error}</Alert>}
         <button type="submit" className="btn btn-accent" style={{ marginTop: '1rem' }} disabled={loading}>
@@ -323,16 +390,18 @@ function SuaLoaiXeModal({ lx, onClose, onSuccess }) {
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8, marginBottom: '1rem',
           padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)',
+          border: '1px solid var(--border)',
         }}>
           <span style={{ width: 10, height: 10, borderRadius: '50%', background: lx.mau_sac || '#FFD700', flexShrink: 0 }} />
           <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{lx.ten}</span>
-          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>Không đổi được tên/nhóm ở đây</span>
+          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>Không đổi được tên/nhóm ở đây</span>
         </div>
 
         <KieuGiaEditor gia={gia} onChange={setGia} />
 
         <Field label="Giá vé tháng (đ) — để trống nếu không có">
-          <input type="number" value={giaVeThang} onChange={e => setGiaVeThang(e.target.value)} min="0" step="10000" placeholder="Không bắt buộc" />
+          <input type="number" value={giaVeThang} onChange={e => setGiaVeThang(e.target.value)} min="0" step="10000" placeholder="Không bắt buộc"
+            style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }} />
         </Field>
         {error && <Alert type="danger">{error}</Alert>}
         <button type="submit" className="btn btn-accent" style={{ marginTop: '1rem' }} disabled={loading}>
@@ -343,65 +412,79 @@ function SuaLoaiXeModal({ lx, onClose, onSuccess }) {
   )
 }
 
-// ─── Hiển thị giá tổng hợp & badge kiểu giá ──────────────────────
-function fmtGia(lx) {
-  const fmt = (n) => Number(n || 0).toLocaleString('vi-VN')
-  const parts = []
-  if (lx.co_gia_luot) parts.push(`${fmt(lx.gia_luot)} đ/lượt`)
-  if (lx.co_gia_ngay_dem) parts.push(`Ngày ${fmt(lx.gia_ngay)} · Đêm ${fmt(lx.gia_dem)} · Qua đêm ${fmt(lx.gia_ngay_dem)} đ`)
-  if (lx.co_gia_gio) {
-    let cfg = lx.cau_hinh_theo_gio
-    if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg) } catch { cfg = [] } }
-    if (Array.isArray(cfg) && cfg.length) {
-      parts.push(cfg.map(b => b.den_gio ? `${b.den_gio}h: ${b.gia.toLocaleString()}đ` : `+${b.moi_gio_tiep.toLocaleString()}đ/h`).join(' · '))
-    } else {
-      parts.push('Giờ: chưa cấu hình')
-    }
-  }
-  return parts.join('  |  ') || 'Chưa cấu hình giá'
-}
-
-function KieuBadges({ lx }) {
+// ─── Hiển thị giá tổng hợp (nhiều dòng, số căn phải) ─────────────
+function DongGiaLine({ icon, label, value }) {
   return (
-    <div style={{ display: 'flex', gap: 4 }}>
-      {lx.co_gia_luot && <span className="badge badge-gray" style={{ fontSize: '0.62rem' }}>Lượt</span>}
-      {lx.co_gia_gio && <span className="badge badge-gray" style={{ fontSize: '0.62rem' }}>Giờ</span>}
-      {lx.co_gia_ngay_dem && <span className="badge badge-gray" style={{ fontSize: '0.62rem' }}>Ngày/đêm</span>}
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: '0.76rem' }}>
+      <span style={{ color: 'var(--text-muted)' }}>{icon} {label}</span>
+      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)', whiteSpace: 'nowrap' }}>{value}</span>
     </div>
   )
 }
 
+function GiaChiTiet({ lx }) {
+  const fmt = (n) => Number(n || 0).toLocaleString('vi-VN') + ' đ'
+  const dong = []
+
+  if (lx.co_gia_luot) dong.push(<DongGiaLine key="luot" icon="🎫" label="Mỗi lượt" value={fmt(lx.gia_luot)} />)
+
+  if (lx.co_gia_ngay_dem) {
+    dong.push(
+      <DongGiaLine key="ngaydem" icon="🌗" label="Ngày / Đêm / Qua đêm" value={`${fmt(lx.gia_ngay)} · ${fmt(lx.gia_dem)} · ${fmt(lx.gia_ngay_dem)}`} />
+    )
+  }
+
+  if (lx.co_gia_gio) {
+    let cfg = lx.cau_hinh_theo_gio
+    if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg) } catch { cfg = [] } }
+    const text = Array.isArray(cfg) && cfg.length
+      ? cfg.map(b => b.den_gio ? `${b.den_gio}h: ${Number(b.gia).toLocaleString('vi-VN')}đ` : `+${Number(b.moi_gio_tiep).toLocaleString('vi-VN')}đ/h`).join(' · ')
+      : 'chưa cấu hình'
+    dong.push(<DongGiaLine key="gio" icon="⏱️" label="Theo giờ" value={text} />)
+  }
+
+  if (dong.length === 0) return <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>Chưa cấu hình giá</div>
+  return <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>{dong}</div>
+}
+
 // ─── Card loại xe (hỗ trợ chế độ chọn) ─────────────────────────
 function LoaiXeCard({ lx, mode, onSelect }) {
-  const giaVeThang = lx.gia_ve_thang ? `· Vé tháng ${Number(lx.gia_ve_thang).toLocaleString('vi-VN')}đ` : ''
   const chonDuoc = mode === 'sua' || mode === 'xoa'
 
   return (
     <div
       onClick={chonDuoc ? () => onSelect(lx) : undefined}
       style={{
-        display: 'flex', alignItems: 'center', gap: 10, padding: '0.6rem 0.4rem',
+        padding: '10px 10px', marginBottom: 4,
         borderBottom: '1px solid var(--border)',
         cursor: chonDuoc ? 'pointer' : 'default',
-        borderRadius: chonDuoc ? 8 : 0,
+        borderRadius: chonDuoc ? 10 : 0,
         background: chonDuoc ? (mode === 'xoa' ? 'rgba(239,68,68,0.06)' : 'rgba(255,215,0,0.06)') : 'transparent',
         transition: 'background 0.12s',
       }}
     >
-      <span style={{ width: 10, height: 10, borderRadius: '50%', background: lx.mau_sac || '#FFD700', flexShrink: 0 }} />
-      <div style={{ flex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontWeight: 600 }}>{lx.ten}</span>
-          {lx.is_default ? <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>hệ thống</span> : <span style={{ fontSize: '0.62rem', color: 'var(--accent)' }}>tùy chỉnh</span>}
-        </div>
-        <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>{fmtGia(lx)} {giaVeThang}</div>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <KieuBadges lx={lx} />
+      {/* Dòng 1: tên + tag + icon thao tác */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <span style={{ width: 9, height: 9, borderRadius: '50%', background: lx.mau_sac || '#FFD700', flexShrink: 0 }} />
+        <span style={{ fontWeight: 600, fontSize: '0.92rem', flex: 1 }}>{lx.ten}</span>
+        {lx.is_default
+          ? <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 20, padding: '1px 8px' }}>hệ thống</span>
+          : <span style={{ fontSize: '0.62rem', color: 'var(--accent)', border: '1px solid var(--accent)', borderRadius: 20, padding: '1px 8px' }}>tùy chỉnh</span>
+        }
         {chonDuoc && (
-          <span style={{ fontSize: '0.75rem', color: mode === 'xoa' ? 'var(--danger)' : 'var(--accent)' }}>
+          <span style={{ fontSize: '0.85rem', color: mode === 'xoa' ? 'var(--danger)' : 'var(--accent)', flexShrink: 0 }}>
             {mode === 'xoa' ? '🗑️' : '✏️'}
           </span>
+        )}
+      </div>
+
+      {/* Dòng 2: chi tiết giá, thụt lề theo chấm màu */}
+      <div style={{ paddingLeft: 17 }}>
+        <GiaChiTiet lx={lx} />
+        {lx.gia_ve_thang > 0 && (
+          <div style={{ fontSize: '0.76rem', color: 'var(--info)', marginTop: 3 }}>
+            🎟️ Vé tháng {Number(lx.gia_ve_thang).toLocaleString('vi-VN')} đ
+          </div>
         )}
       </div>
     </div>
@@ -409,7 +492,7 @@ function LoaiXeCard({ lx, mode, onSelect }) {
 }
 
 // ─── Card nhóm xe ─────────────────────────────────────────────────
-function NhomXeCard({ nhom, loaiXeList, nhomGia, sucChua, onXoa, onXoaDongGia, onLuuSoCho, isOpen, onToggle, mode, onSelectLoaiXe }) {
+function NhomXeCard({ nhom, loaiXeList, nhomGia, sucChua, onXoaDongGia, onLuuSoCho, isOpen, onToggle, mode, onSelectLoaiXe }) {
   const loaiTrongNhom = loaiXeList.filter(lx => 
     lx.nhom_xe_id === nhom.id && lx.co_gia && 
     !(lx.gia_luot === 0 && lx.ten && lx.ten.includes('(đồng giá)'))
@@ -429,64 +512,71 @@ function NhomXeCard({ nhom, loaiXeList, nhomGia, sucChua, onXoa, onXoaDongGia, o
   if (!nhomGia && loaiTrongNhom.length === 0) return null
 
   return (
-    <div className="card" style={{ marginBottom: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: isOpen ? 8 : 0, borderBottom: isOpen ? '1px solid var(--border)' : 'none', cursor: 'pointer' }} onClick={onToggle}>
-        <span style={{ fontSize: '1.1rem' }}>{NHOM_ICON[nhom.id] || '🚘'}</span>
-        <strong style={{ flex: 1 }}>{nhom.ten}</strong>
+    <div className="card" style={{ marginBottom: 10, padding: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: isOpen ? 10 : 0, borderBottom: isOpen ? '1px solid var(--border)' : 'none', cursor: 'pointer' }} onClick={onToggle}>
+        <span style={{ fontSize: '1.15rem' }}>{NHOM_ICON[nhom.id] || '🚘'}</span>
+        <strong style={{ flex: 1, fontSize: '0.95rem' }}>{nhom.ten}</strong>
         <span style={{
-          fontSize: '0.68rem', padding: '2px 8px', borderRadius: 20,
+          fontSize: '0.7rem', padding: '3px 10px', borderRadius: 20, fontFamily: 'var(--font-mono)',
           background: soCho != null ? 'rgba(255,215,0,0.12)' : 'transparent',
           color: soCho != null ? 'var(--accent)' : 'var(--text-muted)',
           border: soCho != null ? 'none' : '1px solid var(--border)',
+          whiteSpace: 'nowrap',
         }}>
           {soCho != null ? `${daDung}/${soCho} chỗ` : 'Chưa giới hạn'}
         </span>
-        <span>{isOpen ? '▴' : '▾'}</span>
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{isOpen ? '▴' : '▾'}</span>
       </div>
 
       {isOpen && (
-        <div style={{ marginTop: 6 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.6rem 0', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ marginTop: 10 }}>
+
+          {/* Sức chứa nhóm */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', marginBottom: 10,
+            background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: 10,
+          }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', flex: 1 }}>Sức chứa nhóm này</span>
             <input
               type="number" min="0" placeholder="Không giới hạn"
               value={soChoInput}
               onChange={e => { setSoChoInput(e.target.value); setDirty(true) }}
-              style={{ width: 110, fontSize: '0.85rem' }}
+              style={{ width: 90, fontSize: '0.85rem', textAlign: 'right', fontFamily: 'var(--font-mono)', padding: '6px 10px' }}
             />
-            {dirty && (
-              <button
-                className="btn btn-accent btn-sm"
-                onClick={() => { onLuuSoCho(nhom.id, soChoInput === '' ? null : Number(soChoInput)); setDirty(false) }}
-                style={{ width: 'auto', whiteSpace: 'nowrap' }}
-              >
-                Lưu
-              </button>
-            )}
+            <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)', width: 30 }}>chỗ</span>
+            <button
+              className="btn btn-accent btn-sm"
+              onClick={() => { onLuuSoCho(nhom.id, soChoInput === '' ? null : Number(soChoInput)); setDirty(false) }}
+              disabled={!dirty}
+              style={{ width: 'auto', whiteSpace: 'nowrap', opacity: dirty ? 1 : 0.35, pointerEvents: dirty ? 'auto' : 'none' }}
+            >
+              Lưu
+            </button>
           </div>
 
+          {/* Đồng giá nhóm (nếu có) */}
           {nhomGia && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.6rem 0', borderBottom: '1px solid var(--border)' }}>
-              <span>⚖️</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontWeight: 600 }}>Toàn bộ {nhom.ten}</span>
-                  <span style={{ fontSize: '0.62rem', background: 'var(--accent)', color: '#fff', padding: '0.1em 0.5em', borderRadius: 4 }}>
-                    đồng giá
-                  </span>
-                </div>
-                <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>{fmtGia(nhomGia)}</div>
+            <div style={{
+              padding: '10px 12px', marginBottom: 6, borderRadius: 10,
+              background: 'rgba(255,215,0,0.05)', border: '1px solid rgba(255,215,0,0.25)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <span style={{ fontWeight: 600, fontSize: '0.88rem', flex: 1 }}>⚖️ Toàn bộ {nhom.ten}</span>
+                <span style={{ fontSize: '0.62rem', background: 'var(--accent)', color: '#1e293b', fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>
+                  ĐỒNG GIÁ
+                </span>
+                <button
+                  onClick={() => onXoaDongGia(nhom.id, nhom.ten)}
+                  title="Bỏ đồng giá"
+                  style={{ background: 'transparent', border: '1px solid var(--text-muted)', color: 'var(--text-muted)', padding: '2px 8px', borderRadius: 6, cursor: 'pointer', fontSize: '0.7rem' }}
+                >
+                  Bỏ
+                </button>
               </div>
-              <KieuBadges lx={nhomGia} />
-              <button
-                onClick={() => onXoaDongGia(nhom.id, nhom.ten)}
-                title="Bỏ đồng giá"
-                style={{ background: 'transparent', border: '1px solid var(--text-muted)', color: 'var(--text-muted)', padding: '2px 8px', borderRadius: 4, cursor: 'pointer', fontSize: '0.75rem' }}
-              >
-                Bỏ ĐG
-              </button>
+              <GiaChiTiet lx={nhomGia} />
             </div>
           )}
+
           {loaiTrongNhom.map(lx => (
             <LoaiXeCard key={lx.id} lx={lx} mode={mode} onSelect={onSelectLoaiXe} />
           ))}
@@ -603,10 +693,22 @@ export default function LoaiXe() {
   return (
     <PageLayout title="🏷️ Loại xe" backTo="/#quan-ly">
       {!dataLoading && stats.totalXe > 0 && (
-        <div style={{ display: 'flex', gap: 12, marginBottom: 14, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-          <span>📦 {stats.totalNhomCoXe} nhóm</span>
-          <span>🏷️ {stats.totalXe} loại xe đã cấu hình</span>
-          <span>⚙️ {stats.customCount} tùy chỉnh</span>
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 14,
+        }}>
+          {[
+            ['📦', stats.totalNhomCoXe, 'nhóm'],
+            ['🏷️', stats.totalXe, 'loại xe'],
+            ['⚙️', stats.customCount, 'tùy chỉnh'],
+          ].map(([icon, num, label]) => (
+            <div key={label} style={{
+              textAlign: 'center', padding: '8px 4px', borderRadius: 10,
+              background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)',
+            }}>
+              <div style={{ fontSize: '0.95rem', fontWeight: 700 }}>{icon} {num}</div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 2 }}>{label}</div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -671,7 +773,6 @@ export default function LoaiXe() {
           loaiXeList={list}
           nhomGia={nhomGiaMap[nhom.id] || null}
           sucChua={sucChuaMap[nhom.id]}
-          onXoa={handleXoa}
           onXoaDongGia={handleXoaDongGia}
           onLuuSoCho={handleLuuSoCho}
           isOpen={openNhomId === nhom.id}
