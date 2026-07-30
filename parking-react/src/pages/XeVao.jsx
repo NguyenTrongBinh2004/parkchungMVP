@@ -69,32 +69,52 @@ function ImagePicker({ label, required, file, onFile, refInput }) {
   )
 }
 
-// ─── Chọn kiểu giá khi loại xe có nhiều lựa chọn ─────────────
+// ─── Chọn kiểu giá khi loại xe có nhiều lựa chọn (giao diện mới) ──
 function KieuGiaPicker({ loaiXe, value, onChange }) {
   if (!loaiXe) return null
   const options = [
-    loaiXe.co_gia_luot && { key: 'theo_luot', label: 'Theo lượt' },
-    loaiXe.co_gia_gio && { key: 'theo_gio', label: 'Theo giờ' },
-    loaiXe.co_gia_ngay_dem && { key: 'theo_ngay_dem', label: 'Theo ngày/đêm' },
+    loaiXe.co_gia_luot && { key: 'theo_luot', icon: '🎫', label: 'Theo lượt' },
+    loaiXe.co_gia_gio && { key: 'theo_gio', icon: '⏱️', label: 'Theo giờ' },
+    loaiXe.co_gia_ngay_dem && { key: 'theo_ngay_dem', icon: '🌗', label: 'Ngày/đêm' },
   ].filter(Boolean)
 
   if (options.length <= 1) return null
 
   return (
-    <Field label="⚖️ Loại xe này có nhiều kiểu giá — chọn kiểu áp dụng" required>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+    <div style={{
+      marginBottom: '0.85rem', padding: '10px 12px',
+      background: 'rgba(255,215,0,0.06)', border: '1px solid rgba(255,215,0,0.3)',
+      borderRadius: 10,
+    }}>
+      <div style={{
+        fontSize: '0.78rem', fontWeight: 600, color: 'var(--accent)',
+        marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6,
+      }}>
+        ⚖️ Chọn kiểu tính giá <span style={{ color: 'var(--danger)' }}>*</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${options.length}, 1fr)`, gap: 8 }}>
         {options.map(opt => (
           <button
             key={opt.key}
             type="button"
-            className={`btn btn-sm ${value === opt.key ? 'btn-accent' : 'btn-outline'}`}
             onClick={() => onChange(opt.key)}
+            style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+              padding: '10px 4px', minHeight: 56,
+              borderRadius: 10,
+              border: `1.5px solid ${value === opt.key ? 'var(--accent)' : 'var(--border)'}`,
+              background: value === opt.key ? 'var(--accent)' : 'transparent',
+              color: value === opt.key ? '#1e293b' : 'var(--text)',
+              fontWeight: value === opt.key ? 700 : 500,
+              cursor: 'pointer', transition: 'all 0.12s',
+            }}
           >
-            {opt.label}
+            <span style={{ fontSize: '1.15rem', lineHeight: 1 }}>{opt.icon}</span>
+            <span style={{ fontSize: '0.74rem' }}>{opt.label}</span>
           </button>
         ))}
       </div>
-    </Field>
+    </div>
   )
 }
 
@@ -173,7 +193,7 @@ function SmartPanel() {
   const defaultLoaiXeRef = useRef('')
   const [autoModeFailed, setAutoModeFailed] = useState(false)
 
-  // State chọn kiểu giá (cho xe thường)
+  // State chọn kiểu giá
   const [kieuTinhGia, setKieuTinhGia] = useState('')
 
   useEffect(() => {
@@ -185,7 +205,6 @@ function SmartPanel() {
 
   useEffect(() => { setAutoModeFailed(false) }, [result])
 
-  // Tìm loại xe đang chọn để dùng cho KieuGiaPicker
   const loaiXeObjThuong = configuredLoaiXe.find(lx => lx.id == formThuong.loaiXe)
 
   async function handleBienSoFile(file) {
@@ -299,7 +318,6 @@ function SmartPanel() {
   const isVeThangQR = result?.loai === 've_thang_qr'
   const isVeThang = result?.loai === 've_thang'
 
-  // Component nội bộ dùng lại biến hoanThien từ SmartPanel
   const VeThangInfo = ({ r }) => (
     <div className="card" style={{ borderColor: 'var(--info)', marginBottom: '0.75rem' }} key={r.ma_qr || 'auto'}>
       <h5 style={{ color: 'var(--info)', marginBottom: '0.75rem' }}>🎫 Vé tháng</h5>
@@ -322,7 +340,6 @@ function SmartPanel() {
 
   return (
     <div>
-      {/* Banner cảnh báo chưa hoàn thiện bãi xe */}
       {!baiXeLoading && !hoanThien && (
         <div style={{
           display: 'flex', alignItems: 'flex-start', gap: 10,
@@ -375,7 +392,7 @@ function SmartPanel() {
           <h5 style={{ marginBottom: '0.75rem' }}>🚗 Xe thường</h5>
           <Field label="Biển số"><input value={bienSoText} disabled style={{ textTransform: 'uppercase' }} /></Field>
           <Field label="Loại xe" required>
-            <select value={formThuong.loaiXe} onChange={e => setFormThuong(f => ({ ...f, loaiXe: e.target.value }))}>
+            <select value={formThuong.loaiXe} onChange={e => { setFormThuong(f => ({ ...f, loaiXe: e.target.value })); setKieuTinhGia('') }}>
               {groupedLoaiXe.map(group => (
                 <optgroup key={group.nhom_id} label={group.ten_nhom}>
                   {group.items.map(lx => (
@@ -387,6 +404,7 @@ function SmartPanel() {
               ))}
             </select>
           </Field>
+          <KieuGiaPicker loaiXe={loaiXeObjThuong} value={kieuTinhGia} onChange={setKieuTinhGia} />
           <Field label="Tên chủ xe"><input value={formThuong.tenChuXe} onChange={e => setFormThuong(f => ({ ...f, tenChuXe: e.target.value }))} /></Field>
           <Field label="Số điện thoại"><input value={formThuong.sdt} onChange={e => setFormThuong(f => ({ ...f, sdt: e.target.value }))} inputMode="tel" /></Field>
           <Field label="Email"><input type="email" value={formThuong.email} onChange={e => setFormThuong(f => ({ ...f, email: e.target.value }))} /></Field>
@@ -397,7 +415,6 @@ function SmartPanel() {
               <span>Có</span>
             </label>
           </Field>
-          <KieuGiaPicker loaiXe={loaiXeObjThuong} value={kieuTinhGia} onChange={setKieuTinhGia} />
           <button className="btn btn-accent" onClick={xacNhanThuong} disabled={loading || !hoanThien}>✅ Xác nhận xe vào</button>
         </div>
       )}
@@ -462,7 +479,7 @@ function BienSoPanel({ coChupAnh, setCoChupAnh }) {
   useEffect(() => { setAutoModeFailed(false) }, [result])
 
   const isVeThang = result?.loai === 've_thang'
-  const loaiXeObj = configuredLoaiXe.find(lx => lx.id == formThuong.loaiXe)  // dùng cho KieuGiaPicker
+  const loaiXeObj = configuredLoaiXe.find(lx => lx.id == formThuong.loaiXe)
 
   async function xacNhanVeThangAuto() {
     if (!result?.ma_qr) { setError('Thiếu mã QR vé tháng'); return }
@@ -535,7 +552,6 @@ function BienSoPanel({ coChupAnh, setCoChupAnh }) {
       if (!fileNguoiLai) { setError('Vui lòng chụp ảnh người lái'); return }
     }
 
-    // Kiểm tra nếu có nhiều kiểu giá mà chưa chọn
     const coNhieuKieu = [loaiXeObj?.co_gia_luot, loaiXeObj?.co_gia_gio, loaiXeObj?.co_gia_ngay_dem].filter(Boolean).length > 1
     if (coNhieuKieu && !kieuTinhGia) { setError('Vui lòng chọn kiểu tính giá áp dụng.'); return }
 
@@ -572,7 +588,6 @@ function BienSoPanel({ coChupAnh, setCoChupAnh }) {
 
   return (
     <div className="card">
-      {/* Banner cảnh báo chưa hoàn thiện bãi xe */}
       {!baiXeLoading && !hoanThien && (
         <div style={{
           display: 'flex', alignItems: 'flex-start', gap: 10,
@@ -667,7 +682,7 @@ function BienSoPanel({ coChupAnh, setCoChupAnh }) {
         <div style={{ marginTop: '0.75rem' }}>
           <h5 style={{ marginBottom: '0.75rem' }}>🚗 Thông tin xe</h5>
           <Field label="Loại xe" required>
-            <select value={formThuong.loaiXe} onChange={e => setFormThuong(f => ({ ...f, loaiXe: e.target.value }))}>
+            <select value={formThuong.loaiXe} onChange={e => { setFormThuong(f => ({ ...f, loaiXe: e.target.value })); setKieuTinhGia('') }}>
               {groupedLoaiXe.map(group => (
                 <optgroup key={group.nhom_id} label={group.ten_nhom}>
                   {group.items.map(lx => (
@@ -679,6 +694,7 @@ function BienSoPanel({ coChupAnh, setCoChupAnh }) {
               ))}
             </select>
           </Field>
+          <KieuGiaPicker loaiXe={loaiXeObj} value={kieuTinhGia} onChange={setKieuTinhGia} />
           <Field label="Tên chủ xe"><input value={formThuong.tenChuXe} onChange={e => setFormThuong(f => ({ ...f, tenChuXe: e.target.value }))} /></Field>
           <Field label="Số điện thoại"><input value={formThuong.sdt} onChange={e => setFormThuong(f => ({ ...f, sdt: e.target.value }))} inputMode="tel" /></Field>
           <Field label="Email"><input type="email" value={formThuong.email} onChange={e => setFormThuong(f => ({ ...f, email: e.target.value }))} /></Field>
@@ -689,7 +705,6 @@ function BienSoPanel({ coChupAnh, setCoChupAnh }) {
               <span>Có</span>
             </label>
           </Field>
-          <KieuGiaPicker loaiXe={loaiXeObj} value={kieuTinhGia} onChange={setKieuTinhGia} />
           <button className="btn btn-accent" onClick={handleXacNhan} disabled={loading || !hoanThien}>✅ Xác nhận xe vào</button>
         </div>
       )}
