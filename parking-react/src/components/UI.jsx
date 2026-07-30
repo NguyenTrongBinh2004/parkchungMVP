@@ -37,8 +37,30 @@ export function PageLayout({ title, backTo, children }) {
 // ─── Modal ───
 export function Modal({ onClose, title, children }) {
   return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal-box">
+    <div
+      className="modal-overlay"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        overflowY: 'auto',              // cho phép cuộn cả lớp nền nếu modal cao hơn màn hình
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        padding: '5vh 16px',
+        boxSizing: 'border-box',
+        zIndex: 1000,
+      }}
+    >
+      <div
+        className="modal-box"
+        style={{
+          maxHeight: '90vh',             // giới hạn chiều cao khung modal
+          overflowY: 'auto',             // tự cuộn bên trong khi nội dung dài hơn khung
+          WebkitOverflowScrolling: 'touch', // cuộn mượt trên iOS Safari
+          boxSizing: 'border-box',
+        }}
+      >
         <button className="modal-close" onClick={onClose}>✕</button>
         {title && <h5 style={{ marginBottom: '1rem', fontSize: '1.1rem' }}>{title}</h5>}
         {children}
