@@ -19,47 +19,36 @@ const KIEU_META = {
   ngayDem: { icon: '🌗', label: 'Theo ngày/đêm' },
 }
 
-// ─── Editor giá dùng chung (đã sửa logic chống chồng lấn) ──
+// ─── Editor giá dùng chung: chỉ còn "Đến giờ" và "Giá" là sửa được ──
 function KieuGiaEditor({ gia, onChange }) {
   const upd = (patch) => onChange({ ...gia, ...patch })
   const toggleKieu = (key) => upd({ [key]: !gia[key] })
 
   const themDong = () => {
     const last = gia.bangGio[gia.bangGio.length - 1]
-    upd({ bangGio: [...gia.bangGio, { tuGio: last.denGio, denGio: last.denGio + 1, gia: '' }] })
+    upd({ bangGio: [...gia.bangGio, { denGio: last.denGio + 1, gia: '' }] })
   }
   const xoaDong = (idx) => {
     if (gia.bangGio.length > 1) upd({ bangGio: gia.bangGio.filter((_, i) => i !== idx) })
   }
 
-  // ── Cập nhật 1 mốc, tự động ràng buộc với mốc liền trước/sau ──
-  const updateDong = (idx, field, rawValue) => {
+  // ── Chỉ còn "Đến giờ" và "Giá" là chỉnh được; "Từ giờ" luôn suy ra tự động ──
+  const updateDenGio = (idx, rawValue) => {
     const arr = [...gia.bangGio]
+    const sanMin = (idx === 0 ? 0 : arr[idx - 1].denGio) + 1
     let value = Number(rawValue) || 0
-
-    if (field === 'tuGio') {
-      const sanMin = idx === 0 ? 1 : arr[idx - 1].denGio
-      if (value < sanMin) value = sanMin
-      arr[idx].tuGio = value
-      // đến giờ của chính mốc này phải lớn hơn từ giờ vừa sửa
-      if (arr[idx].denGio <= value) arr[idx].denGio = value + 1
+    if (value < sanMin) value = sanMin
+    arr[idx].denGio = value
+    // đẩy dây chuyền: nếu mốc sau có "đến giờ" không còn hợp lệ, kéo nó lên theo
+    if (arr[idx + 1] && arr[idx + 1].denGio <= value) {
+      arr[idx + 1].denGio = value + 1
     }
+    upd({ bangGio: arr })
+  }
 
-    if (field === 'denGio') {
-      const sanMin = arr[idx].tuGio + 1
-      if (value < sanMin) value = sanMin
-      arr[idx].denGio = value
-      // đẩy dây chuyền: nếu mốc sau đang có "từ giờ" nhỏ hơn "đến giờ" vừa sửa, kéo nó lên theo
-      if (arr[idx + 1] && arr[idx + 1].tuGio < value) {
-        arr[idx + 1].tuGio = value
-        if (arr[idx + 1].denGio <= value) arr[idx + 1].denGio = value + 1
-      }
-    }
-
-    if (field === 'gia') {
-      arr[idx].gia = rawValue
-    }
-
+  const updateGia = (idx, rawValue) => {
+    const arr = [...gia.bangGio]
+    arr[idx].gia = rawValue
     upd({ bangGio: arr })
   }
 
@@ -146,32 +135,35 @@ function KieuGiaEditor({ gia, onChange }) {
           {gia.coGiaGio && (
             <div>
               <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
-                ⏱️ Cấu hình giá theo giờ
+                ⏱️ Cấu hình giá theo giờ (tích lũy từ lúc xe vào)
               </label>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr 1.2fr auto', gap: 6, fontSize: '0.68rem', color: 'var(--text-muted)', padding: '0 2px 4px', alignItems: 'center' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '0.9fr auto 1fr 1.2fr auto', gap: 6, fontSize: '0.68rem', color: 'var(--text-muted)', padding: '0 2px 4px', alignItems: 'center' }}>
                 <span>Từ giờ</span><span></span><span>Đến giờ</span><span style={{ textAlign: 'right' }}>Giá (đ)</span><span></span>
               </div>
 
               {gia.bangGio.map((dong, idx) => {
-                const sanMinTu = idx === 0 ? 1 : gia.bangGio[idx - 1].denGio
+                const tuGioHienThi = idx === 0 ? 0 : gia.bangGio[idx - 1].denGio
                 return (
-                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr 1.2fr auto', gap: 6, alignItems: 'center', marginBottom: 6 }}>
-                    <input
-                      type="number" value={dong.tuGio} min={sanMinTu}
-                      style={{ textAlign: 'center', padding: '6px 4px' }}
-                      onChange={e => updateDong(idx, 'tuGio', e.target.value)}
-                    />
+                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '0.9fr auto 1fr 1.2fr auto', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+                    {/* Từ giờ: chỉ hiển thị, không sửa được */}
+                    <div style={{
+                      textAlign: 'center', padding: '6px 4px', borderRadius: 8,
+                      background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)',
+                      color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.85rem',
+                    }}>
+                      {tuGioHienThi}
+                    </div>
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>→</span>
                     <input
-                      type="number" value={dong.denGio} min={dong.tuGio + 1}
+                      type="number" value={dong.denGio} min={tuGioHienThi + 1}
                       style={{ textAlign: 'center', padding: '6px 4px' }}
-                      onChange={e => updateDong(idx, 'denGio', e.target.value)}
+                      onChange={e => updateDenGio(idx, e.target.value)}
                     />
                     <input
                       type="number" value={dong.gia} placeholder="0"
                       style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', padding: '6px 8px' }}
-                      onChange={e => updateDong(idx, 'gia', e.target.value)}
+                      onChange={e => updateGia(idx, e.target.value)}
                     />
                     {gia.bangGio.length > 1 ? (
                       <button type="button" onClick={() => xoaDong(idx)}
@@ -184,7 +176,7 @@ function KieuGiaEditor({ gia, onChange }) {
               })}
               <button type="button" onClick={themDong} className="btn btn-sm btn-outline" style={{ marginTop: 4 }}>+ Thêm mốc giờ</button>
               <small style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 6 }}>
-                Mỗi mốc tự nối tiếp mốc trước, không thể chồng lấn hoặc đi lùi giờ.
+                "Từ giờ" tự nối tiếp mốc trước — không thể tạo khoảng trống hay chồng lấn.
               </small>
 
               <div style={{ marginTop: 12 }}>
@@ -203,7 +195,7 @@ function KieuGiaEditor({ gia, onChange }) {
 function giaMacDinh() {
   return {
     coGiaLuot: true, giaLuot: '',
-    coGiaGio: false, bangGio: [{ tuGio: 1, denGio: 2, gia: '' }], giaMoiGioTiep: '',
+    coGiaGio: false, bangGio: [{ denGio: 1, gia: '' }], giaMoiGioTiep: '',
     coGiaNgayDem: false, giaNgay: '', giaDem: '', giaNgayDem: '',
   }
 }
@@ -216,14 +208,11 @@ function validateGia(gia) {
     if (!gia.bangGio.some(d => d.gia)) {
       return 'Vui lòng nhập ít nhất một mốc giờ với giá.'
     }
-    // Kiểm tra thứ tự & chồng lấn giữa các mốc giờ
-    for (let i = 0; i < gia.bangGio.length; i++) {
-      const d = gia.bangGio[i]
-      if (d.denGio <= d.tuGio) {
-        return `Mốc giờ thứ ${i + 1}: "Đến giờ" phải lớn hơn "Từ giờ".`
-      }
-      if (i > 0 && d.tuGio < gia.bangGio[i - 1].denGio) {
-        return `Mốc giờ thứ ${i + 1} đang chồng lấn với mốc trước đó.`
+    // Với model mới, "đến giờ" luôn tăng dần do updateDenGio đã ràng buộc —
+    // chỉ cần chốt lại 1 lần cho chắc trước khi gửi lên server.
+    for (let i = 1; i < gia.bangGio.length; i++) {
+      if (gia.bangGio[i].denGio <= gia.bangGio[i - 1].denGio) {
+        return `Mốc giờ thứ ${i + 1}: "Đến giờ" phải lớn hơn mốc trước đó.`
       }
     }
   }
@@ -241,7 +230,12 @@ function buildFormDataGia(fd, gia) {
     fd.append('gia_ngay_dem', gia.giaNgayDem || 0)
   }
   if (gia.coGiaGio) {
-    const arr = gia.bangGio.map(d => ({ tu_gio: Number(d.tuGio), den_gio: Number(d.denGio), gia: Number(d.gia) }))
+    // tu_gio suy ra tự động (0 hoặc den_gio mốc trước) để tương thích với dữ liệu cũ / fmtGia
+    const arr = gia.bangGio.map((d, idx) => ({
+      tu_gio: idx === 0 ? 0 : Number(gia.bangGio[idx - 1].denGio),
+      den_gio: Number(d.denGio),
+      gia: Number(d.gia),
+    }))
     if (gia.giaMoiGioTiep) arr.push({ moi_gio_tiep: Number(gia.giaMoiGioTiep) })
     fd.append('cau_hinh_theo_gio', JSON.stringify(arr))
   }
@@ -417,11 +411,11 @@ function SuaLoaiXeModal({ lx, onClose, onSuccess }) {
     let cfg = lx.cau_hinh_theo_gio
     if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg) } catch { cfg = [] } }
     cfg = Array.isArray(cfg) ? cfg : []
-    const mocGoc = cfg.filter(b => b.den_gio !== undefined).map(b => ({ tuGio: b.tu_gio, denGio: b.den_gio, gia: b.gia }))
+    const mocGoc = cfg.filter(b => b.den_gio !== undefined).map(b => ({ denGio: b.den_gio, gia: b.gia }))
     const tiepGoc = cfg.find(b => b.moi_gio_tiep !== undefined)?.moi_gio_tiep ?? ''
     return {
       coGiaLuot: !!lx.co_gia_luot, giaLuot: lx.gia_luot ?? '',
-      coGiaGio: !!lx.co_gia_gio, bangGio: mocGoc.length ? mocGoc : [{ tuGio: 1, denGio: 2, gia: '' }], giaMoiGioTiep: tiepGoc,
+      coGiaGio: !!lx.co_gia_gio, bangGio: mocGoc.length ? mocGoc : [{ denGio: 1, gia: '' }], giaMoiGioTiep: tiepGoc,
       coGiaNgayDem: !!lx.co_gia_ngay_dem, giaNgay: lx.gia_ngay ?? '', giaDem: lx.gia_dem ?? '', giaNgayDem: lx.gia_ngay_dem ?? '',
     }
   })
@@ -521,7 +515,6 @@ function LoaiXeCard({ lx, mode, onSelect }) {
         transition: 'background 0.12s',
       }}
     >
-      {/* Dòng 1: tên + tag + icon thao tác */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
         <span style={{ width: 9, height: 9, borderRadius: '50%', background: lx.mau_sac || '#FFD700', flexShrink: 0 }} />
         <span style={{ fontWeight: 600, fontSize: '0.92rem', flex: 1 }}>{lx.ten}</span>
@@ -536,7 +529,6 @@ function LoaiXeCard({ lx, mode, onSelect }) {
         )}
       </div>
 
-      {/* Dòng 2: chi tiết giá, thụt lề theo chấm màu */}
       <div style={{ paddingLeft: 17 }}>
         <GiaChiTiet lx={lx} />
         {lx.gia_ve_thang > 0 && (
