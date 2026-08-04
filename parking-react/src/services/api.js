@@ -163,3 +163,8 @@ export const nhanVienApi = {
     headers: authHeader(),
   }),
 }
+export const datChoWebApi = {
+  list: (trangThai) => request(`/dat-cho-web/${trangThai ? `?trang_thai_xu_ly=${trangThai}` : ''}`, { headers: authHeader() }),
+  xacNhan: (id) => request(`/dat-cho-web/${id}/xac-nhan`, { method: 'PUT', headers: authHeader() }),
+  huy: (id) => request(`/dat-cho-web/${id}/huy`, { method: 'PUT', headers: authHeader() }),
+}

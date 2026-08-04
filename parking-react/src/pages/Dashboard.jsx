@@ -1,7 +1,7 @@
 // src/pages/Dashboard.jsx
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { useBaiXe } from '../context/BaiXeContext'   // thêm import
+import { useBaiXe } from '../context/BaiXeContext'
 
 function LogoParkchung({ size = 32 }) {
   return (
@@ -113,6 +113,7 @@ const TABS = [
     items: [
       { label: 'Xe vào',  icon: '📸', path: '/xe-vao',  color: '#22c55e' },
       { label: 'Xe ra',   icon: '📤', path: '/xe-ra',   color: '#ef4444' },
+      { label: 'Đặt chỗ Web', icon: '🌐', path: '/dat-cho-web', color: '#0ea5e9' },
     ],
   },
   {
@@ -150,10 +151,9 @@ const TABS = [
 export default function Dashboard() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { dangXuat, laAdmin } = useAuth()                  // bỏ tenBaiXe
-  const { thongTin } = useBaiXe()                          // lấy từ BaiXeContext
+  const { dangXuat, laAdmin } = useAuth()
+  const { thongTin } = useBaiXe()
 
-  // Lọc tab theo quyền: bỏ item adminOnly nếu không phải admin, sau đó ẩn cả tab nếu không còn item nào
   const tabsHienThi = TABS
     .map(tab => ({
       ...tab,
@@ -217,10 +217,8 @@ export default function Dashboard() {
           {activeTab.label}
         </p>
 
-        {/* Thông tin bãi xe — chỉ hiện ở tab Bảng giữ xe */}
         {activeTab.id === 'ban-gui-xe' && <ThongTinBaiXeCard />}
 
-        {/* Tên bãi xe — chỉ hiện ở tab Người dùng, dùng dữ liệu từ BaiXeContext */}
         {activeTab.id === 'nguoi-dung' && thongTin?.ten && (
           <div style={{
             background: 'var(--bg-secondary)', borderRadius: 14,

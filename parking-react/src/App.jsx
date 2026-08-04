@@ -19,6 +19,7 @@ import DangKy from './pages/DangKy'
 import DangNhap from './pages/DangNhap'
 import QuenMatKhau from './pages/QuenMatKhau' 
 import NhanVien from './pages/NhanVien'
+import DatChoWeb from './pages/DatChoWeb' 
 
 function LogoParkchung({ size = 32 }) {
   return (
@@ -148,6 +149,7 @@ export default function App() {
             <Route path="/thong-ke" element={<ThongKe />} />
             <Route path="/tim-xe" element={<TimXe />} />
             <Route path="/cai-dat" element={<CaiDat />} />
+            <Route path="/dat-cho-web" element={<DatChoWeb />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </RequireAuth>
